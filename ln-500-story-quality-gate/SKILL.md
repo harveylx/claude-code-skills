@@ -1,6 +1,6 @@
 ---
 name: ln-500-story-quality-gate
-description: Story-level quality orchestrator with 4-level Gate (PASS/CONCERNS/FAIL/WAIVED) and Quality Score. Pass 1: code quality -> regression -> manual testing. Pass 2: verify tests/coverage -> calculate NFR scores -> mark Story Done. Use when user requests quality gate for Story or when ln-400 delegates quality check.
+description: "Story-level quality orchestrator with 4-level Gate (PASS/CONCERNS/FAIL/WAIVED) and Quality Score. Pass 1: code quality -> regression -> manual testing. Pass 2: verify tests/coverage -> calculate NFR scores -> mark Story Done. Use when user requests quality gate for Story or when ln-400 delegates quality check."
 ---
 
 # Story Quality Gate
@@ -89,13 +89,20 @@ Mark each as in_progress when starting, completed when done. On failure, mark re
 
 ## Worker Invocation (MANDATORY)
 
-> **CRITICAL:** All worker delegations MUST use Skill tool. DO NOT run linters/tests directly.
+> **CRITICAL:** All delegations use Task tool with `subagent_type: "general-purpose"` for context isolation.
 
-| Step | Worker | How to Invoke |
-|------|--------|---------------|
-| Code Quality | ln-501-code-quality-checker | `Skill(skill: "ln-501-code-quality-checker")` |
-| Regression | ln-502-regression-checker | `Skill(skill: "ln-502-regression-checker")` |
-| Test Planning | ln-510-test-planner | `Skill(skill: "ln-510-test-planner")` |
+| Step | Worker | Purpose |
+|------|--------|---------|
+| Code Quality | ln-501-code-quality-checker | DRY/KISS/YAGNI + Code Quality Score |
+| Regression | ln-502-regression-checker | Run existing test suite |
+| Test Planning | ln-510-test-planner | Orchestrates ln-511/512/513 pipeline |
+
+**Prompt template:**
+```
+Task(description: "[Pass 1/2] quality check via ln-50X",
+     prompt: "Execute ln-50X-{worker}. Read skill from ln-50X-{worker}/SKILL.md. Story: {storyId}",
+     subagent_type: "general-purpose")
+```
 
 **Note:** ln-510 orchestrates the full test pipeline (ln-511 research → ln-512 manual → ln-513 auto tests).
 

@@ -89,9 +89,12 @@ Each SKILL.md starts with YAML frontmatter:
 ```yaml
 ---
 name: skill-name
-description: Short description for Claude Code skill selector
+description: "Short description for Claude Code skill selector"
 ---
 ```
+
+> [!IMPORTANT]
+> **YAML Quoting Rule:** If `description` contains colons (`:`), it MUST be wrapped in double quotes. Without quotes, YAML parser interprets colons as key-value separators, causing "mapping values are not allowed" errors.
 
 ### Reference Files
 Stored in `{skill}/references/` and used by skill for:
