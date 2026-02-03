@@ -345,32 +345,65 @@ Orchestrator automatically creates fix tasks when quality checks fail, then rest
 
 | Question | YES → | NO → |
 |----------|-------|------|
-| Q1: Does coordinator perform expensive research ONCE (MCP Ref, Stack detection, Epic analysis)? | **Use Shared Context** | Continue |
-| Q2: Do workers need coordinator's analysis/context to avoid duplication? | **Use Shared Context** | Continue |
-| Q3: Is "context gathered ONCE" or "token efficiency" explicitly documented? | **Use Shared Context** | Continue |
-| Q4: Coordinator only orchestrates workflow, workers load their own data? | **Use Separate Context** | Re-evaluate design |
+| Q1: Do workers audit DIFFERENT aspects requiring focus/isolation? | **Use Separate Context** | Continue |
+| Q2: Does coordinator perform expensive work ONCE that ALL workers reuse? | **Use Shared Context** | Continue |
+| Q3: Do workers need the SAME context (Context Store, Stack, IDEAL plan)? | **Use Shared Context** | Continue |
+| Q4: Coordinator only orchestrates, workers load their own data? | **Use Separate Context** | Re-evaluate design |
 
 **Examples from Repository:**
 
 | Coordinator | Workers | Pattern | Rationale |
 |-------------|---------|---------|-----------|
-| **ln-110-project-docs-coordinator** | 5 | **Shared** | Context Store with 15+ keys gathered ONCE, passed to all workers |
+| **ln-110-project-docs-coordinator** | 5 | **Shared** | Context Store with 15+ keys gathered ONCE, all workers use SAME data |
 | **ln-220-story-coordinator** | 2-3 | **Shared** | Standards Research (15-20 min) ONCE, passed to ln-221/ln-222 |
 | **ln-300-task-coordinator** | 2 | **Shared** | Story AC + IDEAL plan ONCE, passed to ln-301/ln-302 |
-| **ln-620-codebase-auditor** | 9 | **Shared** | MCP research for dependencies ONCE → 9 workers (9x duplication avoided) |
-| **ln-630-test-auditor** | 5 | **Shared** | Testing best practices research ONCE → 5 workers (5x duplication avoided) |
-| **ln-640-pattern-evolution-auditor** | 3 | **Shared** | MCP research + layer audit ONCE, passed to ln-641 loop |
 | **ln-720-structure-migrator** | 4 | **Shared** | Structure analysis ONCE, scoped contexts per worker |
 | **ln-730-devops-setup** | 3 | **Shared** | Stack detection ONCE → 3 workers (Docker, CI/CD, Env) |
-| **ln-740-quality-setup** | 3 | **Shared** | Stack detection + config check ONCE → 3 workers (linter, pre-commit, test infra) |
-| **ln-500-story-quality-gate** | 3 | **Separate** | Orchestrates gate flow only, workers independent |
+| **ln-740-quality-setup** | 3 | **Shared** | Stack detection + config check ONCE → 3 workers |
+| **ln-620-codebase-auditor** | 9 | **Separate** | Workers audit DIFFERENT aspects (security/build/arch) — isolation = focus |
+| **ln-630-test-auditor** | 5 | **Separate** | Workers audit DIFFERENT test categories — isolation = focus |
+| **ln-640-pattern-evolution-auditor** | 3 | **Separate** | Workers analyze DIFFERENT patterns — isolation = focus |
+| **ln-500-story-quality-gate** | 3 | **Mixed** | ln-501 Separate (independent analysis), ln-502/ln-510 Shared (need Gate context) |
 | **ln-510-test-planner** | 3 | **Separate** | Pipeline orchestration, workers read from Linear comments |
-| **ln-710-dependency-upgrader** | 3 | **Separate** | Independent package managers (npm/nuget/pip), no shared analysis |
-| **ln-760-security-setup** | 2 | **Separate** | Independent scans (secrets/dependencies), no shared analysis |
+| **ln-710-dependency-upgrader** | 3 | **Separate** | Independent package managers (npm/nuget/pip) |
+| **ln-760-security-setup** | 2 | **Separate** | Independent scans (secrets/dependencies) |
 
-**Key Insight:** 9 of 13 L2 coordinators (69%) need Shared Context for token efficiency. Only use Separate Context (Task tool) when workers are truly independent.
+**Key Decision Factors:**
 
-**Anti-Pattern Warning:** Adding Task tool wrapper to coordinators that perform expensive context gathering will cause 3x-9x token duplication and significantly slower execution.
+| Factor | → Shared Context | → Separate Context |
+|--------|-----------------|-------------------|
+| Workers use **SAME context** (Context Store, Stack) | ✅ | |
+| Workers audit **DIFFERENT aspects** (security/build/arch) | | ✅ |
+| Need **focus + specialization** per worker | | ✅ |
+| Coordinator does **expensive work ONCE** all workers reuse | ✅ | |
+| Workers are **fully independent** | | ✅ |
+
+**Anti-Pattern Warnings:**
+- ❌ Task tool on coordinators with expensive shared context → 3x-9x token duplication
+- ❌ Shared Context on audit workers → context pollution, lost focus on specific aspect
+
+### Worker Result Return Patterns
+
+How workers return results depends on the delegation pattern:
+
+| Pattern | Mechanism | Coordinator receives | Example |
+|---------|-----------|---------------------|---------|
+| **Shared Context** | Conversation continuation | Worker output appears in coordinator's context automatically | ln-300 → ln-301: task URLs, kanban updates visible in same conversation |
+| **Separate Context** | Task tool return value | Single text message with worker's final output | ln-620 → ln-621: audit findings returned as structured text |
+| **Status Change** | External state mutation | Coordinator reads updated state (Linear, files, kanban) after worker completes | ln-400 → ln-401: task status changes in Linear, coordinator re-reads |
+
+**Worker output contract:**
+
+| Delegation | Worker MUST return | Format |
+|------------|-------------------|--------|
+| Shared Context | Result in conversation (implicit) | Free-form — coordinator sees everything |
+| Separate Context (Task tool) | Structured summary as final message | Key data: URLs, counts, verdicts, errors |
+| Status Change | Updated external state | Linear status, file changes, kanban updates |
+
+**Anti-Patterns:**
+- ❌ Separate Context worker relying on coordinator to "see" intermediate steps (only final message returns)
+- ❌ Shared Context worker writing results to external storage instead of conversation (unnecessary indirection)
+- ❌ Coordinator not verifying worker results before proceeding to next phase
 
 ---
 
