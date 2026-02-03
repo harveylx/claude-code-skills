@@ -96,19 +96,6 @@ Before delegating, check what configurations already exist.
 
 ## Phase 3: Parallel Delegation
 
-> **CRITICAL:** All delegations use Task tool with `subagent_type: "general-purpose"` for context isolation.
-
-**Prompt template:**
-```
-Task(description: "Quality setup via ln-74X",
-     prompt: "Execute ln-74X-{worker}. Read skill from ln-74X-{worker}/SKILL.md. Stack: {detectedStack}",
-     subagent_type: "general-purpose")
-```
-
-**Anti-Patterns:**
-- ❌ Direct Skill tool invocation without Task wrapper
-- ❌ Any execution bypassing subagent context isolation
-
 Invoke workers for each quality aspect. Workers can run in parallel as they configure independent tools.
 
 **Delegation Order:**

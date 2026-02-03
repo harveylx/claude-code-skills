@@ -150,6 +150,7 @@ Target: 400-600 lines for core principles, 600-800 lines with advanced documenta
 1. [Advanced Documentation Principles (2024-2025)](#advanced-documentation-principles-2024-2025)
 2. [Core Principles](#core-principles)
 3. [Orchestrator-Worker Pattern](#orchestrator-worker-pattern)
+    - [Delegation Pattern Selection](#delegation-pattern-selection)
 4. [Single Responsibility Principle](#single-responsibility-principle)
 5. [When to Split Skills](#when-to-split-skills)
 6. [When to Combine Skills](#when-to-combine-skills)
@@ -330,6 +331,46 @@ This architecture follows industry-proven pattern where:
 Orchestrator automatically creates fix tasks when quality checks fail, then restarts the loop.
 
 **Benefits:** Automatic error recovery, no manual intervention, ensures quality before completion.
+
+### Delegation Pattern Selection
+
+**Context:** L2 coordinators can delegate to workers using two patterns: Shared Context (direct Skill tool) or Separate Context (Task tool wrapper).
+
+| Pattern | When to Use | Pros | Cons |
+|---------|-------------|------|------|
+| **Shared Context**<br>(Direct Skill tool) | Coordinator performs expensive work ONCE (MCP research, Stack detection, Epic analysis) that workers must reuse | ✅ Token efficiency (no duplication)<br>✅ Workers see full context<br>✅ Conversation history preserved | ❌ Context pollution<br>❌ No parallelization (sequential only) |
+| **Separate Context**<br>(Task tool wrapper) | Coordinator only orchestrates workflow, workers are independent | ✅ Context isolation<br>✅ Parallelization possible<br>✅ Clean worker environment | ❌ Context lost between coordinator/worker<br>❌ Must pass all data via prompt |
+
+**Decision Tree:**
+
+| Question | YES → | NO → |
+|----------|-------|------|
+| Q1: Does coordinator perform expensive research ONCE (MCP Ref, Stack detection, Epic analysis)? | **Use Shared Context** | Continue |
+| Q2: Do workers need coordinator's analysis/context to avoid duplication? | **Use Shared Context** | Continue |
+| Q3: Is "context gathered ONCE" or "token efficiency" explicitly documented? | **Use Shared Context** | Continue |
+| Q4: Coordinator only orchestrates workflow, workers load their own data? | **Use Separate Context** | Re-evaluate design |
+
+**Examples from Repository:**
+
+| Coordinator | Workers | Pattern | Rationale |
+|-------------|---------|---------|-----------|
+| **ln-110-project-docs-coordinator** | 5 | **Shared** | Context Store with 15+ keys gathered ONCE, passed to all workers |
+| **ln-220-story-coordinator** | 2-3 | **Shared** | Standards Research (15-20 min) ONCE, passed to ln-221/ln-222 |
+| **ln-300-task-coordinator** | 2 | **Shared** | Story AC + IDEAL plan ONCE, passed to ln-301/ln-302 |
+| **ln-620-codebase-auditor** | 9 | **Shared** | MCP research for dependencies ONCE → 9 workers (9x duplication avoided) |
+| **ln-630-test-auditor** | 5 | **Shared** | Testing best practices research ONCE → 5 workers (5x duplication avoided) |
+| **ln-640-pattern-evolution-auditor** | 3 | **Shared** | MCP research + layer audit ONCE, passed to ln-641 loop |
+| **ln-720-structure-migrator** | 4 | **Shared** | Structure analysis ONCE, scoped contexts per worker |
+| **ln-730-devops-setup** | 3 | **Shared** | Stack detection ONCE → 3 workers (Docker, CI/CD, Env) |
+| **ln-740-quality-setup** | 3 | **Shared** | Stack detection + config check ONCE → 3 workers (linter, pre-commit, test infra) |
+| **ln-500-story-quality-gate** | 3 | **Separate** | Orchestrates gate flow only, workers independent |
+| **ln-510-test-planner** | 3 | **Separate** | Pipeline orchestration, workers read from Linear comments |
+| **ln-710-dependency-upgrader** | 3 | **Separate** | Independent package managers (npm/nuget/pip), no shared analysis |
+| **ln-760-security-setup** | 2 | **Separate** | Independent scans (secrets/dependencies), no shared analysis |
+
+**Key Insight:** 9 of 13 L2 coordinators (69%) need Shared Context for token efficiency. Only use Separate Context (Task tool) when workers are truly independent.
+
+**Anti-Pattern Warning:** Adding Task tool wrapper to coordinators that perform expensive context gathering will cause 3x-9x token duplication and significantly slower execution.
 
 ---
 
