@@ -82,9 +82,10 @@ python shared/agents/agent_runner.py --health-check
 ```
 
 **HARD RULES:**
-1. **ALWAYS execute** the command above. NEVER skip, NEVER assume result.
-2. **Only command output determines availability.** Do NOT reason about file existence, environment, or installation — run the command and read its output.
-3. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → agent review phase SKIPPED, Self-Review fallback.
+1. **ALWAYS execute the EXACT command above** — copy-paste, no modifications, no substitutions.
+2. **Do NOT invent alternative checks** (e.g., `where`, `which`, `--version`, PATH lookup). ONLY the command above is valid.
+3. **Only command output determines availability.** Do NOT reason about file existence, environment, or installation — run the command and read its output.
+4. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → agent review phase SKIPPED, Self-Review fallback.
 
 Filter output by `skill_groups` matching current skill (e.g., "310" for ln-310, "402" for ln-402).
 
@@ -120,7 +121,7 @@ Prompt ──────┤                                                 ├
 2. Both agents receive identical prompt and run simultaneously
 3. Collect `suggestions[]` from all successful responses
 4. Deduplicate by `(area, issue)` — keep higher confidence
-5. Filter: `confidence >= 90` AND `impact_percent > 10`
+5. Filter: `confidence >= 90` AND `impact_percent > 2`
 6. Fallback logic:
    - Both succeed → aggregate suggestions from both agents
    - One fails → use successful agent's suggestions only, log failed agent

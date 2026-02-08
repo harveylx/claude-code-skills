@@ -99,7 +99,7 @@ Phase 4: Auto-Fix (7 groups)
 
 Phase 5: Agent Review ← CONDITIONAL (only if agents available)
   - Run review agents (codex-review + gemini-review parallel)
-  - Aggregate and filter suggestions (confidence ≥90, impact >10)
+  - Aggregate and filter suggestions per agent_delegation_pattern.md §Parallel Aggregation
   - Apply accepted suggestions to Story/Tasks
 
 Phase 6: Approve & Notify
