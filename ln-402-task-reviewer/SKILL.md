@@ -31,6 +31,52 @@ description: L3 Worker. Reviews task implementation for quality, code standards,
 Per `shared/references/agent_delegation_pattern.md` §Startup.
 Result determines whether Step 6 (Agent Review) is included in workflow.
 
+## Progress Tracking with TodoWrite
+
+When operating in any mode, skill MUST create detailed todo checklist tracking ALL steps.
+
+**Rules:**
+1. Create todos IMMEDIATELY after Startup checks (before Step 1)
+2. Each workflow step = separate todo item; multi-check steps get sub-items
+3. Mark `in_progress` before starting step, `completed` after finishing
+4. Step 6 items: only include if ≥1 review agent available (from Startup check)
+
+**Todo Template (13-15 items depending on agent availability):**
+
+```
+Startup:
+  - Run agent health check (codex-review, gemini-review)
+
+Step 1: Receive Task
+  - Load task by ID (isolated context, no executor data)
+
+Step 2: Read Context
+  - Load full task + parent Story + affected components
+
+Step 3: Review Checks
+  - Verify approach alignment with Story Technical Approach
+  - Check config hygiene, error handling, logging
+  - Check comments, naming, docs updates
+  - Verify tests updated/run (risk-based limits for test tasks)
+
+Step 4: AC Validation
+  - Validate implementation against 4 AC criteria
+
+Step 5: Side-Effect Bug Detection
+  - Scan for bugs outside task scope, create [BUG] tasks
+
+Step 6: Agent Review ← CONDITIONAL (only if agents available)
+  - Run review agents (codex-review + gemini-review parallel)
+  - Aggregate suggestions, evaluate verdict escalation
+
+Step 7: Decision
+  - Apply minor fixes or set To Rework with guidance
+
+Step 8: Update & Commit
+  - Set task status, update kanban, post review comment
+  - If Done: commit changes with task ID
+```
+
 ## Workflow (concise)
 1) **Receive task (isolated context):** Get task ID from orchestrator (ln-400)—NO other context passed. Load all information independently from Linear. Detect type (label "tests" -> test task, else implementation/refactor).
 2) **Read context:** Full task + parent Story; load affected components/docs; review diffs if available.
