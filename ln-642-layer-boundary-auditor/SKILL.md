@@ -220,7 +220,7 @@ IF len(unique_files) > 2:
 
 ### Phase 3.5: Calculate Score
 
-See `shared/references/audit_scoring.md` for unified formula and score interpretation.
+**MANDATORY READ:** Load `shared/references/audit_scoring.md` for unified scoring formula.
 
 ### Phase 4: Return Result
 

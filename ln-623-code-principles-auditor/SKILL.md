@@ -325,7 +325,7 @@ Extract to shared module, create utility function, centralize constants/messages
 
 ## Scoring Algorithm
 
-See `shared/references/audit_scoring.md` for unified formula and score interpretation.
+**MANDATORY READ:** Load `shared/references/audit_scoring.md` for unified scoring formula.
 
 ## Output Format
 

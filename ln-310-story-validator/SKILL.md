@@ -53,7 +53,7 @@ Detect operating mode at startup:
 
 ## Startup: Agent Availability Check
 
-Per `shared/references/agent_delegation_pattern.md` §Startup.
+**MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` §Startup for health check command.
 Result determines whether Phase 5 is included in plan and todos.
 
 ## Plan Mode: Progress Tracking with TodoWrite
@@ -183,7 +183,7 @@ Phase 6: Approve & Notify
 
 ### Phase 5: Agent Review (Conditional)
 
-Per `shared/references/agent_delegation_pattern.md` §Parallel Aggregation.
+**MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` §Parallel Aggregation for agent invocation.
 - **Template:** `story_review.md` with `{story_content}` + `{tasks_content}` from Phase 4.
 - **Apply:** ACCEPTED suggestions modify Story/Tasks text. No suggestions → proceed to Phase 6 unchanged.
 - **Display:** `"Agent Review: codex ({duration}s, {N} suggestions), gemini ({duration}s, {N} suggestions). Validated: {accepted}/{total} accepted, {rejected} rejected"`

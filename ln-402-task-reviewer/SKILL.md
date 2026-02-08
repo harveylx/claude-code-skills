@@ -41,7 +41,7 @@ Detect operating mode at startup:
 
 ## Plan Mode Support
 
-Follows `shared/references/plan_mode_pattern.md` Workflow A (Preview-Only).
+**MANDATORY READ:** Load `shared/references/plan_mode_pattern.md` Workflow A (Preview-Only) for plan mode behavior.
 
 **CRITICAL: In Plan Mode, plan file = REVIEW PLAN (what will be checked). NEVER write review findings or verdicts to plan file.**
 
@@ -80,7 +80,7 @@ Expected output: Verdict (Done/To Rework) + Issues + Fix actions
 
 ## Startup: Agent Availability Check
 
-Per `shared/references/agent_delegation_pattern.md` §Startup.
+**MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` §Startup for health check command.
 Result determines whether Step 6 (Agent Review) is included in workflow.
 
 ## Progress Tracking with TodoWrite
@@ -142,7 +142,7 @@ Step 8: Update & Commit
    - Docs: if public API changed → API docs updated. If new env var → .env.example updated. If new concept → README/architecture doc updated.
    - Tests updated/run: for impl/refactor ensure affected tests adjusted; for test tasks verify risk-based limits and priority (≤15) per planner template.
 4) **AC Validation (MANDATORY for implementation tasks):**
-   Load parent Story AC and verify implementation against 4 criteria (see `references/ac_validation_checklist.md`):
+   **MANDATORY READ:** Load `references/ac_validation_checklist.md`. Verify implementation against 4 criteria:
    - **AC Completeness:** All AC scenarios covered (happy path + errors + edge cases).
    - **AC Specificity:** Exact requirements met (HTTP codes 200/401/403, timing <200ms, exact messages).
    - **Task Dependencies:** Task N uses ONLY Tasks 1 to N-1 (no forward dependencies on N+1, N+2).
@@ -164,7 +164,7 @@ Step 8: Update & Commit
    - Priority: based on severity (security → 1 Urgent, logic → 2 High, style → 4 Low)
    - **Do NOT defer** — create task immediately, reviewer catches what executor missed
 
-6) **Agent Review:** Per `shared/references/agent_delegation_pattern.md` §Parallel Aggregation.
+6) **Agent Review:** **MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` §Parallel Aggregation for agent invocation.
    - **Template:** `code_review.md` with `{task_content}` + `{story_content}` from Step 2.
    - **Verdict escalation:** Agent findings with area=security|correctness can escalate Done → To Rework.
    - **Display:** `"Agent Review: codex ({duration}s, {N}), gemini ({duration}s, {N}). Validated: {accepted}/{total}"`

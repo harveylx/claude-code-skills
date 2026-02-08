@@ -380,7 +380,7 @@ Next Steps:
 
 **Trigger:** Phase 3 determined Count ≥ 1 (REPLAN MODE)
 
-**Full workflow:** See `references/replan_workflow.md` for complete REPLAN process.
+**Full workflow:** **MANDATORY READ:** Load `references/replan_workflow.md` for complete REPLAN process.
 
 **Summary:**
 1. Load existing Epics from Linear (full descriptions)
@@ -430,7 +430,7 @@ Before completing work, verify ALL checkpoints:
 - [ ] Summary displayed with all Epic URLs
 
 **✅ Epic Replan Complete (Phase 5b - REPLAN only):**
-- See `references/replan_workflow.md` for full checklist
+- **MANDATORY READ:** Load `references/replan_workflow.md` for full checklist
 
 **Output:** List of Linear Project URLs (Epic {N}: {Title}) + Next Epic Number value
 

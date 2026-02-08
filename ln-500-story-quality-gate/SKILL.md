@@ -58,7 +58,7 @@ Additional prefixes: `TEST-` (coverage gaps), `ARCH-` (architecture issues), `DO
 - **Phase 1 Discovery:** Auto-discover team/config; select Story; load Story + task metadata (no descriptions), detect test task status.
 - **Pass 1 flow (fail fast):**
   1) Invoke ln-501-code-quality-checker. If issues -> create refactor task (Backlog), stop.
-  1.5) **Criteria Validation (Story-level checks)** - see `references/criteria_validation.md`:
+  1.5) **Criteria Validation (Story-level checks)** - **MANDATORY READ:** Load `references/criteria_validation.md`:
      - Check #1: Story Dependencies (no forward deps within Epic) - if FAIL → create [DEP-] task, stop.
      - Check #2: AC-Task Coverage Quality (STRONG/WEAK/MISSING scoring) - if FAIL/CONCERNS → create [BUG-]/[COV-] tasks, stop.
      - Check #3: Database Creation Principle (schema scope matches Story) - if FAIL → create [DB-] task, stop.
