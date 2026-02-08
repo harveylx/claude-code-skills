@@ -138,7 +138,7 @@ Next Steps:
 | Story | ln-220 | ln-221, ln-222 |
 | Task | ln-300 | ln-301, ln-302 |
 | Execution | ln-400 | ln-401, ln-402, ln-403, ln-404 |
-| Quality | ln-500 | ln-501, ln-502, ln-510 |
+| Quality | ln-500 | ln-501, ln-502, ln-503, ln-510 |
 | Codebase Audit | ln-620 | ln-621 through ln-629 |
 | Test Audit | ln-630 | ln-631 through ln-635 |
 

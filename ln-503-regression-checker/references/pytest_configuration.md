@@ -1,7 +1,7 @@
 # Test Framework Configuration Reference
 
 <!-- SCOPE: Test framework detection and configuration ONLY. Contains pytest, jest, vitest detection patterns. -->
-<!-- DO NOT add here: Regression checker logic → ln-502-regression-checker SKILL.md -->
+<!-- DO NOT add here: Regression checker logic → ln-503-regression-checker SKILL.md -->
 
 This document provides configuration examples and detection patterns for supported test frameworks.
 

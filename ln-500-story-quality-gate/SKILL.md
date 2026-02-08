@@ -10,7 +10,7 @@ Two-pass Story review with 4-level Gate verdict, Quality Score calculation, and 
 ## Purpose & Scope
 - Pass 1 (after impl tasks Done): run code-quality, lint, regression, and manual testing; if all pass, create/confirm test task; otherwise create targeted fix/refactor tasks and stop.
 - Pass 2 (after test task Done): verify tests/coverage/priority limits, calculate Quality Score and NFR validation, close Story to Done or create fix tasks.
-- Delegates work to ln-501/ln-502 workers and ln-510-test-planner.
+- Delegates work to ln-501/ln-502/ln-503 workers and ln-510-test-planner.
 
 ## 4-Level Gate Model
 
@@ -63,7 +63,7 @@ Additional prefixes: `TEST-` (coverage gaps), `ARCH-` (architecture issues), `DO
      - Check #2: AC-Task Coverage Quality (STRONG/WEAK/MISSING scoring) - if FAIL/CONCERNS → create [BUG-]/[COV-] tasks, stop.
      - Check #3: Database Creation Principle (schema scope matches Story) - if FAIL → create [DB-] task, stop.
   2) Run all linters from tech_stack.md. If fail -> create lint-fix task, stop.
-  3) Invoke ln-502-regression-checker. If fail -> create regression-fix task, stop.
+  3) Invoke ln-503-regression-checker. If fail -> create regression-fix task, stop.
   4) Invoke ln-510-test-planner (orchestrates: ln-511-test-researcher → ln-512-manual-tester → ln-513-auto-test-planner). If manual testing fails -> create bug-fix task, stop. If all passed -> test task created/updated.
   5) If test task exists and Done, jump to Pass 2; if exists but not Done, report status and stop.
 - **Pass 2 flow (after test task Done):**
@@ -83,7 +83,7 @@ Pass 1:
 - Invoke ln-501-code-quality-checker (in_progress)
 - Pass 1.5: Criteria Validation (Story deps, AC coverage, DB schema) (pending)
 - Run linters from tech_stack.md (pending)
-- Invoke ln-502-regression-checker (pending)
+- Invoke ln-503-regression-checker (pending)
 - Invoke ln-510-test-planner (research + manual + auto tests) (pending)
 
 Pass 2:
@@ -96,11 +96,12 @@ Mark each as in_progress when starting, completed when done. On failure, mark re
 
 | Step | Worker | Context | Rationale |
 |------|--------|---------|-----------|
-| Code Quality | ln-501-code-quality-checker | **Shared** (Skill tool) | Runs inline like ln-502/ln-510 |
-| Regression | ln-502-regression-checker | **Shared** (direct Skill tool) | Needs Story context and previous check results |
+| Code Quality | ln-501-code-quality-checker | **Shared** (Skill tool) | Runs inline; delegates agent review to ln-502 |
+| Agent Review | ln-502-agent-reviewer | **Separate** (invoked by ln-501) | External agent review (Codex + Gemini) |
+| Regression | ln-503-regression-checker | **Shared** (direct Skill tool) | Needs Story context and previous check results |
 | Test Planning | ln-510-test-planner | **Shared** (direct Skill tool) | Needs full Gate context for test planning |
 
-**All workers (ln-501, ln-502, ln-510):** Invoke via direct Skill tool — workers see Gate context.
+**All workers (ln-501, ln-503, ln-510):** Invoke via direct Skill tool — workers see Gate context. ln-502 is invoked by ln-501 internally.
 
 **ln-501 invocation:**
 ```
@@ -112,7 +113,7 @@ Skill(skill: "ln-501-code-quality-checker", args: "{storyId}")
 **Note:** ln-510 orchestrates the full test pipeline (ln-511 research → ln-512 manual → ln-513 auto tests).
 
 **❌ FORBIDDEN SHORTCUTS (Anti-Patterns):**
-- Running `mypy`, `ruff`, `pytest` directly instead of invoking ln-501/ln-502
+- Running `mypy`, `ruff`, `pytest` directly instead of invoking ln-501/ln-503
 - Doing "minimal quality check" (just linters) and skipping ln-510 test planning
 - Asking user "Want me to run the full skill?" after doing partial checks
 - Marking steps as "completed" in todo without invoking the actual skill
@@ -134,7 +135,7 @@ Skill(skill: "ln-501-code-quality-checker", args: "{storyId}")
 - Language preservation in comments (EN/RU).
 
 ## Definition of Done
-- Pass 1: ln-501 pass OR refactor task created; linters pass OR lint-fix task created; ln-502 pass OR regression-fix task created; ln-510 pipeline pass (research + manual + auto tests) OR bug-fix task created; test task created/updated; exits.
+- Pass 1: ln-501 pass OR refactor task created; linters pass OR lint-fix task created; ln-503 pass OR regression-fix task created; ln-510 pipeline pass (research + manual + auto tests) OR bug-fix task created; test task created/updated; exits.
 - Pass 2: test task verified (priority/limits/coverage/infra/docs); Quality Score calculated; NFR validation completed; Gate verdict determined (PASS/CONCERNS/FAIL/WAIVED).
 - **Gate output format:**
   ```yaml
@@ -155,7 +156,7 @@ Skill(skill: "ln-501-code-quality-checker", args: "{storyId}")
 - **AC validation rules:** `shared/references/ac_validation_rules.md`
 - Criteria Validation: `references/criteria_validation.md` (Story deps, AC coverage quality, DB schema checks from ln-310)
 - Gate levels: `references/gate_levels.md` (detailed scoring rules and thresholds)
-- Workers: `../ln-501-code-quality-checker/SKILL.md`, `../ln-502-regression-checker/SKILL.md`
+- Workers: `../ln-501-code-quality-checker/SKILL.md`, `../ln-502-agent-reviewer/SKILL.md`, `../ln-503-regression-checker/SKILL.md`
 - Test planning orchestrator: `../ln-510-test-planner/SKILL.md` (coordinates ln-511/512/513)
 - Tech stack/linters: `docs/project/tech_stack.md`
 

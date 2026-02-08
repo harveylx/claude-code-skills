@@ -2,14 +2,14 @@
 
 You are reviewing a validated Story and its implementation Tasks against the actual codebase and industry best practices.
 
-## Story
-{story_content}
+## Story Reference
+Read the Story from: {story_ref}
 
-## Tasks
-{tasks_content}
+## Tasks Reference
+Read the Tasks from: {tasks_ref}
 
 ## Instructions
-1. Read the Story and Tasks above
+1. Read the referenced Story and Tasks
 2. Examine the actual codebase in your working directory
 3. Search the web for current best practices relevant to the technical domains
 4. Compare Story/Tasks against:

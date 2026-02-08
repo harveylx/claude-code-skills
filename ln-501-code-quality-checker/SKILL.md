@@ -74,12 +74,8 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
 ## When to Use
 - **Invoked by ln-500-story-quality-gate** Pass 1 (first gate)
 - All implementation tasks in Story status = Done
-- Before regression testing (ln-502) and test planning (ln-510)
+- Before regression testing (ln-503) and test planning (ln-510)
 
-## Startup: Agent Availability Check
-
-**MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` §Startup for health check command.
-**EXECUTE the health check command via Bash.** NEVER assume agent availability — only command output determines whether Step 7 is included.
 
 ## Workflow (concise)
 1) Load Story (full) and Done implementation tasks (full descriptions) via Linear; skip tasks with label "tests".
@@ -128,13 +124,13 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
    - Subtract issue penalties (see Issue penalties table)
 
 6) Output verdict with score and structured issues. Add Linear comment with findings.
-7) **Agent Review (CONDITIONAL — only if agents available from Startup):**
-   **MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` §Parallel Aggregation for agent invocation.
-   - **Template:** `code_review.md` with `{task_content}` (all Done tasks) + `{story_content}` from Step 1.
-   - Aggregate suggestions per §Parallel Aggregation rules.
-   - Merge agent findings into issues list (same prefixes: SEC-, PERF-, MNT-, ARCH-, BP-, OPT-).
-   - Agent findings can escalate verdict: PASS → CONCERNS if high-severity issue found.
-   - **Display:** `"Agent Review: codex ({duration}s, {N}), gemini ({duration}s, {N}). Validated: {accepted}/{total}"`
+7) **Agent Review (Delegated to ln-502):**
+   Invoke `Skill(skill="ln-502-agent-reviewer", args="story_ref={story_linear_url_or_file} tasks_ref={tasks_linear_url_or_glob}")`.
+   - ln-502 handles health check, prompt building, agent execution, aggregation internally.
+   - Merge returned suggestions into issues list (same prefixes: SEC-, PERF-, MNT-, ARCH-, BP-, OPT-).
+   - If verdict = `SUGGESTIONS` with `area=security` or `area=correctness` → escalate PASS → CONCERNS.
+   - If verdict = `SKIPPED` → Self-Review fallback (native Claude reviews code).
+   - **Display:** agent stats from ln-502 output.
 
 ## Critical Rules
 - Read guides mentioned in Story/Tasks before judging compliance.
@@ -152,7 +148,7 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
   - PERF-: Performance analyzed (algorithms, configs, patterns, DB)
 - Issues identified with prefixes and severity, sources from MCP Ref/Context7.
 - Code Quality Score calculated.
-- Agent review completed (or skipped if agents unavailable).
+- Agent review: ln-502 invoked; suggestions merged into issues (or SKIPPED/Self-Review fallback).
 - **Output format:**
   ```yaml
   verdict: PASS | CONCERNS | ISSUES_FOUND

@@ -1,5 +1,5 @@
 ---
-name: ln-502-regression-checker
+name: ln-503-regression-checker
 description: Worker that runs existing tests to catch regressions. Auto-detects framework, reports pass/fail. No status changes or task creation.
 ---
 
@@ -13,7 +13,7 @@ Runs the existing test suite to ensure no regressions after implementation chang
 - Return PASS/FAIL with counts/log excerpts; never modifies Linear or kanban.
 
 ## When to Use
-- **Invoked by ln-500-story-quality-gate** Pass 1 (after ln-501)
+- **Invoked by ln-500-story-quality-gate** Pass 1 (after ln-501 and ln-502)
 - Code quality check passed
 
 ## Workflow (concise)

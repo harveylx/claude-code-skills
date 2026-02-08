@@ -15,8 +15,22 @@ Standard pattern for skills delegating work to external CLI AI agents (Codex, Ge
 | 200 (Decomposition) | Gemini | gemini-3-pro | Opus | Scope analysis, epic planning |
 | 300 (Task Mgmt) | Codex | gpt-5.3-codex | Opus | Task decomposition, plan review |
 | 400 (Execution) | Opus (native) | claude-opus-4-6 | -- | Direct code writing |
-| 310 (Validation) | codex-review + gemini-review | parallel | Self-review (if both fail) | Story/Tasks review (Phase 5) |
-| 501 (Code Quality) | codex-review + gemini-review | parallel | Self-review (if both fail) | Code quality review (Step 7) |
+| 311 (Story Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Story/Tasks review via ln-311 |
+| 502 (Code Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Code review via ln-502 |
+
+## Dedicated Agent Review Skills
+
+Agent review is encapsulated in dedicated worker skills, not inline in parent skills:
+
+| Worker Skill | Parent | Purpose | Prompt Template |
+|-------------|--------|---------|-----------------|
+| **ln-311-agent-reviewer** | ln-310 Phase 5 | Story/Tasks review | `story_review.md` |
+| **ln-502-agent-reviewer** | ln-501 Step 7 | Code implementation review | `code_review.md` |
+
+**Benefits:**
+- Health check + prompt execution in single invocation (minimal timing gap — solves API limit detection problem)
+- SRP: parent skills focus on their domain logic, agent communication is isolated
+- Reference-based prompts: agents read files in CWD instead of receiving embedded content
 
 ## Invocation Pattern
 
@@ -50,6 +64,7 @@ python shared/agents/agent_runner.py --agent codex --prompt-file /tmp/plan.md --
 3. **Use prompt-file** -- avoids Windows shell escaping for long text
 4. **Request JSON** -- easier to parse programmatically
 5. **Keep scope narrow** -- one task per call, not multi-step workflows
+6. **Use references** -- pass file paths or Linear URLs, not embedded content
 
 ## Fallback Rules
 
@@ -67,7 +82,7 @@ Phase 1: DISCOVERY
 Phase 2: PLAN ← external agent for analysis/decomposition
 Phase 3: MODE DETECTION
 Phase 4: AUTO-FIX ← 19 criteria, Penalty Points = 0 (ln-310)
-Phase 5: AGENT REVIEW ← parallel: codex+gemini, fallback: self (ln-310)
+Phase 5: AGENT REVIEW ← delegated to ln-311 (ln-310) or ln-502 (ln-501)
 Phase 6: DELEGATE
 Phase 7: AGGREGATE
 Phase 8: REPORT
@@ -75,7 +90,7 @@ Phase 8: REPORT
 
 ## Startup: Agent Availability Check
 
-**EXECUTE this command via Bash tool at skill startup — BEFORE creating todos:**
+**Health check is performed inside the dedicated agent review skills (ln-311, ln-502), NOT in parent skills.**
 
 ```bash
 python shared/agents/agent_runner.py --health-check
@@ -85,35 +100,25 @@ python shared/agents/agent_runner.py --health-check
 1. **ALWAYS execute the EXACT command above** — copy-paste, no modifications, no substitutions.
 2. **Do NOT invent alternative checks** (e.g., `where`, `which`, `--version`, PATH lookup). ONLY the command above is valid.
 3. **Only command output determines availability.** Do NOT reason about file existence, environment, or installation — run the command and read its output.
-4. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → agent review phase SKIPPED, Self-Review fallback.
+4. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → return SKIPPED verdict.
 
-Filter output by `skill_groups` matching current skill (e.g., "310" for ln-310, "501" for ln-501).
+Filter output by `skill_groups` matching current skill (e.g., "311" for ln-311, "502" for ln-502).
 
-| Command Output | Impact on Plan |
-|----------------|----------------|
-| ≥1 review agent OK | Agent review phase INCLUDED in plan + todos |
-| All agents UNAVAILABLE | Agent review phase SKIPPED — Self-Review fallback |
-| Command error/not found | Same as UNAVAILABLE — phase SKIPPED |
-
-Display at startup:
-```
-Agent Health Check:
-✓ codex-review: OK
-✗ gemini-review: UNAVAILABLE
-→ Agent Review: INCLUDED (1 agent available)
-```
-
-This result feeds into todo template — agent review items only created when agents available.
+| Command Output | Impact |
+|----------------|--------|
+| >=1 review agent OK | Run agents, return suggestions |
+| All agents UNAVAILABLE | Return `{verdict: "SKIPPED"}` |
+| Command error/not found | Same as UNAVAILABLE |
 
 ## Parallel Aggregation Pattern
 
 Run multiple agents in parallel, aggregate results from all successful responses:
 
 ```
-             ┌─ Agent A ──→ success? ──→ collect suggestions ─┐
-Prompt ──────┤                                                 ├──→ Dedup + Filter → Claude Validates → Apply accepted
-             └─ Agent B ──→ success? ──→ collect suggestions ─┘
-                              both fail? → Self-Review fallback
+             +-- Agent A --> success? --> collect suggestions --+
+Prompt ------+                                                  +---> Dedup + Filter -> Claude Validates -> Apply accepted
+             +-- Agent B --> success? --> collect suggestions --+
+                              both fail? -> Self-Review fallback
 ```
 
 **Rules:**
@@ -123,48 +128,49 @@ Prompt ──────┤                                                 ├
 4. Deduplicate by `(area, issue)` — keep higher confidence
 5. Filter: `confidence >= 90` AND `impact_percent > 2`
 6. Fallback logic:
-   - Both succeed → aggregate suggestions from both agents
-   - One fails → use successful agent's suggestions only, log failed agent
-   - Both fail → Self-Review fallback (native Claude, always succeeds)
+   - Both succeed -> aggregate suggestions from both agents
+   - One fails -> use successful agent's suggestions only, log failed agent
+   - Both fail -> return SKIPPED; parent skill falls back to Self-Review
 7. Log all attempts for user visibility (agent name, duration, suggestion count)
 8. Same JSON schema expected from all agents
 
 **Active Configurations:**
 
-| Skill | Agents (parallel) | Fallback | Prompt Template |
-|-------|-------------------|----------|-----------------|
-| ln-310 Phase 5 | codex-review + gemini-review | Self-Review | story_review.md |
-| ln-501 Step 7 | codex-review + gemini-review | Self-Review | code_review.md |
+| Worker Skill | Agents (parallel) | Fallback | Prompt Template |
+|-------------|-------------------|----------|-----------------|
+| ln-311-agent-reviewer | codex-review + gemini-review | SKIPPED -> ln-310 Self-Review | story_review.md |
+| ln-502-agent-reviewer | codex-review + gemini-review | SKIPPED -> ln-501 Self-Review | code_review.md |
 
-## Prompt Preparation
+## Prompt Preparation (Reference-Based)
 
-Standard steps before launching agents (applies to all Parallel Aggregation calls):
+Standard steps before launching agents (performed inside ln-311/ln-502):
 
 1. Load template: `Read("shared/agents/prompt_templates/{template}.md")`
-2. Replace placeholders: `{story_content}`, `{tasks_content}`, `{task_content}` with actual text from prior phases
-3. Save expanded prompt to scratchpad temp file (NOT `/tmp` on Windows)
+2. Replace placeholders: `{story_ref}` and `{tasks_ref}` with Linear URLs or file paths
+3. Save expanded prompt to temp file (use `%TEMP%` on Windows)
 4. Pass `--prompt-file {temp_file} --cwd {project_dir}` to agent_runner.py
+
+**Agents read the actual content themselves** from the referenced files/URLs in their CWD.
 
 ## Verdict Escalation Rules
 
-| Skill | Escalation? | Mechanism |
-|-------|-------------|-----------|
-| ln-310 (Story Review) | No | ACCEPTED suggestions modify Story/Tasks text only; Gate verdict unchanged |
-| ln-501 (Code Quality) | Yes | Findings with `area=security` or `area=correctness` can escalate PASS → CONCERNS |
-
-**Key difference:** ln-310 reviews plans (text), so suggestions are editorial. ln-501 reviews code, so security/correctness findings can escalate verdict.
+| Worker | Escalation? | Mechanism |
+|--------|-------------|-----------|
+| ln-311 (Story Review) | No | Suggestions are editorial; ln-310 Gate verdict unchanged |
+| ln-502 (Code Quality) | Yes | Findings with `area=security` or `area=correctness` can escalate PASS -> CONCERNS in ln-501 |
 
 ## Anti-Patterns
 
 | DON'T | DO |
 |-------|-----|
 | Auto-retry in runner | Let skill decide fallback |
-| Pass entire codebase as text | Run agent in project cwd (sees files) |
+| Embed full story/task content in prompt | Use reference-based prompts (file paths / URLs) |
 | Trust agent output blindly | Claude validates/analyzes response |
 | Use agents for file writes | Use agents for analysis/planning only |
 | Chain multiple agent calls | One call per task, stateless |
 | Hard-depend on agent availability | Always have Opus fallback |
+| Run health check in parent skill | Health check inside agent review worker (ln-311/ln-502) |
 
 ---
-**Version:** 1.0.0
-**Last Updated:** 2026-02-07
+**Version:** 2.0.0 (BREAKING: Agent review extracted to dedicated skills ln-311/ln-502. Reference-based prompts. Health check moved inside worker skills.)
+**Last Updated:** 2026-02-08

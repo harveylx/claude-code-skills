@@ -2,14 +2,14 @@
 
 You are reviewing a code implementation against its task requirements, existing codebase patterns, and industry best practices. This is an independent review with fresh context.
 
-## Task
-{task_content}
+## Task Reference
+Read the task details from: {tasks_ref}
 
-## Parent Story
-{story_content}
+## Story Reference
+Read the parent Story from: {story_ref}
 
 ## Instructions
-1. Read the Task and parent Story above to understand WHAT was supposed to be implemented
+1. Read the referenced Task(s) and parent Story to understand WHAT was supposed to be implemented
 2. Run `git diff` to see all uncommitted changes — focus your review on THESE changes
 3. Examine the surrounding codebase for existing patterns and conventions
 4. Search the web for current best practices relevant to the technical domains

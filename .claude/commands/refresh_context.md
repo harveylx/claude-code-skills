@@ -85,6 +85,7 @@ allowed-tools: Read, Edit
 - [ ] Read `ln-301-task-creator/SKILL.md` - L3 CREATE worker
 - [ ] Read `ln-302-task-replanner/SKILL.md` - L3 REPLAN worker
 - [ ] Read `ln-310-story-validator/SKILL.md` - auto-fix Stories/Tasks
+- [ ] Read `ln-311-agent-reviewer/SKILL.md` - external agent review for Stories
 
 **When working with 4XX Execution:**
 - [ ] Read `ln-400-story-executor/SKILL.md` - L1 orchestrator
@@ -96,7 +97,8 @@ allowed-tools: Read, Edit
 **When working with 5XX Quality:**
 - [ ] Read `ln-500-story-quality-gate/SKILL.md` - L2 coordinator
 - [ ] Read `ln-501-code-quality-checker/SKILL.md` - code quality
-- [ ] Read `ln-502-regression-checker/SKILL.md` - regression tests
+- [ ] Read `ln-502-agent-reviewer/SKILL.md` - external agent review
+- [ ] Read `ln-503-regression-checker/SKILL.md` - regression tests
 - [ ] Read `ln-510-test-planner/SKILL.md` - test planning orchestrator
 - [ ] Read `ln-511-test-researcher/SKILL.md` - test research (common problems, competitors)
 - [ ] Read `ln-512-manual-tester/SKILL.md` - manual AC testing

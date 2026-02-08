@@ -51,27 +51,18 @@ Detect operating mode at startup:
 - Phase 1-6: Standard workflow without stopping
 - Automatically fix and approve
 
-## Startup: Agent Availability Check
-
-**MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` §Startup for health check command.
-**EXECUTE the health check command via Bash.** NEVER assume agent availability — only command output determines whether Phase 5 is included.
-
 ## Plan Mode: Progress Tracking with TodoWrite
 
 When operating in any mode, skill MUST create detailed todo checklist tracking ALL phases and steps.
 
 **Rules:**
-1. Create todos IMMEDIATELY after Startup checks (before Phase 1)
+1. Create todos IMMEDIATELY before Phase 1
 2. Each phase step = separate todo item
 3. Mark `in_progress` before starting step, `completed` after finishing
-4. Phase 5 items: only include if ≥1 review agent available (from Startup check)
 
-**Todo Template (21-24 items depending on agent availability):**
+**Todo Template (~21 items):**
 
 ```
-Startup:
-  - Run agent health check (codex-review, gemini-review)
-
 Phase 1: Discovery & Loading
   - Auto-discover configuration (Team ID, docs)
   - Load Story metadata (ID, title, status, labels)
@@ -97,9 +88,8 @@ Phase 4: Auto-Fix (7 groups)
   - Fix Dependencies violations (#18-#19)
   - Fix Traceability violations (#16-#17)
 
-Phase 5: Agent Review ← CONDITIONAL (only if agents available)
-  - Run review agents (codex-review + gemini-review parallel)
-  - Aggregate and filter suggestions per agent_delegation_pattern.md §Parallel Aggregation
+Phase 5: Agent Review (delegated to ln-311)
+  - Invoke ln-311-agent-reviewer with story_ref + tasks_ref
   - Apply accepted suggestions to Story/Tasks
 
 Phase 6: Approve & Notify
@@ -181,12 +171,13 @@ Phase 6: Approve & Notify
 - Zero out penalty points as fixes applied
 - Test Strategy section must exist but remain empty (testing handled separately)
 
-### Phase 5: Agent Review (Conditional)
+### Phase 5: Agent Review (Delegated)
 
-**MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` §Parallel Aggregation for agent invocation.
-- **Template:** `story_review.md` with `{story_content}` + `{tasks_content}` from Phase 4.
-- **Apply:** ACCEPTED suggestions modify Story/Tasks text. No suggestions → proceed to Phase 6 unchanged.
-- **Display:** `"Agent Review: codex ({duration}s, {N} suggestions), gemini ({duration}s, {N} suggestions). Validated: {accepted}/{total} accepted, {rejected} rejected"`
+Invoke `Skill(skill="ln-311-agent-reviewer", args="story_ref={story_linear_url_or_file} tasks_ref={tasks_linear_url_or_glob}")`.
+- ln-311 handles health check, prompt building, agent execution, aggregation internally.
+- If verdict = `SUGGESTIONS` → apply ACCEPTED suggestions to Story/Tasks text.
+- If verdict = `SKIPPED` (no agents or all failed) → proceed to Phase 6 unchanged.
+- **Display:** agent stats from ln-311 output: `"Agent Review: {agent_stats summary}"`
 
 ### Phase 6: Approve & Notify
 
@@ -321,7 +312,7 @@ Verify all 19 criteria (#1-#19) from Auto-Fix Actions pass with concrete evidenc
 - Penalty Points = 0 (all 19 criteria fixed). Readiness Score ≥ 5.
 - Anti-Hallucination: VERIFIED (all claims sourced via MCP).
 - AC Coverage: 100% (each AC mapped to ≥1 Task).
-- Agent Review: suggestions aggregated, validated, accepted applied.
+- Agent Review: ln-311 invoked; suggestions aggregated, validated, accepted applied (or SKIPPED if no agents).
 - Story/Tasks set to Todo; kanban updated; Linear comment with Final Assessment posted.
 
 ## Example Workflow
@@ -344,7 +335,7 @@ Verify all 19 criteria (#1-#19) from Auto-Fix Actions pass with concrete evidenc
    - Fix #13: Add Guide-05, Guide-06 references
    - Fix #17: Docs already created by ln-002
    - All fixes applied, Penalty Points = 0
-5. **Phase 5:** Agent review (codex-review + gemini-review parallel → validate → apply accepted)
+5. **Phase 5:** Agent review (delegated to ln-311-agent-reviewer → apply accepted suggestions)
 6. **Phase 6:** Story -> Todo, tabular report
 
 ## Template Loading

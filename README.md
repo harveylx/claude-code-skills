@@ -48,6 +48,7 @@ claude-code-skills/
 |   |   |-- ln-301-task-creator/       # Universal factory (impl/refactor/test)
 |   |   |-- ln-302-task-replanner/     # Updates when plan changes
 |   |-- ln-310-story-validator/        # Validates against 2025 standards
+|   |-- ln-311-agent-reviewer/        # External agent review for Stories
 |
 |-- ln-4XX-*/                          # EXECUTION (5 skills)
 |   |-- ln-400-story-executor/         # Full automation: tasks -> Done
@@ -59,7 +60,8 @@ claude-code-skills/
 |-- ln-5XX-*/                          # QUALITY (8 skills)
 |   |-- ln-500-story-quality-gate/     # Pass 1 (code) + Pass 2 (tests)
 |   |-- ln-501-code-quality-checker/   # DRY/KISS/YAGNI violations
-|   |-- ln-502-regression-checker/     # Run existing test suite
+|   |-- ln-502-agent-reviewer/         # External agent review (Codex + Gemini)
+|   |-- ln-503-regression-checker/     # Run existing test suite
 |   |-- ln-510-test-planner/           # Orchestrator: research -> manual -> auto
 |   |   |-- ln-511-test-researcher/    # Research real-world problems
 |   |   |-- ln-512-manual-tester/      # Manual functional testing

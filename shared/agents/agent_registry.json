@@ -34,7 +34,7 @@
       "args": ["-a", "never", "exec", "--sandbox", "read-only", "--json"],
       "env_override": {},
       "timeout_seconds": 600,
-      "skill_groups": ["310", "402"],
+      "skill_groups": ["311", "502"],
       "health_check": "codex --version"
     },
     "gemini-review": {
@@ -43,7 +43,7 @@
       "args": ["--yolo", "-m", "gemini-3-pro-preview", "--output-format", "json", "-p", ""],
       "env_override": {"GOOGLE_CLOUD_PROJECT": ""},
       "timeout_seconds": 300,
-      "skill_groups": ["310", "402"],
+      "skill_groups": ["311", "502"],
       "health_check": "gemini --version"
     },
     "opencode-review": {
@@ -52,7 +52,7 @@
       "args": ["run", "--format", "json"],
       "env_override": {},
       "timeout_seconds": 300,
-      "skill_groups": ["310"],
+      "skill_groups": ["311"],
       "health_check": "opencode --version"
     }
   }
