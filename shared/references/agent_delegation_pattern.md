@@ -184,30 +184,67 @@ Claude MUST independently verify each agent suggestion. Do NOT trust blindly.
 
 ```
 Agent Suggestion --> Claude Evaluation --> AGREE? --> Accept as-is
-                                      --> DISAGREE/UNCERTAIN? --> Challenge Round (1 max)
+                                      --> DISAGREE/UNCERTAIN? --> Challenge Round 1
                                                                     |
-                                              Agent DEFEND (convincing) --> Accept agent's
-                                              Agent DEFEND (weak) -------> Reject (Claude wins)
-                                              Agent WITHDRAW ------------> Reject
-                                              Agent MODIFY (acceptable) -> Accept modified
-                                              Agent MODIFY (disagree) ---> Reject
+                                              Agent DEFEND (convincing, conf >= 85) --> Accept
+                                              Agent WITHDRAW -----------------------> Reject (final)
+                                              Agent DEFEND (weak) ------------------> Follow-Up Round
+                                              Agent MODIFY (acceptable) ------------> Accept modified
+                                              Agent MODIFY (disagree) --------------> Follow-Up Round
+                                                                                         |
+                                              Agent DEFEND (new evidence, conf >= 85) -> Accept
+                                              Agent DEFEND (same/weaker) -------------> Reject (final)
+                                              Agent WITHDRAW -------------------------> Reject (final)
+                                              Agent MODIFY (acceptable) --------------> Accept modified
+                                              Agent MODIFY (disagree) ----------------> Reject (final)
 ```
 
-**Challenge process:**
+### Challenge Round 1
+
 1. Build prompt from `shared/agents/prompt_templates/challenge_review.md`
-2. Fill: original suggestion details + Claude's counterargument
-3. Save to `.agent-review/{agent}/{id}_challenge_{N}_prompt.md`
+2. Fill: original suggestion details + Claude's specific counterargument
+3. Save to `.agent-review/{agent}/{id}_{reviewtype}_challenge_{N}_prompt.md`
 4. Run same agent with challenge prompt + `--output-file`
 5. Parse response (DEFEND/WITHDRAW/MODIFY)
-6. Resolution: accept only if agent provides convincing new evidence (confidence >= 85)
 
-**"Convincing" criteria:**
+**Round 1 Resolution:**
+
+| Agent Response | Action |
+|----------------|--------|
+| DEFEND + convincing evidence (confidence >= 85) | Accept agent's suggestion |
+| WITHDRAW | Reject (final) |
+| DEFEND + weak evidence | Proceed to Follow-Up Round |
+| MODIFY + acceptable revision | Accept modified version |
+| MODIFY + still disagree | Proceed to Follow-Up Round |
+
+### Follow-Up Round (1 max, only for suggestions not resolved in Round 1)
+
+1. Build prompt from `shared/agents/prompt_templates/challenge_review.md` with updated placeholders:
+   - `{counterargument}` = Claude's specific rejection reason from Round 1, including: what evidence was insufficient, what was checked, why revision was not accepted
+2. Save to `.agent-review/{agent}/{id}_{reviewtype}_followup_{N}_prompt.md`
+3. Run same agent with follow-up prompt + `--output-file`
+4. Parse response
+
+**Follow-Up Resolution (final, no further rounds):**
+
+| Agent Response | Action |
+|----------------|--------|
+| DEFEND + new evidence not seen in Round 1 (confidence >= 85) | Accept agent's suggestion |
+| DEFEND + same/weaker evidence | Reject (final) |
+| WITHDRAW | Reject (final) |
+| MODIFY + acceptable revision | Accept modified version |
+| MODIFY + still disagree | Reject (final) |
+
+### "Convincing" Criteria
+
 - Agent cites specific standard/RFC/benchmark Claude hadn't considered
 - Agent shows concrete code path Claude missed
 - Agent's `confidence_after_challenge` >= 85
 - Claude cannot refute the new evidence
 
-**Debate is limited to 1 round** — no back-and-forth. If agent is not convincing in 1 round, Claude's position wins.
+### Debate Limits
+
+**Maximum 2 rounds per suggestion** (1 challenge + 1 follow-up). Follow-up only triggers for non-final rejections in Round 1. WITHDRAW in any round is always final.
 
 ## Reference Passing Pattern
 
@@ -234,8 +271,10 @@ Standard steps before launching agents (performed inside ln-311/ln-512):
 ├── codex/
 │   ├── PROJ-123_storyreview_prompt.md
 │   ├── PROJ-123_storyreview_result.md
-│   ├── PROJ-123_storyreview_challenge_1_prompt.md    # debate artifact
-│   ├── PROJ-123_storyreview_challenge_1_result.md    # debate artifact
+│   ├── PROJ-123_storyreview_challenge_1_prompt.md    # Round 1 debate
+│   ├── PROJ-123_storyreview_challenge_1_result.md    # Round 1 debate
+│   ├── PROJ-123_storyreview_followup_1_prompt.md     # Follow-up (if Round 1 not resolved)
+│   ├── PROJ-123_storyreview_followup_1_result.md     # Follow-up result
 │   ├── PROJ-123_codereview_prompt.md
 │   └── PROJ-123_codereview_result.md
 └── gemini/

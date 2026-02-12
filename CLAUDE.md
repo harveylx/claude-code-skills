@@ -84,6 +84,8 @@ All 99 skills documented in [README.md](README.md#-features) feature tables with
 
 **File References in Skills:** All file references in SKILL.md workflow sections MUST use `**MANDATORY READ:** Load {file}` pattern. Passive references (`See`, `Per`, `Follows`) are NOT followed by agents. If a skill references the same file multiple times, group into ONE `**MANDATORY READ:**` at the start of the relevant section, then reference specific parts inline (e.g., `per checklist #9`).
 
+**Path Resolution:** File paths in SKILL.md (`shared/`, `references/`, `../ln-*`) are relative to the skills repository root, NOT the target project. When a file is not found at CWD, the agent MUST resolve it from the SKILL.md file's directory (go up one level = repo root). Every SKILL.md with file references includes a `> **Paths:**` note after frontmatter. **Rule for skill authors:** never assume `shared/` or `references/` exist in the target project — always direct agents to the skill's own repository.
+
 ## Working with Skill Files
 
 ### SKILL.md Metadata
