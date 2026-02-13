@@ -23,7 +23,8 @@
                 <li><strong>Auto PR:</strong> After quality gate PASS, auto-create PR via gh CLI</li>
                 <li><strong>Error Recovery:</strong> Quality cycle limit (2), validation retry (1), rework escalation (3), crash resume via checkpoint</li>
                 <li><strong>Lead Recovery:</strong> Phase 0 restores all state from .pipeline/state.json on restart (full schema persisted every heartbeat)</li>
-                <li><strong>Git Worktree:</strong> Each Story runs in .worktrees/story-{id}/ for parallel isolation (no git checkout conflicts)</li>
+                <li><strong>Git Worktree:</strong> Conditional — only created when 2nd worker starts (parallel isolation). Solo worker runs in project CWD</li>
+                <li><strong>Dependencies:</strong> Stories with Depends On fields are scheduled after prerequisites complete (dependency guard in Phase 4)</li>
                 <li><strong>Keepalive:</strong> Stop hook prevents lead exit, TeammateIdle hook prevents worker idle during stages</li>
             </ul>
         </div>
@@ -113,9 +114,7 @@ stateDiagram-v2
         InstallHooks: Install Stop + TeammateIdle hooks
         InstallHooks --> InitState
         InitState: Write .pipeline/state.json (complete=false, full schema)
-        InitState --> CreateWorktrees
-        CreateWorktrees: git worktree add .worktrees/story-{id} develop (per story)
-        CreateWorktrees --> CreateTeam
+        InitState --> CreateTeam
         CreateTeam: TeamCreate(pipeline-{date})
         CreateTeam --> SpawnWorker1
         SpawnWorker1: Spawn worker-1 (Sonnet, bypassPermissions)
@@ -126,8 +125,18 @@ stateDiagram-v2
     Phase3_TeamSetup --> Phase4_Loop
 
     state "Phase 4: Execution Loop (heartbeat-driven)" as Phase4_Loop {
-        [*] --> AssignStages
-        AssignStages: Assign stages to idle workers
+        [*] --> CheckDeps
+        CheckDeps: Check dependency guard (depends_on satisfied?)
+        state DepResult <<choice>>
+        CheckDeps --> DepResult
+        DepResult --> CreateWorktree: Unblocked + parallel (active_workers >= 1)
+        DepResult --> AssignStages: Unblocked + solo (active_workers == 0)
+        DepResult --> SkipBlocked: All deps unresolved
+        CreateWorktree: git worktree add (lazy, only for parallel)
+        CreateWorktree --> AssignStages
+        SkipBlocked: Skip to next candidate or wait
+        SkipBlocked --> TurnEnds
+        AssignStages: Assign stages to workers
         AssignStages --> TurnEnds
         TurnEnds: Lead turn ends
         TurnEnds --> StopHook
@@ -194,7 +203,7 @@ stateDiagram-v2
         ShutdownWorkers --> DeleteTeam
         DeleteTeam: TeamDelete
         DeleteTeam --> RemoveWorktrees
-        RemoveWorktrees: git worktree remove + rm -rf .worktrees/
+        RemoveWorktrees: git worktree remove (if any created)
         RemoveWorktrees --> CleanPipeline
         CleanPipeline: Delete .pipeline/ directory
         CleanPipeline --> ReportPRs

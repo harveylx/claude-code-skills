@@ -63,7 +63,7 @@ Task(
 )
 ```
 
-**Note:** Every stage template includes `WORKING DIRECTORY` — the worktree path created by lead in Phase 3.3. Workers MUST `cd` to this directory before any operation.
+**Note:** Stage templates include `WORKING DIRECTORY` block only when the worker runs in a worktree (parallel mode). When absent, the worker operates in the project root (CWD). Lead includes this block conditionally based on `worktree_dir` parameter.
 
 ## Stage 0: Task Planning (ln-300)
 
@@ -71,8 +71,10 @@ Task(
 You are a pipeline worker in team "pipeline-{date}".
 Your assignment: Story {storyId} "{storyTitle}"
 
-WORKING DIRECTORY: .worktrees/story-{storyId}/
-ALL commands must execute in this directory. cd to .worktrees/story-{storyId}/ before any operation.
+{IF worktree_dir:}
+WORKING DIRECTORY: {worktree_dir}
+ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
+{ENDIF}
 
 TASK: Execute Stage 0 — Task Planning (create implementation tasks).
 
@@ -104,8 +106,10 @@ CONTEXT:
 You are a pipeline worker in team "pipeline-{date}".
 Your assignment: Story {storyId} "{storyTitle}"
 
-WORKING DIRECTORY: .worktrees/story-{storyId}/
-ALL commands must execute in this directory. cd to .worktrees/story-{storyId}/ before any operation.
+{IF worktree_dir:}
+WORKING DIRECTORY: {worktree_dir}
+ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
+{ENDIF}
 
 TASK: Execute Stage 1 — Story Validation.
 
@@ -142,8 +146,10 @@ CONTEXT:
 You are a pipeline worker in team "pipeline-{date}".
 Your assignment: Story {storyId} "{storyTitle}"
 
-WORKING DIRECTORY: .worktrees/story-{storyId}/
-ALL commands must execute in this directory. cd to .worktrees/story-{storyId}/ before any operation.
+{IF worktree_dir:}
+WORKING DIRECTORY: {worktree_dir}
+ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
+{ENDIF}
 
 TASK: Execute Stage 2 — Story Execution.
 
@@ -179,8 +185,10 @@ CONTEXT:
 You are a pipeline worker in team "pipeline-{date}".
 Your assignment: Story {storyId} "{storyTitle}"
 
-WORKING DIRECTORY: .worktrees/story-{storyId}/
-ALL commands must execute in this directory. cd to .worktrees/story-{storyId}/ before any operation.
+{IF worktree_dir:}
+WORKING DIRECTORY: {worktree_dir}
+ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
+{ENDIF}
 
 TASK: Execute Stage 3 — Quality Gate.
 

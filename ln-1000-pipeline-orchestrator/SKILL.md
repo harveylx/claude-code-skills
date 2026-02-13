@@ -120,16 +120,21 @@ IF .pipeline/state.json NOT exists OR complete == true:
 6. Detect task presence per Story:
    - Has `_(tasks not created yet)_` → **no tasks** → Stage 0
    - Has task lines (4-space indent) → **tasks exist** → Stage 1+
-7. Show pipeline plan to user:
+7. Extract dependencies per Story (see `references/kanban_parser.md` Dependency Extraction):
+   - Read each Story file → parse `## Dependencies / ### Depends On` section
+   - Build `depends_on[storyId] = [prerequisite IDs]`
+   - Prerequisites already Done → satisfied, ignore. Not found → WARN, treat as none
+   - Circular dependencies → ESCALATE to user
+8. Show pipeline plan to user:
    ```
    Pipeline Plan:
-   | # | Story | Current Status | Tasks? | Target Stage | Action |
-   |---|-------|---------------|--------|-------------|--------|
-   | 1 | PROJ-42 | To Review | yes | Stage 3 | Quality gate |
-   | 2 | PROJ-38 | To Rework | yes | Stage 2 | Re-execute with fix tasks |
-   | 3 | PROJ-45 | Todo | yes | Stage 2 | Execute |
-   | 4 | PROJ-50 | Backlog | yes | Stage 1 | Validate |
-   | 5 | PROJ-55 | Backlog | no | Stage 0 | Create tasks |
+   | # | Story | Status | Stage | Deps | Action |
+   |---|-------|--------|-------|------|--------|
+   | 1 | PROJ-42 | To Review | 3 | — | Quality gate |
+   | 2 | PROJ-38 | To Rework | 2 | — | Re-execute with fix tasks |
+   | 3 | PROJ-45 | Todo | 2 | PROJ-42 | Execute (after PROJ-42) |
+   | 4 | PROJ-50 | Backlog | 1 | — | Validate |
+   | 5 | PROJ-55 | Backlog | 0 | PROJ-50 | Create tasks (after PROJ-50) |
    ```
 
 ### Phase 2: Pre-flight Questions (ONE batch)
@@ -178,17 +183,9 @@ Write .pipeline/state.json (full schema — see checkpoint_format.md):
     "crash_count": {}, "pr_urls": {}, "priority_queue_ids": [<all story IDs>] }
 ```
 
-#### 3.3 Create Worktrees for Parallel Isolation
+#### 3.3 Create Team & Spawn Workers
 
-```
-FOR EACH story in top 2 of priority_queue:
-  git worktree add .worktrees/story-{id} develop
-  # Creates isolated working directory from develop branch
-```
-
-**Why worktrees:** Without them, 2 parallel workers in the same CWD would race on `git checkout`, overwriting each other's files. Each worktree has its own HEAD and working directory.
-
-#### 3.4 Create Team & Spawn Workers
+**Worktrees:** Created lazily in Phase 4 spawn loop — only when a 2nd worker starts (parallel mode). Solo worker runs in project CWD. See Phase 4 spawn logic.
 
 1. Create team:
    ```
@@ -247,6 +244,8 @@ crash_count = {}                      # {storyId: count} — crash respawn count
 suspicious_idle = {}                  # {storyId: bool} — crash detection flag
 story_state = {}                      # {storyId: "STAGE_0"|"STAGE_1"|"STAGE_2"|"STAGE_3"|"DONE"|"PAUSED"}
 worker_map = {}                       # {storyId: worker_name}
+depends_on = {}                       # {storyId: [prerequisite IDs]} — from Phase 1 step 7
+worktree_map = {}                     # {storyId: worktree_dir | null} — tracks which stories use worktrees
 
 # Initialize counters for all queued stories
 FOR EACH story IN priority_queue:
@@ -271,14 +270,28 @@ FOR EACH story IN priority_queue:
 
 WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
 
-  # 1. Spawn workers for queued stories (respecting concurrency limit)
+  # 1. Spawn workers for queued stories (respecting concurrency + dependency limits)
   WHILE active_workers < 2 AND priority_queue NOT EMPTY:
-    story = priority_queue.pop()
+    story = priority_queue.peek()            # Don't pop yet — may be blocked
+
+    # Dependency guard: all prerequisites must be DONE
+    blocked_deps = [d for d in depends_on[story.id] if story_state[d] != "DONE"]
+    IF blocked_deps NOT EMPTY:
+      priority_queue.skip(story.id)          # Move to next candidate
+      CONTINUE                               # Try next story in queue
+    priority_queue.pop()                     # Safe to start
+
     target_stage = determine_stage(story)    # See pipeline_states.md guards
     worker_name = "story-{story.id}"
-    worktree_dir = ".worktrees/story-{story.id}"
-    IF worktree not yet created:
+
+    # Conditional worktree: only when parallel (another worker already active)
+    IF active_workers >= 1:
+      worktree_dir = ".worktrees/story-{story.id}"
       git worktree add {worktree_dir} develop
+    ELSE:
+      worktree_dir = null                    # Solo mode — work in project CWD
+
+    worktree_map[story.id] = worktree_dir
     Task(name: worker_name, team_name: "pipeline-{date}",
          model: "sonnet", mode: "bypassPermissions",
          subagent_type: "general-purpose",
@@ -398,8 +411,12 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     # Full state write enables Phase 0 recovery if lead crashes between heartbeats
 
   ON NO NEW MESSAGES (heartbeat cycle with no worker updates):
-    # Brief status — do NOT say "waiting" and stop. Let turn end naturally.
-    Output: "Heartbeat: {active_workers} workers active, {stories_remaining} remaining."
+    # Brief status with checkpoint progress — do NOT say "waiting" and stop.
+    FOR EACH active story in story_state (STAGE_0..STAGE_3):
+      checkpoint = read(".pipeline/checkpoint-{id}.json") if exists
+      progress = "{len(checkpoint.tasksCompleted)}/{len(checkpoint.tasksCompleted)+len(checkpoint.tasksRemaining)}" if checkpoint else "—"
+      # Collect per-story progress
+    Output: "Heartbeat: {active_workers} workers, {stories_remaining} remaining. Progress: {id}={progress}, ..."
     # Turn ends → Stop hook fires → next heartbeat cycle
 ```
 
@@ -407,9 +424,13 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
 
 #### Phase 4a: Auto PR Creation
 
-After Stage 3 PASS for each Story (execute from worktree `.worktrees/story-{id}/`):
-1. Verify feature branch exists: `git -C .worktrees/story-{id} branch --show-current`
-2. Push branch: `git -C .worktrees/story-{id} push -u origin feature/{id}-{slug}`
+After Stage 3 PASS for each Story:
+1. Verify feature branch exists:
+   - If `worktree_map[id]`: `git -C .worktrees/story-{id} branch --show-current`
+   - Else: `git branch --show-current`
+2. Push branch:
+   - If `worktree_map[id]`: `git -C .worktrees/story-{id} push -u origin feature/{id}-{slug}`
+   - Else: `git push -u origin feature/{id}-{slug}`
 3. Create PR:
    ```bash
    gh pr create --title "{storyId}: {Story Title}" --body "$(cat <<'EOF'
@@ -468,10 +489,11 @@ FOR EACH worker_name IN worker_map.values():
 # 5. Cleanup team
 TeamDelete
 
-# 6. Remove worktrees
-FOR EACH story in worker_map:
-  git worktree remove .worktrees/story-{id} --force
-rm -rf .worktrees/
+# 6. Remove worktrees (only if any were created)
+IF .worktrees/ directory exists:
+  FOR EACH story in worktree_map WHERE worktree_dir != null:
+    git worktree remove {worktree_dir} --force
+  rm -rf .worktrees/
 
 # 7. Remove pipeline state files
 Delete .pipeline/ directory
