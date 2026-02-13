@@ -21,7 +21,8 @@ Meta-orchestrator that reads the kanban board, builds a priority queue of Storie
 
 ```
 L0: ln-1000-pipeline-orchestrator (TeamCreate lead, delegate mode)
-  +-- Story Workers (Sonnet, per-story, persistent between stages)
+  +-- Story Workers (fresh per stage, shutdown after completion)
+       |   Stage 0,2 (code/tasks): Sonnet 4.5  |  Stage 1,3 (review/QA): Opus 4.6
        +-- L1: ln-300 / ln-310 / ln-400 / ln-500 (invoked via Skill tool, as-is)
             +-- L2/L3: existing hierarchy unchanged
 ```
@@ -90,7 +91,8 @@ This skill runs as a **team lead** in delegate mode. The agent executing ln-1000
 IF .pipeline/state.json exists AND complete == false:
   # Previous run interrupted — resume from saved state
   1. Read .pipeline/state.json → restore: story_state, worker_map,
-     quality_cycles, validation_retries, crash_count, pr_urls, priority_queue_ids
+     quality_cycles, validation_retries, crash_count, pr_urls, priority_queue_ids,
+     story_results, remote_type
   2. Read .pipeline/checkpoint-*.json → validate story_state consistency
      (checkpoint.stage should match story_state[id])
   3. Re-read kanban board → rebuild priority_queue from priority_queue_ids
@@ -125,7 +127,14 @@ IF .pipeline/state.json NOT exists OR complete == true:
    - Build `depends_on[storyId] = [prerequisite IDs]`
    - Prerequisites already Done → satisfied, ignore. Not found → WARN, treat as none
    - Circular dependencies → ESCALATE to user
-8. Show pipeline plan to user:
+8. Detect remote type:
+   ```
+   remote_url = git remote get-url origin
+   IF remote_url contains "github": remote_type = "github"
+   ELIF remote_url contains "gitlab": remote_type = "gitlab"
+   ELSE: remote_type = "unknown"; WARN user "Unknown remote type. PRs may need manual creation."
+   ```
+9. Show pipeline plan to user:
    ```
    Pipeline Plan:
    | # | Story | Status | Stage | Deps | Action |
@@ -185,30 +194,24 @@ Write .pipeline/state.json (full schema — see checkpoint_format.md):
 
 #### 3.3 Create Team & Spawn Workers
 
-**Worktrees:** Created lazily in Phase 4 spawn loop — only when a 2nd worker starts (parallel mode). Solo worker runs in project CWD. See Phase 4 spawn logic.
+**Worktrees:** Created lazily in Phase 4 spawn loop — only when a 2nd worker starts (parallel mode). Solo worker runs in project CWD.
 
-1. Create team:
+**Model routing:** `model_for_stage(0) = "sonnet"`, `model_for_stage(1) = "opus"`, `model_for_stage(2) = "sonnet"`, `model_for_stage(3) = "opus"`. Crash recovery/respawn always uses `"opus"` (troubleshooting needs stronger reasoning).
+
+1. Ensure `develop` branch exists:
+   ```
+   IF `develop` branch not found locally or on origin:
+     git branch develop master        # Create from master
+     git push -u origin develop
+   git checkout develop               # Start pipeline from develop
+   ```
+
+2. Create team:
    ```
    TeamCreate(team_name: "pipeline-{YYYY-MM-DD}")
    ```
 
-2. Spawn workers for top 2 Stories from priority queue:
-   ```
-   Task(
-     name: "story-{storyId}",
-     team_name: "pipeline-{date}",
-     model: "sonnet",
-     mode: "bypassPermissions",
-     subagent_type: "general-purpose",
-     prompt: <worker prompt from references/worker_prompts.md>
-   )
-   ```
-
-3. Each worker receives:
-   - Story ID and title
-   - Current status and target stage
-   - Business question answers (from Phase 2)
-   - Instruction to wait for lead's stage command
+Workers are spawned by Phase 4 spawn loop on first heartbeat — NOT here. This avoids duplicate spawn logic.
 
 ### Phase 4: Execution Loop
 
@@ -246,6 +249,7 @@ story_state = {}                      # {storyId: "STAGE_0"|"STAGE_1"|"STAGE_2"|
 worker_map = {}                       # {storyId: worker_name}
 depends_on = {}                       # {storyId: [prerequisite IDs]} — from Phase 1 step 7
 worktree_map = {}                     # {storyId: worktree_dir | null} — tracks which stories use worktrees
+story_results = {}                    # {storyId: {stage0: "...", stage1: "...", ...}} — for pipeline report
 
 # Initialize counters for all queued stories
 FOR EACH story IN priority_queue:
@@ -267,6 +271,9 @@ FOR EACH story IN priority_queue:
 # The Stop hook IS the event loop driver. Each heartbeat = one iteration.
 # Lead MUST NOT say "waiting for messages" and stop — the heartbeat keeps it alive.
 # If no worker messages arrived: output brief status, let turn end → next heartbeat.
+#
+# FRESH WORKER PER STAGE: Each stage transition = shutdown old worker + spawn new one.
+# active_workers stays same (net-zero). Only DONE/PAUSED/ERROR decrement active_workers.
 
 WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
 
@@ -282,7 +289,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     priority_queue.pop()                     # Safe to start
 
     target_stage = determine_stage(story)    # See pipeline_states.md guards
-    worker_name = "story-{story.id}"
+    worker_name = "story-{story.id}-s{target_stage}"
 
     # Conditional worktree: only when parallel (another worker already active)
     IF active_workers >= 1:
@@ -293,7 +300,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
 
     worktree_map[story.id] = worktree_dir
     Task(name: worker_name, team_name: "pipeline-{date}",
-         model: "sonnet", mode: "bypassPermissions",
+         model: model_for_stage(target_stage), mode: "bypassPermissions",
          subagent_type: "general-purpose",
          prompt: worker_prompt(story, target_stage, business_answers, worktree_dir))
     worker_map[story.id] = worker_name
@@ -308,45 +315,94 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
   # 2. Process worker messages (delivered by heartbeat cycle)
   #    Messages from workers arrive as conversation context in each heartbeat iteration.
   #    Match against ON handlers below. If no match → ON NO NEW MESSAGES at bottom.
+  #
+  # SENDER VALIDATION: Before processing ANY completion message, verify sender:
+  #   VERIFY message.sender == worker_map[id]
+  #   IF mismatch: LOG "Ignoring stale message from {sender} for {id}"; SKIP handler
+  #   This prevents old/dead workers from corrupting pipeline state.
+
   ON "Stage 0 COMPLETE for {id}. {N} tasks created. Plan score: {score}/4":
     Re-read kanban board
     ASSERT tasks exist under Story {id}         # Guard: verify ln-300 output
     IF tasks missing: story_state[id] = "PAUSED"; ESCALATE; CONTINUE
     story_state[id] = "STAGE_1"
-    SendMessage(recipient: worker_map[id],
-                content: "Proceed to Stage 1", summary: "{id} → Stage 1")
+    # Shutdown old worker, spawn fresh for Stage 1
+    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    SendMessage(type: "shutdown_request", recipient: worker_map[id])
+    next_worker = "story-{id}-s1"
+    Task(name: next_worker, team_name: "pipeline-{date}",
+         model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",
+         prompt: worker_prompt(story, 1, business_answers, worktree_map[id]))
+    worker_map[id] = next_worker
+    Write .pipeline/worker-{next_worker}-active.flag
+    story_results[id].stage0 = "{N} tasks, {score}/4"
 
   ON "Stage 0 ERROR for {id}: {details}":
     story_state[id] = "PAUSED"
     active_workers--
     ESCALATE to user: "Cannot create tasks for Story {id}: {details}"
     SendMessage(type: "shutdown_request", recipient: worker_map[id])
-    # Loop continues → spawns next story from queue
+    story_results[id].stage0 = "ERROR: {details}"
+    Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
 
   ON "Stage 1 COMPLETE for {id}. Verdict: GO. Readiness: {score}":
     Re-read kanban board
     ASSERT Story {id} status = Todo              # Guard: verify ln-310 output
     story_state[id] = "STAGE_2"
-    SendMessage(recipient: worker_map[id],
-                content: "Proceed to Stage 2", summary: "{id} → Stage 2")
+    # Shutdown old worker, spawn fresh for Stage 2
+    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    SendMessage(type: "shutdown_request", recipient: worker_map[id])
+    next_worker = "story-{id}-s2"
+    Task(name: next_worker, team_name: "pipeline-{date}",
+         model: "sonnet", mode: "bypassPermissions", subagent_type: "general-purpose",    # Stage 2 = code
+         prompt: worker_prompt(story, 2, business_answers, worktree_map[id]))
+    worker_map[id] = next_worker
+    Write .pipeline/worker-{next_worker}-active.flag
+    story_results[id].stage1 = "GO, {score}"
 
   ON "Stage 1 COMPLETE for {id}. Verdict: NO-GO. Readiness: {score}":
     validation_retries[id]++
     IF validation_retries[id] <= 1:
-      SendMessage(recipient: worker_map[id],
-                  content: "Re-run Stage 1 (auto-fix attempt)", summary: "{id} Stage 1 retry")
+      # Shutdown old worker, spawn fresh for Stage 1 retry
+      Remove .pipeline/worker-{worker_map[id]}-active.flag
+      SendMessage(type: "shutdown_request", recipient: worker_map[id])
+      next_worker = "story-{id}-s1-retry"
+      Task(name: next_worker, team_name: "pipeline-{date}",
+           model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",    # Stage 1 = review
+           prompt: worker_prompt(story, 1, business_answers, worktree_map[id]))
+      worker_map[id] = next_worker
+      Write .pipeline/worker-{next_worker}-active.flag
     ELSE:
       story_state[id] = "PAUSED"
       active_workers--
       ESCALATE to user: "Story {id} failed validation twice: {reason}"
       SendMessage(type: "shutdown_request", recipient: worker_map[id])
+      story_results[id].stage1 = "NO-GO, {score}, {reason} (retries exhausted)"
+      Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
+
+  ON "Stage 2 ERROR for {id}: {details}":
+    story_state[id] = "PAUSED"
+    active_workers--
+    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    ESCALATE to user: "Story {id} execution failed: {details}"
+    SendMessage(type: "shutdown_request", recipient: worker_map[id])
+    story_results[id].stage2 = "ERROR: {details}"
+    Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
 
   ON "Stage 2 COMPLETE for {id}. All tasks Done":
     Re-read kanban board
     ASSERT Story {id} status = To Review         # Guard: verify ln-400 output
     story_state[id] = "STAGE_3"
-    SendMessage(recipient: worker_map[id],
-                content: "Proceed to Stage 3", summary: "{id} → Stage 3")
+    # Shutdown old worker, spawn fresh for Stage 3
+    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    SendMessage(type: "shutdown_request", recipient: worker_map[id])
+    next_worker = "story-{id}-s3"
+    Task(name: next_worker, team_name: "pipeline-{date}",
+         model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",      # Stage 3 = QA
+         prompt: worker_prompt(story, 3, business_answers, worktree_map[id]))
+    worker_map[id] = next_worker
+    Write .pipeline/worker-{next_worker}-active.flag
+    story_results[id].stage2 = "Done"
 
   ON "Stage 3 COMPLETE for {id}. Verdict: PASS|CONCERNS|WAIVED. Quality Score: {score}":
     story_state[id] = "DONE"
@@ -356,20 +412,28 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     Auto PR (see Phase 4a below)
     Update kanban: Story → Done
     SendMessage(type: "shutdown_request", recipient: worker_map[id])
-    # Loop continues → spawns next story from queue
+    story_results[id].stage3 = "{verdict} {score}/100"
 
   ON "Stage 3 COMPLETE for {id}. Verdict: FAIL. Quality Score: {score}":
     quality_cycles[id]++
     IF quality_cycles[id] < 2:
       story_state[id] = "STAGE_2"
-      SendMessage(recipient: worker_map[id],
-                  content: "Quality gate FAIL. Fix tasks created. Re-enter Stage 2.",
-                  summary: "{id} FAIL → Stage 2")
+      # Shutdown old worker, spawn fresh for Stage 2 re-entry (fix tasks)
+      Remove .pipeline/worker-{worker_map[id]}-active.flag
+      SendMessage(type: "shutdown_request", recipient: worker_map[id])
+      next_worker = "story-{id}-s2-fix"
+      Task(name: next_worker, team_name: "pipeline-{date}",
+           model: "sonnet", mode: "bypassPermissions", subagent_type: "general-purpose",  # Stage 2 = code fix
+           prompt: worker_prompt(story, 2, business_answers, worktree_map[id]))
+      worker_map[id] = next_worker
+      Write .pipeline/worker-{next_worker}-active.flag
     ELSE:
       story_state[id] = "PAUSED"
       active_workers--
       ESCALATE to user: "Story {id} failed quality gate {quality_cycles[id]} times"
       SendMessage(type: "shutdown_request", recipient: worker_map[id])
+      story_results[id].stage3 = "FAIL {score}/100 (cycles exhausted)"
+      Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
 
   ON worker TeammateIdle WITHOUT prior completion message for {id}:
     # Crash detection: 3-step protocol (see worker_health_contract.md)
@@ -391,10 +455,10 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
         IF checkpoint.agentId exists:
           Task(resume: checkpoint.agentId)          # Try 1: full context resume
         ELSE:
-          new_prompt = worker_prompt(story, checkpoint.stage) + CHECKPOINT_RESUME block
-          Task(name: "story-{id}-retry", team_name: "pipeline-{date}",
-               mode: "bypassPermissions", subagent_type: "general-purpose",
-               prompt: new_prompt)                  # Try 2: checkpoint-based new worker
+          new_prompt = worker_prompt(story, checkpoint.stage, business_answers, worktree_map[id]) + CHECKPOINT_RESUME block
+          Task(name: "story-{id}-s{checkpoint.stage}-retry", team_name: "pipeline-{date}",
+               model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",
+               prompt: new_prompt)                  # Try 2: Opus for crash recovery/troubleshooting
         worker_map[id] = new_worker_name
         active_workers++
       ELSE:
@@ -407,7 +471,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     Write .pipeline/state.json with ALL state variables:
       complete, active_workers, stories_remaining, last_check=now,
       story_state, worker_map, quality_cycles, validation_retries,
-      crash_count, pr_urls, priority_queue_ids
+      crash_count, pr_urls, priority_queue_ids, story_results, remote_type
     # Full state write enables Phase 0 recovery if lead crashes between heartbeats
 
   ON NO NEW MESSAGES (heartbeat cycle with no worker updates):
@@ -422,35 +486,89 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
 
 **`determine_stage(story)` routing:** See `references/pipeline_states.md` Stage-to-Status Mapping table.
 
-#### Phase 4a: Auto PR Creation
+#### Phase 4a: Git Flow & Auto PR
 
-After Stage 3 PASS for each Story:
-1. Verify feature branch exists:
-   - If `worktree_map[id]`: `git -C .worktrees/story-{id} branch --show-current`
-   - Else: `git branch --show-current`
-2. Push branch:
-   - If `worktree_map[id]`: `git -C .worktrees/story-{id} push -u origin feature/{id}-{slug}`
-   - Else: `git push -u origin feature/{id}-{slug}`
-3. Create PR:
-   ```bash
-   gh pr create --title "{storyId}: {Story Title}" --body "$(cat <<'EOF'
-   ## Summary
-   - Pipeline: ln-300 (tasks) -> ln-310 (validation) -> ln-400 (execution) -> ln-500 (quality gate)
-   - Quality Score: {score}/100
-   - Gate Verdict: PASS
+After Stage 3 PASS for each Story. All git commands use `git -C {dir}` where `dir = worktree_map[id] || "."`.
 
-   ## Stories & Tasks
-   {task list with status}
+```
+dir = worktree_map[id] || "."
 
-   ## Test plan
-   - [ ] Verify PR diff matches Story acceptance criteria
-   - [ ] Run CI pipeline
+# 1. Sync with develop (pull latest changes)
+git -C {dir} fetch origin develop
+git -C {dir} rebase origin/develop
+IF rebase conflict:
+  git -C {dir} rebase --abort
+  git -C {dir} merge origin/develop    # Fallback to merge
+  IF merge conflict:
+    ESCALATE to user: "Merge conflict in Story {id}. Manual resolution required."
+    story_state[id] = "PAUSED"
+    CONTINUE                           # Skip PR, move to next story
 
-   Generated by ln-1000-pipeline-orchestrator
-   EOF
-   )"
-   ```
-4. Store PR URL for final report
+# 2. Push feature branch
+git -C {dir} push -u origin feature/{id}-{slug}
+
+# 3. Create PR (remote-aware)
+pr_body = "$(cat <<'EOF'
+## Summary
+- Pipeline: ln-300 → ln-310 → ln-400 → ln-500
+- Quality Score: {score}/100
+- Gate Verdict: PASS
+
+## Stories & Tasks
+{task list with status}
+
+## Test plan
+- [ ] Verify PR diff matches Story acceptance criteria
+- [ ] Run CI pipeline
+
+Generated by ln-1000-pipeline-orchestrator
+EOF
+)"
+IF remote_type == "github":
+  gh pr create --title "{storyId}: {Story Title}" --body "$pr_body"
+ELIF remote_type == "gitlab":
+  glab mr create --fill --title "{storyId}: {Story Title}" --description "$pr_body"
+ELSE:
+  WARN user: "Unknown remote type ({remote_type}). Branch pushed but PR not created."
+  pr_urls[id] = "manual"              # Mark for user to create PR manually
+
+# 4. Merge into develop
+git -C {dir} checkout develop
+git -C {dir} merge --squash feature/{id}-{slug}
+git -C {dir} commit -m "{storyId}: {Story Title}"
+git -C {dir} push origin develop
+
+# 5. Cleanup worktree (if exists)
+IF worktree_map[id]:
+  git worktree remove .worktrees/story-{id} --force
+  worktree_map[id] = null
+ELSE:
+  # Solo mode — already on develop after checkout above
+
+# 6. Store PR URL
+pr_urls[id] = <PR URL from step 3>
+
+# 7. Append story report section
+Append to docs/tasks/reports/pipeline-{date}.md:
+  ### {storyId}: {storyTitle} — DONE
+  | Stage | Result | Details |
+  |-------|--------|---------|
+  | 0 | {story_results[id].stage0 or "skip"} | |
+  | 1 | {story_results[id].stage1 or "skip"} | retries: {validation_retries[id]} |
+  | 2 | {story_results[id].stage2 or "skip"} | rework cycles: {quality_cycles[id]} |
+  | 3 | {story_results[id].stage3 or "skip"} | crashes: {crash_count[id]} |
+  **PR:** {pr_urls[id]}
+  **Branch:** feature/{id}-{slug}
+  **Problems:** {list from counters, or "None"}
+
+# 8. Verify kanban + Linear sync
+Re-read kanban board → ASSERT Story {id} is in Done section
+IF storage_mode == "linear":
+  Read Linear issue via MCP → ASSERT status matches kanban (Done/Completed)
+  IF mismatch: Update Linear status to match kanban
+  VERIFY assignee, labels, PR link attached
+IF mismatch found: LOG warning but do NOT block pipeline
+```
 
 ### Phase 5: Cleanup & Self-Verification
 
@@ -468,11 +586,34 @@ verification = {
   team_created:     team exists                       # Phase 3 ✓
   all_processed:    ALL story_state[id] IN ("DONE", "PAUSED")  # Phase 4 ✓
   prs_created:      EVERY "DONE" story has PR URL     # Phase 4a ✓
+  merged_develop:   EVERY "DONE" story merged to develop  # Phase 4a ✓
+  linear_synced:    IF storage_mode == "linear": ALL "DONE" stories match Linear status  # Phase 4a.8 ✓
+  on_develop:       Current branch is develop              # Phase 5 ✓
 }
 IF ANY verification == false: WARN user with details
 
-# 3. Show pipeline summary
-```
+# 3. Finalize pipeline report
+Prepend summary header to docs/tasks/reports/pipeline-{date}.md:
+  # Pipeline Report — {date}
+  | Metric | Value |
+  |--------|-------|
+  | Stories processed | {total} |
+  | Completed (DONE) | {count where story_state == "DONE"} |
+  | Paused (needs intervention) | {count where story_state == "PAUSED"} |
+  | Total quality rework cycles | {sum of quality_cycles} |
+  | Total validation retries | {sum of validation_retries} |
+  | Total crash recoveries | {sum of crash_count} |
+
+Append Recommendations section (auto-generated):
+  ## Recommendations
+  - IF any quality_cycles > 0: "Story {id} needed {N} quality cycles. Improve task specs or acceptance criteria."
+  - IF any validation_retries > 0: "Story {id} failed validation. Review Story/Task structure."
+  - IF any crash_count > 0: "Worker crashed {N} times for {id}. Check for context-heavy operations."
+  - IF any PAUSED: "Stories {ids} require manual intervention."
+  - IF any Linear sync mismatches: "Linear/kanban sync issues detected for {ids}. Verify statuses manually."
+  - IF all DONE with 0 retries: "Clean run — no issues detected."
+
+# 4. Show pipeline summary to user
 ```
 Pipeline Complete:
 | Story | Stage 0 | Stage 1 | Stage 2 | Stage 3 | PR | Final State |
@@ -480,25 +621,29 @@ Pipeline Complete:
 | PROJ-42 | skip | skip | skip | PASS 92 | #123 | DONE |
 | PROJ-55 | 5 tasks | GO | Done | PASS 85 | #125 | DONE |
 | PROJ-60 | skip | NO-GO | — | — | — | PAUSED |
+
+Report saved: docs/tasks/reports/pipeline-{date}.md
 ```
-```
-# 4. Shutdown remaining workers (if any still active)
+# 5. Shutdown remaining workers (if any still active)
 FOR EACH worker_name IN worker_map.values():
   SendMessage(type: "shutdown_request", recipient: worker_name)
 
-# 5. Cleanup team
+# 6. Cleanup team
 TeamDelete
 
-# 6. Remove worktrees (only if any were created)
+# 7. Remove remaining worktrees (PAUSED stories not cleaned by Phase 4a)
 IF .worktrees/ directory exists:
   FOR EACH story in worktree_map WHERE worktree_dir != null:
     git worktree remove {worktree_dir} --force
   rm -rf .worktrees/
 
-# 7. Remove pipeline state files
+# 8. Ensure on develop branch
+git checkout develop
+
+# 9. Remove pipeline state files
 Delete .pipeline/ directory
 
-# 8. Report all PR URLs to user
+# 10. Report PR URLs and report location to user
 ```
 
 ## Kanban as Single Source of Truth
@@ -541,6 +686,8 @@ Delete .pipeline/ directory
 - Reading `~/.claude/teams/*/inboxes/*.json` directly (messages arrive automatically)
 - Using `sleep` + filesystem polling for message checking
 - Parsing internal Claude Code JSON formats (permission_request, idle_notification)
+- Reusing same worker across stages (context exhaustion — spawn fresh worker per stage)
+- Processing messages without verifying sender matches worker_map (stale message confusion from old/dead workers)
 
 ## Plan Mode Support
 
@@ -577,8 +724,9 @@ When invoked in Plan Mode, generate execution plan without creating team:
 | 3 | Team created, workers spawned (max 2 concurrent) | `active_workers` never exceeded 2 |
 | 4 | ALL Stories processed: state = DONE or PAUSED | `ALL story_state[id] IN ("DONE", "PAUSED")` |
 | 5 | PR created for every DONE Story | Every DONE story has PR URL |
-| 6 | Pipeline summary shown with PR URLs | Phase 5 table output |
-| 7 | Team cleaned up (workers shutdown, TeamDelete) | `active_workers == 0`, TeamDelete called |
+| 6 | Every DONE Story squash-merged into develop | Feature branches merged, on develop branch |
+| 7 | Pipeline summary shown with PR URLs | Phase 5 table output |
+| 8 | Team cleaned up (workers shutdown, TeamDelete) | `active_workers == 0`, TeamDelete called |
 
 ## Reference Files
 - **Message protocol:** `references/message_protocol.md`

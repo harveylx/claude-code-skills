@@ -10,7 +10,7 @@ Templates for spawning story-workers via Task tool with team_name.
 - Use `SendMessage(type: "message", recipient: "pipeline-lead")` for all reports
 - `content` must match exact format from protocol (Stage N COMPLETE/ERROR for {id}...)
 - `summary` must be `"{id} Stage {N} {result}"` (max 10 words)
-- After reporting, WAIT for lead's command — never advance to next stage autonomously
+- After reporting, approve shutdown when lead requests it — never advance to next stage autonomously
 
 **Diagnostic response:** When lead sends `"Status check"`, respond with:
 ```
@@ -24,7 +24,7 @@ Status for {id}: Stage {N} {EXECUTING|WAITING|ERROR}. Current step: {description
 - NEVER use `sleep` loops or filesystem polling to check for messages
 - Messages from lead arrive **automatically** as conversation turns
 - Use **ONLY** `SendMessage` to communicate with lead
-- After reporting, WAIT — do not poll, do not sleep, do not read inbox files
+- After reporting, approve shutdown immediately — do not poll, do not sleep, do not read inbox files
 
 ## Checkpoint Protocol
 
@@ -54,9 +54,9 @@ Write .pipeline/checkpoint-{storyId}.json after each significant step:
 
 ```
 Task(
-  name: "story-{storyId}",
+  name: "story-{storyId}-s{stage}",
   team_name: "pipeline-{date}",
-  model: "sonnet",
+  model: model_for_stage(stage),    # Stage 0,2="sonnet" | Stage 1,3="opus"
   mode: "bypassPermissions",
   subagent_type: "general-purpose",
   prompt: <use appropriate template below based on target stage>
@@ -93,7 +93,7 @@ Step 4: Report to lead:
     content: "Stage 0 COMPLETE for {storyId}. {N} tasks created. Plan score: {score}/4.",
     summary: "{storyId} Stage 0 {N} tasks")
 
-Then WAIT for lead's next instruction. Do NOT proceed to Stage 1 without lead's message.
+After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
 CONTEXT:
@@ -133,7 +133,7 @@ Step 4: Report to lead (use EXACT format per verdict):
       content: "Stage 1 COMPLETE for {storyId}. Verdict: NO-GO. Readiness: {score}. Reason: {reason}",
       summary: "{storyId} Stage 1 NO-GO")
 
-Then WAIT for lead's next instruction. Do NOT proceed to Stage 2 without lead's message.
+After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
 CONTEXT:
@@ -172,7 +172,7 @@ Step 4: Report to lead:
     content: "Stage 2 COMPLETE for {storyId}. All tasks Done. Story set to To Review.",
     summary: "{storyId} Stage 2 Done")
 
-Then WAIT for lead's next instruction.
+After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
 CONTEXT:
@@ -214,33 +214,23 @@ Step 4: Report to lead (use EXACT format per verdict):
       content: "Stage 3 COMPLETE for {storyId}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues list}",
       summary: "{storyId} Stage 3 FAIL")
 
-Then WAIT for lead's next instruction.
+After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
 CONTEXT:
 {businessAnswers}
 ```
 
-## Stage Continuation Prompt
+## Worker Lifecycle
 
-When lead sends "Proceed to Stage N", worker uses:
+Each worker handles exactly ONE stage. After reporting completion/error:
+1. Lead sends shutdown_request
+2. Worker approves shutdown immediately
+3. Lead spawns fresh worker for next stage (if any)
 
-```
-SendMessage received from lead: "Proceed to Stage {N}"
+Workers NEVER receive follow-up stage commands. One stage = one worker lifecycle.
 
-Execute Stage {N} as described above.
-```
-
-## Re-entry Prompt (after FAIL)
-
-When lead sends "Re-enter Stage 2" after quality gate FAIL:
-
-```
-SendMessage received from lead: "Quality gate FAIL. Fix tasks created. Re-enter Stage 2."
-
-Execute Stage 2 again. ln-400 will pick up fix tasks created by ln-500
-and process them through the standard To Rework -> ln-403 -> ln-402 loop.
-```
+**Why:** Long-lived workers accumulate conversation context across stages (validation + task executions + reviews). By Stage 3, context is exhausted. Fresh workers start with clean context containing only stage-specific minimum.
 
 ---
 **Version:** 1.0.0

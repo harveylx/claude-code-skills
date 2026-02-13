@@ -34,14 +34,13 @@ Status for {id}: Stage {N} {EXECUTING|WAITING|ERROR}. Current step: {description
 
 ## Lead -> Worker: Commands
 
+Each worker receives exactly ONE `Execute Stage` command per lifetime. Stage transitions spawn new workers (fresh context per stage).
+
 | Command | Format | When |
 |---------|--------|------|
-| Start stage | `Execute Stage {N} for {id}` | Initial assignment after spawn |
-| Advance | `Proceed to Stage {N}` | After successful stage completion |
-| Retry | `Re-run Stage {N} (auto-fix attempt)` | After NO-GO (validation_retries <= 1) |
-| Re-entry | `Quality gate FAIL. Fix tasks created. Re-enter Stage 2.` | After FAIL (quality_cycles < 2) |
+| Start stage | `Execute Stage {N} for {id}` | Initial assignment after spawn (one per worker) |
 | Diagnostic | `Status check: are you still working on Stage {N} for {id}?` | Crash detection probe |
-| Shutdown | `SendMessage(type: "shutdown_request", recipient: "story-{id}")` | After DONE or PAUSED |
+| Shutdown | `SendMessage(type: "shutdown_request", recipient: "story-{id}-s{N}")` | After stage completion or PAUSED |
 
 ## Lead Parsing Regex
 
@@ -84,7 +83,7 @@ SendMessage(
 ```
 SendMessage(
   type: "message",
-  recipient: "story-{id}",
+  recipient: "story-{id}-s{N}",
   content: <exact format from Commands table>,
   summary: "{id} -> Stage {N}"                  # max 10 words
 )

@@ -52,6 +52,8 @@ Lead writes ALL state variables to `.pipeline/state.json` on every heartbeat cyc
 | `crash_count` | object | `{storyId: count}` — crash respawn counter (limit 1) |
 | `pr_urls` | object | `{storyId: "https://..."}` — PR URLs for DONE stories |
 | `priority_queue_ids` | string[] | Remaining story IDs in priority order |
+| `story_results` | object | `{storyId: {stage0: "...", stage1: "...", ...}}` — per-stage results for report |
+| `remote_type` | string | `"github"\|"gitlab"\|"unknown"` — detected in Phase 1 |
 
 **Example:**
 ```json
@@ -61,12 +63,14 @@ Lead writes ALL state variables to `.pipeline/state.json` on every heartbeat cyc
   "stories_remaining": 3,
   "last_check": "2026-02-13T14:30:00Z",
   "story_state": { "API-427": "STAGE_2", "API-428": "STAGE_1" },
-  "worker_map": { "API-427": "story-API-427", "API-428": "story-API-428" },
+  "worker_map": { "API-427": "story-API-427-s2", "API-428": "story-API-428-s1" },
   "quality_cycles": { "API-427": 0, "API-428": 0 },
   "validation_retries": { "API-427": 0, "API-428": 0 },
   "crash_count": { "API-427": 0, "API-428": 0 },
   "pr_urls": {},
-  "priority_queue_ids": ["API-429", "API-430", "API-431"]
+  "priority_queue_ids": ["API-429", "API-430", "API-431"],
+  "story_results": { "API-427": { "stage0": "skip", "stage1": "skip", "stage2": "Done" } },
+  "remote_type": "github"
 }
 ```
 
@@ -82,8 +86,8 @@ Lead executes on confirmed crash (3-step protocol passed):
    IF resume succeeds → worker continues where it left off → DONE
 
 3. Fallback — new worker with checkpoint context:
-   prompt = worker_prompt(story, checkpoint.stage) + CHECKPOINT_RESUME block
-   Task(name: "story-{id}-retry", prompt: prompt, mode: "bypassPermissions", ...)
+   prompt = worker_prompt(story, checkpoint.stage, business_answers, worktree_map[id]) + CHECKPOINT_RESUME block
+   Task(name: "story-{id}-s{N}-retry", model: "opus", prompt: prompt, mode: "bypassPermissions", ...)
 ```
 
 **CHECKPOINT_RESUME block** (appended to worker prompt):

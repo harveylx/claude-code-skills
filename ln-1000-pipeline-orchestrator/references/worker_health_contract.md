@@ -5,33 +5,32 @@ Worker lifecycle, health monitoring, and crash recovery for pipeline story worke
 ## Worker Lifecycle
 
 ```
-SPAWNED ──→ EXECUTING ──→ REPORTING ──→ IDLE ──→ EXECUTING (next stage)
-                │                         │
-                │                         └──→ SHUTDOWN (graceful, lead request)
+SPAWNED ──→ EXECUTING ──→ REPORTING ──→ SHUTDOWN
                 │
                 └──→ CRASHED (no completion message, idle without report)
 ```
+
+Each worker handles exactly ONE stage. No IDLE→EXECUTING transition between stages.
 
 | State | Description | Duration |
 |-------|------------|----------|
 | SPAWNED | Task() called, worker initializing | Seconds |
 | EXECUTING | Worker running ln-300/310/400/500 via Skill tool | Minutes to hours (ln-400 can be long) |
 | REPORTING | Worker sends "Stage N COMPLETE/ERROR" to lead | Seconds |
-| IDLE | TeammateIdle notification, waiting for lead command | Until lead sends next command |
-| SHUTDOWN | Worker received shutdown_request, approved, exiting | Seconds |
+| SHUTDOWN | Lead sends shutdown_request after report, worker approves and exits | Seconds |
 | CRASHED | Worker stopped without sending completion message | Detected by lead |
 
 ## Health Signal Matrix
 
 | Signal | Meaning | Lead Action |
 |--------|---------|-------------|
-| Worker sends "Stage N COMPLETE" | Healthy, stage done | Process result, advance per pipeline_states.md |
-| Worker sends "Stage N ERROR" | Healthy, stage failed | Process error, decide retry/pause |
-| TeammateIdle WITH prior COMPLETE/ERROR in same turn | Normal: reporting then idle | Assign next stage or shutdown |
+| Worker sends "Stage N COMPLETE" | Healthy, stage done | Shutdown worker, spawn fresh for next stage |
+| Worker sends "Stage N ERROR" | Healthy, stage failed | Shutdown worker, decide retry/pause |
+| TeammateIdle WITH prior COMPLETE/ERROR in same turn | Normal: shutdown in progress | No action needed, worker exiting |
 | TeammateIdle WITHOUT prior COMPLETE/ERROR | Suspicious: possible crash | Enter Crash Detection Protocol |
 | No notification at all | Worker still executing | WAIT — do NOT interrupt. ln-400/ln-500 can run 30+ min |
 
-**Critical rule:** TeammateIdle is NORMAL between turns. Do NOT treat idle as error. Only suspicious when idle arrives without completion message for current stage.
+**Critical rule:** TeammateIdle is NORMAL after reporting. Worker is awaiting shutdown_request. Only suspicious when idle arrives without completion message for current stage.
 
 ## Crash Detection Protocol
 
@@ -88,8 +87,8 @@ When crash confirmed (Step 3). See `references/checkpoint_format.md` for checkpo
 
 4. **Fallback: new worker with checkpoint context** (if resume fails or no checkpoint):
    ```
-   new_worker = "story-{id}-retry"
-   new_prompt = worker_prompt(story, checkpoint.stage, business_answers) + """
+   new_worker = "story-{id}-s{checkpoint.stage}-retry"
+   new_prompt = worker_prompt(story, checkpoint.stage, business_answers, worktree_map[id]) + """
      CHECKPOINT RESUME — DO NOT re-execute completed work.
      Tasks already completed: {checkpoint.tasksCompleted}
      Tasks remaining: {checkpoint.tasksRemaining}
@@ -97,7 +96,7 @@ When crash confirmed (Step 3). See `references/checkpoint_format.md` for checkpo
      Continue from remaining tasks only.
    """
    Task(name: new_worker, team_name: "pipeline-{date}",
-        model: "sonnet", mode: "bypassPermissions",
+        model: "opus", mode: "bypassPermissions",              # Opus for crash recovery/troubleshooting
         subagent_type: "general-purpose", prompt: new_prompt)
    worker_map[id] = new_worker
    active_workers++
@@ -165,6 +164,7 @@ Lead turn ends → Stop event → pipeline-keepalive.sh → exit 2
 - Lead MUST NOT output "waiting for messages" and stop — the heartbeat keeps it running
 - If no worker messages: output brief status (`"Heartbeat: N workers active"`), let turn end
 - Frequency: ~10-30 seconds per cycle (depends on Claude's turn processing time)
+- Stage transitions = shutdown old worker + spawn fresh (net-zero active_workers)
 
 **Anti-pattern:** Lead says "I'm waiting for workers" and sits idle. This breaks the pipeline because the lead's turn has ended and it cannot process future messages.
 
@@ -222,6 +222,7 @@ Workers and lead MUST NOT use any of these patterns:
 | Parse `permission_request` JSON | Internal protocol, changes without notice | Use `mode: "bypassPermissions"` at spawn |
 | Parse `idle_notification` JSON | Internal protocol | Use TeammateIdle hook or ON handlers |
 | `Bash(cat ~/.claude/...)` | Internal file structure | Use SendMessage for all communication |
+| Process message without sender check | Stale messages from old workers cause incorrect state transitions | Verify `message.sender == worker_map[id]` before any ON handler |
 
 ---
 **Version:** 1.0.0
