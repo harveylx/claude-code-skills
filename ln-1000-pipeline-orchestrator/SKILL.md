@@ -183,6 +183,11 @@ Copy references/hooks/pipeline-keepalive.sh → .claude/hooks/pipeline-keepalive
 Copy references/hooks/worker-keepalive.sh  → .claude/hooks/worker-keepalive.sh
 ```
 
+**Hook troubleshooting:** If hooks fail with "No such file or directory":
+1. Verify hook commands in `.claude/settings.local.json` use correct quoting: `"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/script.sh"` (quotes around variable only, NOT `bash "..."` wrapper)
+2. Verify `.claude/hooks/*.sh` files exist and have `#!/bin/bash` shebang
+3. On Windows: ensure forward slashes in paths, verify Git Bash is available
+
 #### 3.2 Initialize Pipeline State
 
 ```
