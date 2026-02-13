@@ -22,7 +22,7 @@ Meta-orchestrator that reads the kanban board, builds a priority queue of Storie
 ```
 L0: ln-1000-pipeline-orchestrator (TeamCreate lead, delegate mode)
   +-- Story Workers (fresh per stage, shutdown after completion)
-       |   Stage 0,2 (code/tasks): Sonnet 4.5  |  Stage 1,3 (review/QA): Opus 4.6
+       |   All stages: Opus 4.6  |  Effort: Stage 0,3 = high | Stage 1,2 = medium
        +-- L1: ln-300 / ln-310 / ln-400 / ln-500 (invoked via Skill tool, as-is)
             +-- L2/L3: existing hierarchy unchanged
 ```
@@ -201,7 +201,7 @@ Write .pipeline/state.json (full schema — see checkpoint_format.md):
 
 **Worktrees:** Created lazily in Phase 4 spawn loop — only when a 2nd worker starts (parallel mode). Solo worker runs in project CWD.
 
-**Model routing:** `model_for_stage(0) = "sonnet"`, `model_for_stage(1) = "opus"`, `model_for_stage(2) = "sonnet"`, `model_for_stage(3) = "opus"`. Crash recovery/respawn always uses `"opus"` (troubleshooting needs stronger reasoning).
+**Model routing:** All stages use `model: "opus"`. Effort routing via prompt: `effort_for_stage(0) = "high"`, `effort_for_stage(1) = "medium"`, `effort_for_stage(2) = "medium"`, `effort_for_stage(3) = "high"`. Crash recovery = `"high"`. Thinking mode: always enabled (adaptive).
 
 1. Ensure `develop` branch exists:
    ```
@@ -306,7 +306,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
 
     worktree_map[story.id] = worktree_dir
     Task(name: worker_name, team_name: "pipeline-{date}",
-         model: model_for_stage(target_stage), mode: "bypassPermissions",
+         model: "opus", mode: "bypassPermissions",
          subagent_type: "general-purpose",
          prompt: worker_prompt(story, target_stage, business_answers, worktree_dir))
     worker_map[story.id] = worker_name
@@ -360,7 +360,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     SendMessage(type: "shutdown_request", recipient: worker_map[id])
     next_worker = "story-{id}-s2"
     Task(name: next_worker, team_name: "pipeline-{date}",
-         model: "sonnet", mode: "bypassPermissions", subagent_type: "general-purpose",    # Stage 2 = code
+         model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",      # Stage 2 medium effort
          prompt: worker_prompt(story, 2, business_answers, worktree_map[id]))
     worker_map[id] = next_worker
     Write .pipeline/worker-{next_worker}-active.flag
@@ -429,7 +429,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
       SendMessage(type: "shutdown_request", recipient: worker_map[id])
       next_worker = "story-{id}-s2-fix"
       Task(name: next_worker, team_name: "pipeline-{date}",
-           model: "sonnet", mode: "bypassPermissions", subagent_type: "general-purpose",  # Stage 2 = code fix
+           model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",    # Stage 2 medium effort (fix)
            prompt: worker_prompt(story, 2, business_answers, worktree_map[id]))
       worker_map[id] = next_worker
       Write .pipeline/worker-{next_worker}-active.flag

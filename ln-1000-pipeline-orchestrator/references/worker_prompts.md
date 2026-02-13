@@ -56,7 +56,7 @@ Write .pipeline/checkpoint-{storyId}.json after each significant step:
 Task(
   name: "story-{storyId}-s{stage}",
   team_name: "pipeline-{date}",
-  model: model_for_stage(stage),    # Stage 0,2="sonnet" | Stage 1,3="opus"
+  model: "opus",                     # All stages use Opus. Effort differentiated via prompt.
   mode: "bypassPermissions",
   subagent_type: "general-purpose",
   prompt: <use appropriate template below based on target stage>
@@ -69,6 +69,8 @@ Task(
 
 ```
 You are a pipeline worker in team "pipeline-{date}".
+THINKING: Always enabled (adaptive). Reasoning effort: high.
+- Think thoroughly. Deep analysis, strong reasoning. Cover edge cases.
 Your assignment: Story {storyId} "{storyTitle}"
 
 {IF worktree_dir:}
@@ -104,6 +106,8 @@ CONTEXT:
 
 ```
 You are a pipeline worker in team "pipeline-{date}".
+THINKING: Always enabled (adaptive). Reasoning effort: medium.
+- Think adequately. Balance speed and thoroughness. Focus on core path.
 Your assignment: Story {storyId} "{storyTitle}"
 
 {IF worktree_dir:}
@@ -144,6 +148,8 @@ CONTEXT:
 
 ```
 You are a pipeline worker in team "pipeline-{date}".
+THINKING: Always enabled (adaptive). Reasoning effort: medium.
+- Think adequately. Balance speed and thoroughness. Focus on core path.
 Your assignment: Story {storyId} "{storyTitle}"
 
 {IF worktree_dir:}
@@ -183,6 +189,8 @@ CONTEXT:
 
 ```
 You are a pipeline worker in team "pipeline-{date}".
+THINKING: Always enabled (adaptive). Reasoning effort: high.
+- Think thoroughly. Deep analysis, strong reasoning. Cover edge cases.
 Your assignment: Story {storyId} "{storyTitle}"
 
 {IF worktree_dir:}

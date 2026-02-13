@@ -96,7 +96,7 @@ When crash confirmed (Step 3). See `references/checkpoint_format.md` for checkpo
      Continue from remaining tasks only.
    """
    Task(name: new_worker, team_name: "pipeline-{date}",
-        model: "opus", mode: "bypassPermissions",              # Opus for crash recovery/troubleshooting
+        model: "opus", mode: "bypassPermissions",              # Opus high effort for crash recovery
         subagent_type: "general-purpose", prompt: new_prompt)
    worker_map[id] = new_worker
    active_workers++
