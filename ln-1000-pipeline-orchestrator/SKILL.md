@@ -84,6 +84,27 @@ This skill runs as a **team lead** in delegate mode. The agent executing ln-1000
 
 ## Workflow
 
+### Phase 0: Recovery Check
+
+```
+IF .pipeline/state.json exists AND complete == false:
+  # Previous run interrupted — resume from saved state
+  1. Read .pipeline/state.json → restore: story_state, worker_map,
+     quality_cycles, validation_retries, crash_count, pr_urls, priority_queue_ids
+  2. Read .pipeline/checkpoint-*.json → validate story_state consistency
+     (checkpoint.stage should match story_state[id])
+  3. Re-read kanban board → rebuild priority_queue from priority_queue_ids
+     (skip stories already DONE/PAUSED)
+  4. Set suspicious_idle[*] = false (ephemeral, reset on recovery)
+  5. For each story with story_state IN ("STAGE_0".."STAGE_3"):
+     IF checkpoint.agentId exists → Task(resume: checkpoint.agentId)
+     ELSE → respawn worker with checkpoint context (see checkpoint_format.md)
+  6. Jump to Phase 4 event loop
+
+IF .pipeline/state.json NOT exists OR complete == true:
+  # Fresh start — proceed to Phase 1
+```
+
 ### Phase 1: Discovery & Kanban Parsing
 
 **MANDATORY READ:** Load `references/kanban_parser.md` for parsing patterns.
@@ -151,11 +172,23 @@ Copy references/hooks/worker-keepalive.sh  → .claude/hooks/worker-keepalive.sh
 #### 3.2 Initialize Pipeline State
 
 ```
-Write .pipeline/state.json:
-  { "complete": false, "active_workers": 0, "stories_remaining": N, "last_check": <now> }
+Write .pipeline/state.json (full schema — see checkpoint_format.md):
+  { "complete": false, "active_workers": 0, "stories_remaining": N, "last_check": <now>,
+    "story_state": {}, "worker_map": {}, "quality_cycles": {}, "validation_retries": {},
+    "crash_count": {}, "pr_urls": {}, "priority_queue_ids": [<all story IDs>] }
 ```
 
-#### 3.3 Create Team & Spawn Workers
+#### 3.3 Create Worktrees for Parallel Isolation
+
+```
+FOR EACH story in top 2 of priority_queue:
+  git worktree add .worktrees/story-{id} develop
+  # Creates isolated working directory from develop branch
+```
+
+**Why worktrees:** Without them, 2 parallel workers in the same CWD would race on `git checkout`, overwriting each other's files. Each worktree has its own HEAD and working directory.
+
+#### 3.4 Create Team & Spawn Workers
 
 1. Create team:
    ```
@@ -223,7 +256,19 @@ FOR EACH story IN priority_queue:
   suspicious_idle[story.id] = false
   story_state[story.id] = "QUEUED"
 
-# --- MAIN LOOP ---
+# --- EVENT LOOP (driven by Stop hook heartbeat) ---
+# HOW THIS WORKS:
+# 1. Lead's turn ends → Stop event fires
+# 2. pipeline-keepalive.sh reads .pipeline/state.json → complete=false → exit 2
+# 3. stderr "HEARTBEAT: N workers, M stories..." → new agentic loop iteration
+# 4. Any queued worker messages (SendMessage) delivered in this cycle
+# 5. Lead processes messages via ON handlers below
+# 6. Lead's turn ends → Go to step 1
+#
+# The Stop hook IS the event loop driver. Each heartbeat = one iteration.
+# Lead MUST NOT say "waiting for messages" and stop — the heartbeat keeps it alive.
+# If no worker messages arrived: output brief status, let turn end → next heartbeat.
+
 WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
 
   # 1. Spawn workers for queued stories (respecting concurrency limit)
@@ -231,10 +276,13 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     story = priority_queue.pop()
     target_stage = determine_stage(story)    # See pipeline_states.md guards
     worker_name = "story-{story.id}"
+    worktree_dir = ".worktrees/story-{story.id}"
+    IF worktree not yet created:
+      git worktree add {worktree_dir} develop
     Task(name: worker_name, team_name: "pipeline-{date}",
          model: "sonnet", mode: "bypassPermissions",
          subagent_type: "general-purpose",
-         prompt: worker_prompt(story, target_stage, business_answers))
+         prompt: worker_prompt(story, target_stage, business_answers, worktree_dir))
     worker_map[story.id] = worker_name
     story_state[story.id] = "STAGE_{target_stage}"
     active_workers++
@@ -244,7 +292,9 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
                 content: "Execute Stage {target_stage} for {story.id}",
                 summary: "Stage {target_stage} assignment")
 
-  # 2. Process worker messages (event handlers)
+  # 2. Process worker messages (delivered by heartbeat cycle)
+  #    Messages from workers arrive as conversation context in each heartbeat iteration.
+  #    Match against ON handlers below. If no match → ON NO NEW MESSAGES at bottom.
   ON "Stage 0 COMPLETE for {id}. {N} tasks created. Plan score: {score}/4":
     Re-read kanban board
     ASSERT tasks exist under Story {id}         # Guard: verify ln-300 output
@@ -338,15 +388,28 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
         story_state[id] = "PAUSED"
         active_workers--
         ESCALATE: "Story {id} worker crashed twice at Stage {N}"
+
+  # 3. Heartbeat handler — persist ALL state on every cycle
+  ON HEARTBEAT (Stop hook stderr: "HEARTBEAT: N workers, M stories..."):
+    Write .pipeline/state.json with ALL state variables:
+      complete, active_workers, stories_remaining, last_check=now,
+      story_state, worker_map, quality_cycles, validation_retries,
+      crash_count, pr_urls, priority_queue_ids
+    # Full state write enables Phase 0 recovery if lead crashes between heartbeats
+
+  ON NO NEW MESSAGES (heartbeat cycle with no worker updates):
+    # Brief status — do NOT say "waiting" and stop. Let turn end naturally.
+    Output: "Heartbeat: {active_workers} workers active, {stories_remaining} remaining."
+    # Turn ends → Stop hook fires → next heartbeat cycle
 ```
 
 **`determine_stage(story)` routing:** See `references/pipeline_states.md` Stage-to-Status Mapping table.
 
 #### Phase 4a: Auto PR Creation
 
-After Stage 3 PASS for each Story:
-1. Verify feature branch exists: `git branch --list "feature/{id}-*"`
-2. Push branch: `git push -u origin feature/{id}-{slug}`
+After Stage 3 PASS for each Story (execute from worktree `.worktrees/story-{id}/`):
+1. Verify feature branch exists: `git -C .worktrees/story-{id} branch --show-current`
+2. Push branch: `git -C .worktrees/story-{id} push -u origin feature/{id}-{slug}`
 3. Create PR:
    ```bash
    gh pr create --title "{storyId}: {Story Title}" --body "$(cat <<'EOF'
@@ -405,10 +468,15 @@ FOR EACH worker_name IN worker_map.values():
 # 5. Cleanup team
 TeamDelete
 
-# 6. Remove pipeline state files
+# 6. Remove worktrees
+FOR EACH story in worker_map:
+  git worktree remove .worktrees/story-{id} --force
+rm -rf .worktrees/
+
+# 7. Remove pipeline state files
 Delete .pipeline/ directory
 
-# 7. Report all PR URLs to user
+# 8. Report all PR URLs to user
 ```
 
 ## Kanban as Single Source of Truth

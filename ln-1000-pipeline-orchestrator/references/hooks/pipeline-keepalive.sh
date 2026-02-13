@@ -1,6 +1,8 @@
 #!/bin/bash
 # Stop hook for pipeline lead — prevents Claude from stopping while pipeline is active.
 # Exit code 2 = "don't stop" (Claude Code hooks protocol).
+# This hook IS the heartbeat driver: each exit 2 creates a new agentic loop iteration
+# where queued worker messages get delivered and processed by ON handlers in Phase 4.
 # Lead writes .pipeline/state.json with complete=false during pipeline execution.
 # Phase 5 sets complete=true before cleanup, allowing graceful stop.
 
@@ -8,7 +10,10 @@ PIPELINE_STATE=$(cat .pipeline/state.json 2>/dev/null || echo '{"complete": true
 COMPLETE=$(echo "$PIPELINE_STATE" | jq -r '.complete')
 
 if [ "$COMPLETE" = "false" ]; then
-  echo "Pipeline still running. Check worker statuses and process messages." >&2
+  WORKERS=$(echo "$PIPELINE_STATE" | jq -r '.active_workers // 0')
+  REMAINING=$(echo "$PIPELINE_STATE" | jq -r '.stories_remaining // 0')
+  LAST=$(echo "$PIPELINE_STATE" | jq -r '.last_check // "unknown"')
+  echo "HEARTBEAT: ${WORKERS} active workers, ${REMAINING} stories remaining. Last check: ${LAST}. Process any queued worker messages now." >&2
   exit 2
 fi
 

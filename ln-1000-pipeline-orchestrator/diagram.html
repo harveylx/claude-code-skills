@@ -22,6 +22,8 @@
                 <li><strong>Lead Role:</strong> Delegate mode only - coordination, kanban updates, PR creation. No code writing</li>
                 <li><strong>Auto PR:</strong> After quality gate PASS, auto-create PR via gh CLI</li>
                 <li><strong>Error Recovery:</strong> Quality cycle limit (2), validation retry (1), rework escalation (3), crash resume via checkpoint</li>
+                <li><strong>Lead Recovery:</strong> Phase 0 restores all state from .pipeline/state.json on restart (full schema persisted every heartbeat)</li>
+                <li><strong>Git Worktree:</strong> Each Story runs in .worktrees/story-{id}/ for parallel isolation (no git checkout conflicts)</li>
                 <li><strong>Keepalive:</strong> Stop hook prevents lead exit, TeammateIdle hook prevents worker idle during stages</li>
             </ul>
         </div>
@@ -53,7 +55,26 @@
             <h2>Pipeline Orchestrator Flow</h2>
             <div class="mermaid">
 stateDiagram-v2
-    [*] --> Phase1_Discovery
+    [*] --> Phase0_Recovery
+
+    state "Phase 0: Recovery Check" as Phase0_Recovery {
+        [*] --> CheckState
+        CheckState: Check .pipeline/state.json exists
+        state HasState <<choice>>
+        CheckState --> HasState
+        HasState --> RestoreState: exists AND complete=false
+        HasState --> FreshStart: not exists OR complete=true
+        RestoreState: Restore all state variables from state.json
+        RestoreState --> ValidateCheckpoints
+        ValidateCheckpoints: Read checkpoint-*.json, verify consistency
+        ValidateCheckpoints --> ResumeWorkers
+        ResumeWorkers: Task(resume: agentId) or respawn per story
+        ResumeWorkers --> JumpPhase4: Resume event loop
+        FreshStart: Proceed to Phase 1
+    }
+
+    Phase0_Recovery --> Phase1_Discovery: Fresh start
+    Phase0_Recovery --> Phase4_Loop: Recovery resume
 
     state "Phase 1: Discovery & Kanban Parsing" as Phase1_Discovery {
         [*] --> ParseKanban
@@ -91,8 +112,10 @@ stateDiagram-v2
         VerifySettings --> InstallHooks
         InstallHooks: Install Stop + TeammateIdle hooks
         InstallHooks --> InitState
-        InitState: Write .pipeline/state.json (complete=false)
-        InitState --> CreateTeam
+        InitState: Write .pipeline/state.json (complete=false, full schema)
+        InitState --> CreateWorktrees
+        CreateWorktrees: git worktree add .worktrees/story-{id} develop (per story)
+        CreateWorktrees --> CreateTeam
         CreateTeam: TeamCreate(pipeline-{date})
         CreateTeam --> SpawnWorker1
         SpawnWorker1: Spawn worker-1 (Sonnet, bypassPermissions)
@@ -102,29 +125,37 @@ stateDiagram-v2
 
     Phase3_TeamSetup --> Phase4_Loop
 
-    state "Phase 4: Execution Loop" as Phase4_Loop {
+    state "Phase 4: Execution Loop (heartbeat-driven)" as Phase4_Loop {
         [*] --> AssignStages
         AssignStages: Assign stages to idle workers
-        AssignStages --> WaitMessages
-        WaitMessages: Wait for worker messages
-
-        WaitMessages --> Stage0Done: "Stage 0 tasks created"
-        WaitMessages --> Stage1Done: "Stage 1 GO"
-        WaitMessages --> Stage2Done: "Stage 2 Done"
-        WaitMessages --> Stage3Result: "Stage 3 verdict"
-        WaitMessages --> ErrorHandler: Error/crash
+        AssignStages --> TurnEnds
+        TurnEnds: Lead turn ends
+        TurnEnds --> StopHook
+        StopHook: Stop hook fires (exit 2 if active)
+        StopHook --> Heartbeat
+        Heartbeat: HEARTBEAT — new agentic loop
+        Heartbeat --> CheckMessages
+        state CheckMessages <<choice>>
+        CheckMessages --> Stage0Done: "Stage 0 tasks created"
+        CheckMessages --> Stage1Done: "Stage 1 GO"
+        CheckMessages --> Stage2Done: "Stage 2 Done"
+        CheckMessages --> Stage3Result: "Stage 3 verdict"
+        CheckMessages --> ErrorHandler: Error/crash
+        CheckMessages --> NoMessages: No worker messages
+        NoMessages: Brief status output
+        NoMessages --> TurnEnds
 
         Stage0Done: Verify tasks exist in kanban
         Stage0Done --> SendStage1: Proceed to Stage 1
-        SendStage1 --> WaitMessages
+        SendStage1 --> TurnEnds
 
         Stage1Done: Verify Story=Todo
         Stage1Done --> SendStage2: Proceed to Stage 2
-        SendStage2 --> WaitMessages
+        SendStage2 --> TurnEnds
 
         Stage2Done: Verify Story=To Review
         Stage2Done --> SendStage3: Proceed to Stage 3
-        SendStage3 --> WaitMessages
+        SendStage3 --> TurnEnds
 
         state Stage3Result <<choice>>
         Stage3Result --> AutoPR: PASS/CONCERNS/WAIVED
@@ -141,12 +172,12 @@ stateDiagram-v2
         CheckCycles --> ReenterStage2: cycles < 2
         CheckCycles --> Escalate: cycles >= 2
         ReenterStage2: SendMessage "Re-enter Stage 2"
-        ReenterStage2 --> WaitMessages
+        ReenterStage2 --> TurnEnds
         Escalate: Ask user, pause Story
         Escalate --> SpawnNext
 
         ErrorHandler: Resume/re-spawn worker (checkpoint)
-        ErrorHandler --> AssignStages
+        ErrorHandler --> TurnEnds
 
         AllDone: All Stories processed
     }
@@ -162,7 +193,9 @@ stateDiagram-v2
         ShutdownWorkers: shutdown_request to all workers
         ShutdownWorkers --> DeleteTeam
         DeleteTeam: TeamDelete
-        DeleteTeam --> CleanPipeline
+        DeleteTeam --> RemoveWorktrees
+        RemoveWorktrees: git worktree remove + rm -rf .worktrees/
+        RemoveWorktrees --> CleanPipeline
         CleanPipeline: Delete .pipeline/ directory
         CleanPipeline --> ReportPRs
         ReportPRs: Report all PR URLs to user

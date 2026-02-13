@@ -63,11 +63,16 @@ Task(
 )
 ```
 
+**Note:** Every stage template includes `WORKING DIRECTORY` — the worktree path created by lead in Phase 3.3. Workers MUST `cd` to this directory before any operation.
+
 ## Stage 0: Task Planning (ln-300)
 
 ```
 You are a pipeline worker in team "pipeline-{date}".
 Your assignment: Story {storyId} "{storyTitle}"
+
+WORKING DIRECTORY: .worktrees/story-{storyId}/
+ALL commands must execute in this directory. cd to .worktrees/story-{storyId}/ before any operation.
 
 TASK: Execute Stage 0 — Task Planning (create implementation tasks).
 
@@ -98,6 +103,9 @@ CONTEXT:
 ```
 You are a pipeline worker in team "pipeline-{date}".
 Your assignment: Story {storyId} "{storyTitle}"
+
+WORKING DIRECTORY: .worktrees/story-{storyId}/
+ALL commands must execute in this directory. cd to .worktrees/story-{storyId}/ before any operation.
 
 TASK: Execute Stage 1 — Story Validation.
 
@@ -134,6 +142,9 @@ CONTEXT:
 You are a pipeline worker in team "pipeline-{date}".
 Your assignment: Story {storyId} "{storyTitle}"
 
+WORKING DIRECTORY: .worktrees/story-{storyId}/
+ALL commands must execute in this directory. cd to .worktrees/story-{storyId}/ before any operation.
+
 TASK: Execute Stage 2 — Story Execution.
 
 Step 1: Invoke executor:
@@ -167,6 +178,9 @@ CONTEXT:
 ```
 You are a pipeline worker in team "pipeline-{date}".
 Your assignment: Story {storyId} "{storyTitle}"
+
+WORKING DIRECTORY: .worktrees/story-{storyId}/
+ALL commands must execute in this directory. cd to .worktrees/story-{storyId}/ before any operation.
 
 TASK: Execute Stage 3 — Quality Gate.
 

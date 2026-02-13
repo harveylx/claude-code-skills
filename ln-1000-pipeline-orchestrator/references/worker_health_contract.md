@@ -146,6 +146,71 @@ Two hooks prevent premature termination. Installed by lead in Phase 3 from `refe
 - Remove flag when worker reports stage completion
 - Set `complete: true` in Phase 5 before cleanup
 
+## Lead Heartbeat Loop
+
+The Stop hook drives the lead's event loop. The lead does **NOT** passively wait — it actively processes messages on each heartbeat cycle.
+
+```
+Lead turn ends → Stop event → pipeline-keepalive.sh → exit 2
+  → stderr "HEARTBEAT: N workers, M stories..."
+  → New agentic loop iteration (NOT a user turn)
+  → Queued worker messages (SendMessage) delivered in this cycle
+  → Lead processes via ON handlers in Phase 4
+  → Turn ends → next heartbeat
+```
+
+**Key points:**
+- Stop hook exit 2 = heartbeat trigger, NOT just "prevent exit"
+- Each heartbeat creates a new processing cycle where worker messages arrive
+- Lead MUST NOT output "waiting for messages" and stop — the heartbeat keeps it running
+- If no worker messages: output brief status (`"Heartbeat: N workers active"`), let turn end
+- Frequency: ~10-30 seconds per cycle (depends on Claude's turn processing time)
+
+**Anti-pattern:** Lead says "I'm waiting for workers" and sits idle. This breaks the pipeline because the lead's turn has ended and it cannot process future messages.
+
+**Correct pattern:** Lead processes all available messages, outputs brief status, lets turn end naturally. Stop hook fires, next heartbeat cycle begins.
+
+## Lead Recovery Protocol
+
+When ln-1000 restarts on clean context (crash, context overflow, user interrupt), it must recover all state from `.pipeline/state.json`. See SKILL.md Phase 0.
+
+### State Persistence
+
+Lead writes ALL state variables to `.pipeline/state.json` on **every heartbeat cycle** (not just `last_check`). This ensures recovery loses at most one heartbeat cycle of state.
+
+| Variable | Persisted in state.json | Recovery Notes |
+|----------|------------------------|----------------|
+| `complete` | Yes | Core pipeline flag |
+| `active_workers` | Yes | May be stale if workers crashed during lead downtime |
+| `stories_remaining` | Yes | Recalculate from story_state on recovery |
+| `last_check` | Yes | Timestamp of last heartbeat |
+| `story_state` | Yes | Per-story stage mapping |
+| `worker_map` | Yes | Worker names — validate against team config |
+| `quality_cycles` | Yes | FAIL→retry counters |
+| `validation_retries` | Yes | NO-GO retry counters |
+| `crash_count` | Yes | Respawn counters |
+| `pr_urls` | Yes | Completed PR URLs |
+| `priority_queue_ids` | Yes | Remaining queue order |
+| `suspicious_idle` | No (ephemeral) | Reset to false on recovery |
+
+### Recovery Sequence
+
+```
+1. Read .pipeline/state.json → restore all persisted variables
+2. Read .pipeline/checkpoint-*.json → validate story_state matches checkpoints
+3. Re-read kanban board → verify consistency with story_state
+4. Read team config → verify worker_map members still exist
+5. For each active story (STAGE_0..STAGE_3):
+   a. Try Task(resume: checkpoint.agentId) — preserves full context
+   b. Fallback: respawn with checkpoint context (see Respawn Rules)
+6. Resume Phase 4 event loop
+```
+
+### What Recovery Cannot Restore
+
+- **In-flight messages:** Messages sent by workers during lead downtime are lost. Workers will re-idle, triggering crash detection on next heartbeat.
+- **Partial kanban updates:** If lead crashed mid-write, kanban may be inconsistent. Recovery re-reads and trusts pipeline state over kanban.
+
 ## Forbidden Patterns
 
 Workers and lead MUST NOT use any of these patterns:
