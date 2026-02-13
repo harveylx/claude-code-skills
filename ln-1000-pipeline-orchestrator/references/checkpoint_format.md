@@ -54,6 +54,7 @@ Lead writes ALL state variables to `.pipeline/state.json` on every heartbeat cyc
 | `priority_queue_ids` | string[] | Remaining story IDs in priority order |
 | `story_results` | object | `{storyId: {stage0: "...", stage1: "...", ...}}` — per-stage results for report |
 | `remote_type` | string | `"github"\|"gitlab"\|"unknown"` — detected in Phase 1 |
+| `infra_issues` | array | `[{phase, type, message}]` — infrastructure issues for report |
 
 **Example:**
 ```json
@@ -70,7 +71,8 @@ Lead writes ALL state variables to `.pipeline/state.json` on every heartbeat cyc
   "pr_urls": {},
   "priority_queue_ids": ["API-429", "API-430", "API-431"],
   "story_results": { "API-427": { "stage0": "skip", "stage1": "skip", "stage2": "Done" } },
-  "remote_type": "github"
+  "remote_type": "github",
+  "infra_issues": []
 }
 ```
 

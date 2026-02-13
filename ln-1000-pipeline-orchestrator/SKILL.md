@@ -92,7 +92,7 @@ IF .pipeline/state.json exists AND complete == false:
   # Previous run interrupted — resume from saved state
   1. Read .pipeline/state.json → restore: story_state, worker_map,
      quality_cycles, validation_retries, crash_count, pr_urls, priority_queue_ids,
-     story_results, remote_type
+     story_results, remote_type, infra_issues
   2. Read .pipeline/checkpoint-*.json → validate story_state consistency
      (checkpoint.stage should match story_state[id])
   3. Re-read kanban board → rebuild priority_queue from priority_queue_ids
@@ -255,6 +255,7 @@ worker_map = {}                       # {storyId: worker_name}
 depends_on = {}                       # {storyId: [prerequisite IDs]} — from Phase 1 step 7
 worktree_map = {}                     # {storyId: worktree_dir | null} — tracks which stories use worktrees
 story_results = {}                    # {storyId: {stage0: "...", stage1: "...", ...}} — for pipeline report
+infra_issues = []                     # [{phase, type, message}] — infrastructure problems for report
 
 # Initialize counters for all queued stories
 FOR EACH story IN priority_queue:
@@ -476,7 +477,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     Write .pipeline/state.json with ALL state variables:
       complete, active_workers, stories_remaining, last_check=now,
       story_state, worker_map, quality_cycles, validation_retries,
-      crash_count, pr_urls, priority_queue_ids, story_results, remote_type
+      crash_count, pr_urls, priority_queue_ids, story_results, remote_type, infra_issues
     # Full state write enables Phase 0 recovery if lead crashes between heartbeats
 
   ON NO NEW MESSAGES (heartbeat cycle with no worker updates):
@@ -608,6 +609,23 @@ Prepend summary header to docs/tasks/reports/pipeline-{date}.md:
   | Total quality rework cycles | {sum of quality_cycles} |
   | Total validation retries | {sum of validation_retries} |
   | Total crash recoveries | {sum of crash_count} |
+  | Infrastructure issues | {len(infra_issues)} |
+
+# 3a. Collect infrastructure issues
+# Analyze entire pipeline session for non-fatal problems:
+# hook/settings failures, git conflicts, worktree errors, PR creation issues,
+# Linear sync mismatches, worker crashes, permission errors, any unexpected fallbacks.
+# Populate infra_issues = [{phase, type, message}] from session context.
+
+Append Infrastructure Issues section:
+  ## Infrastructure Issues
+  IF infra_issues NOT EMPTY:
+    | # | Phase | Type | Details |
+    |---|-------|------|---------|
+    FOR EACH issue IN infra_issues:
+      | {N} | {issue.phase} | {issue.type} | {issue.message} |
+  ELSE:
+    _No infrastructure issues._
 
 Append Recommendations section (auto-generated):
   ## Recommendations
@@ -616,7 +634,10 @@ Append Recommendations section (auto-generated):
   - IF any crash_count > 0: "Worker crashed {N} times for {id}. Check for context-heavy operations."
   - IF any PAUSED: "Stories {ids} require manual intervention."
   - IF any Linear sync mismatches: "Linear/kanban sync issues detected for {ids}. Verify statuses manually."
-  - IF all DONE with 0 retries: "Clean run — no issues detected."
+  - IF any infra_issues with type "hook": "Hook configuration errors. Verify settings.local.json and .claude/hooks/."
+  - IF any infra_issues with type "git": "Git conflicts encountered. Rebase feature branches more frequently."
+  - IF any infra_issues with type "worktree": "Worktree failures. Check disk space and existing worktree state."
+  - IF all DONE with 0 retries AND no infra_issues: "Clean run — no issues detected."
 
 # 4. Show pipeline summary to user
 ```
