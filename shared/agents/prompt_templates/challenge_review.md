@@ -24,6 +24,7 @@ You previously reviewed {review_type} for {story_ref} and made the following sug
 - DO NOT modify, create, or delete any project files
 - This is a READ-ONLY debate task
 - If you cannot access a resource, report clearly
+- DO NOT ask clarifying questions or request additional context — you have everything you need. Follow this prompt to completion autonomously. If information is missing, make reasonable assumptions and proceed.
 
 ## Output Format (JSON)
 ```json

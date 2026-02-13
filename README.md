@@ -17,9 +17,9 @@
 ## What's Inside
 
 ```
-claude-code-skills/                      # MARKETPLACE: 2 plugins, 100 skills
+claude-code-skills/                      # MARKETPLACE: 2 plugins, 101 skills
 |
-|  ┌─ Plugin: full-development-workflow-skills (68 skills) ─┐
+|  ┌─ Plugin: full-development-workflow-skills (69 skills) ─┐
 |
 |-- ln-001-standards-researcher/       # Research standards via MCP Context7/Ref
 |-- ln-002-best-practices-researcher/  # Create ADRs, guides, manuals
@@ -101,6 +101,9 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 100 skills
 |   |   |-- ln-651-query-efficiency-auditor/    # N+1, over-fetching, missing bulk ops
 |   |   |-- ln-652-transaction-correctness-auditor/ # Scope, rollback, long-held txns
 |   |   |-- ln-653-runtime-performance-auditor/ # Blocking IO, allocations, sync sleep
+|
+|-- ln-10XX-*/                           # ORCHESTRATION (1 skill)
+|   |-- ln-1000-pipeline-orchestrator/   # L0 Meta: kanban → 4-stage pipeline (300→310→400→500) via TeamCreate
 |
 |  └──────────────────────────────────────────────┘
 |  ┌─ Plugin: claude-code-bootstrap (32 skills) ────┐
@@ -281,7 +284,7 @@ Through the Orchestrator-Worker pattern. Instead of feeding the entire codebase 
 <details>
 <summary><b>How is it different from custom prompts or slash commands?</b></summary>
 
-Custom prompts are ad-hoc and context-free. Claude Code Skills provides 99 coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L1 orchestrators delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
+Custom prompts are ad-hoc and context-free. Claude Code Skills provides 101 coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L1 orchestrators delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
 
 </details>
 

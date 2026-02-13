@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## 2026-02-13
+
+New skill: ln-1000-pipeline-orchestrator (L0 Meta-Orchestrator). Reads kanban board, builds priority queue, drives Stories through 4-stage pipeline (ln-300 task planning -> ln-310 validation -> ln-400 execution -> ln-500 quality gate) via Claude Code Agent Teams. Max 2 concurrent Stories, auto-PR on quality gate PASS. Includes 6 reference files: message_protocol.md (formal lead<->worker message contract with regex parsing), worker_health_contract.md (3-step crash detection + respawn), pipeline_states.md (state machine with guards), worker_prompts.md (4 stage templates), kanban_parser.md (task presence detection), and 4 Mermaid diagrams. New 10XX Orchestration category. Total skills: 100 -> 101.
+
+---
+
 ## 2026-02-12
 
 Session Resume for Agent Debate: ln-311 and ln-512 now resume Codex/Gemini sessions during challenge/follow-up rounds via `--resume-session` flag, preserving full agent context (file analysis, reasoning). New: agent_runner.py session capture + fallback to stateless, agent_registry.json v3.0 with resume_args/session_id_capture config. `.agent-review/` existence check before creation, removed auto-add to .gitignore. New skill: ln-003-push-all (commit+push all changes). Total skills: 99 → 100.

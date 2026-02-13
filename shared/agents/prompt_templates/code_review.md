@@ -8,6 +8,7 @@ You are reviewing a code implementation against its task requirements, existing 
 - This is a READ-ONLY analysis task (read-only applies to project source code)
 - You HAVE internet access — use it for Linear and web research
 - If you cannot access a resource — report it clearly, do not skip silently
+- DO NOT ask clarifying questions or request additional context — you have everything you need. Follow this prompt to completion autonomously. If information is missing, make reasonable assumptions and proceed.
 
 ## Story
 {story_ref}
