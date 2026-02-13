@@ -195,6 +195,7 @@ Write .pipeline/state.json (full schema — see checkpoint_format.md):
   { "complete": false, "active_workers": 0, "stories_remaining": N, "last_check": <now>,
     "story_state": {}, "worker_map": {}, "quality_cycles": {}, "validation_retries": {},
     "crash_count": {}, "pr_urls": {}, "priority_queue_ids": [<all story IDs>] }
+Write .pipeline/lead-session.id with current session_id   # Stop hook uses this to only keep lead alive
 ```
 
 #### 3.3 Create Team & Spawn Workers
@@ -333,7 +334,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     IF tasks missing: story_state[id] = "PAUSED"; ESCALATE; CONTINUE
     story_state[id] = "STAGE_1"
     # Shutdown old worker, spawn fresh for Stage 1
-    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    Remove .pipeline/worker-{worker_map[id]}-active.flag and .pipeline/worker-{worker_map[id]}-done.flag
     SendMessage(type: "shutdown_request", recipient: worker_map[id])
     next_worker = "story-{id}-s1"
     Task(name: next_worker, team_name: "pipeline-{date}",
@@ -356,7 +357,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     ASSERT Story {id} status = Todo              # Guard: verify ln-310 output
     story_state[id] = "STAGE_2"
     # Shutdown old worker, spawn fresh for Stage 2
-    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    Remove .pipeline/worker-{worker_map[id]}-active.flag and .pipeline/worker-{worker_map[id]}-done.flag
     SendMessage(type: "shutdown_request", recipient: worker_map[id])
     next_worker = "story-{id}-s2"
     Task(name: next_worker, team_name: "pipeline-{date}",
@@ -370,7 +371,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     validation_retries[id]++
     IF validation_retries[id] <= 1:
       # Shutdown old worker, spawn fresh for Stage 1 retry
-      Remove .pipeline/worker-{worker_map[id]}-active.flag
+      Remove .pipeline/worker-{worker_map[id]}-active.flag and .pipeline/worker-{worker_map[id]}-done.flag
       SendMessage(type: "shutdown_request", recipient: worker_map[id])
       next_worker = "story-{id}-s1-retry"
       Task(name: next_worker, team_name: "pipeline-{date}",
@@ -389,7 +390,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
   ON "Stage 2 ERROR for {id}: {details}":
     story_state[id] = "PAUSED"
     active_workers--
-    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    Remove .pipeline/worker-{worker_map[id]}-active.flag and .pipeline/worker-{worker_map[id]}-done.flag
     ESCALATE to user: "Story {id} execution failed: {details}"
     SendMessage(type: "shutdown_request", recipient: worker_map[id])
     story_results[id].stage2 = "ERROR: {details}"
@@ -400,7 +401,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     ASSERT Story {id} status = To Review         # Guard: verify ln-400 output
     story_state[id] = "STAGE_3"
     # Shutdown old worker, spawn fresh for Stage 3
-    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    Remove .pipeline/worker-{worker_map[id]}-active.flag and .pipeline/worker-{worker_map[id]}-done.flag
     SendMessage(type: "shutdown_request", recipient: worker_map[id])
     next_worker = "story-{id}-s3"
     Task(name: next_worker, team_name: "pipeline-{date}",
@@ -413,7 +414,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
   ON "Stage 3 COMPLETE for {id}. Verdict: PASS|CONCERNS|WAIVED. Quality Score: {score}":
     story_state[id] = "DONE"
     active_workers--
-    Remove .pipeline/worker-{worker_map[id]}-active.flag
+    Remove .pipeline/worker-{worker_map[id]}-active.flag and .pipeline/worker-{worker_map[id]}-done.flag
     Update .pipeline/state.json: active_workers, stories_remaining, last_check
     Auto PR (see Phase 4a below)
     Update kanban: Story → Done
@@ -425,7 +426,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     IF quality_cycles[id] < 2:
       story_state[id] = "STAGE_2"
       # Shutdown old worker, spawn fresh for Stage 2 re-entry (fix tasks)
-      Remove .pipeline/worker-{worker_map[id]}-active.flag
+      Remove .pipeline/worker-{worker_map[id]}-active.flag and .pipeline/worker-{worker_map[id]}-done.flag
       SendMessage(type: "shutdown_request", recipient: worker_map[id])
       next_worker = "story-{id}-s2-fix"
       Task(name: next_worker, team_name: "pipeline-{date}",

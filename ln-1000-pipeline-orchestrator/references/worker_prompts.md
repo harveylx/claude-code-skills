@@ -95,6 +95,9 @@ Step 4: Report to lead:
     content: "Stage 0 COMPLETE for {storyId}. {N} tasks created. Plan score: {score}/4.",
     summary: "{storyId} Stage 0 {N} tasks")
 
+Step 5: Signal completion:
+  Write empty file: .pipeline/worker-{workerName}-done.flag
+
 After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
@@ -137,6 +140,9 @@ Step 4: Report to lead (use EXACT format per verdict):
       content: "Stage 1 COMPLETE for {storyId}. Verdict: NO-GO. Readiness: {score}. Reason: {reason}",
       summary: "{storyId} Stage 1 NO-GO")
 
+Step 5: Signal completion:
+  Write empty file: .pipeline/worker-{workerName}-done.flag
+
 After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
@@ -177,6 +183,9 @@ Step 4: Report to lead:
   SendMessage(type: "message", recipient: "pipeline-lead",
     content: "Stage 2 COMPLETE for {storyId}. All tasks Done. Story set to To Review.",
     summary: "{storyId} Stage 2 Done")
+
+Step 5: Signal completion:
+  Write empty file: .pipeline/worker-{workerName}-done.flag
 
 After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
@@ -221,6 +230,9 @@ Step 4: Report to lead (use EXACT format per verdict):
     SendMessage(type: "message", recipient: "pipeline-lead",
       content: "Stage 3 COMPLETE for {storyId}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues list}",
       summary: "{storyId} Stage 3 FAIL")
+
+Step 5: Signal completion:
+  Write empty file: .pipeline/worker-{workerName}-done.flag
 
 After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.

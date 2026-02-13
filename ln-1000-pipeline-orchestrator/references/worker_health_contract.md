@@ -26,11 +26,11 @@ Each worker handles exactly ONE stage. No IDLE→EXECUTING transition between st
 |--------|---------|-------------|
 | Worker sends "Stage N COMPLETE" | Healthy, stage done | Shutdown worker, spawn fresh for next stage |
 | Worker sends "Stage N ERROR" | Healthy, stage failed | Shutdown worker, decide retry/pause |
-| TeammateIdle WITH prior COMPLETE/ERROR in same turn | Normal: shutdown in progress | No action needed, worker exiting |
-| TeammateIdle WITHOUT prior COMPLETE/ERROR | Suspicious: possible crash | Enter Crash Detection Protocol |
+| TeammateIdle WITH done.flag existing | Normal: worker reported and awaiting shutdown | Send shutdown_request, remove flags |
+| TeammateIdle WITHOUT done.flag AND no COMPLETE/ERROR | Suspicious: possible crash | Enter Crash Detection Protocol |
 | No notification at all | Worker still executing | WAIT — do NOT interrupt. ln-400/ln-500 can run 30+ min |
 
-**Critical rule:** TeammateIdle is NORMAL after reporting. Worker is awaiting shutdown_request. Only suspicious when idle arrives without completion message for current stage.
+**Critical rule:** TeammateIdle is NORMAL when `done.flag` exists — worker reported and is awaiting shutdown_request. Only suspicious when idle arrives without `done.flag` and no completion message.
 
 ## Crash Detection Protocol
 
@@ -136,13 +136,23 @@ Two hooks prevent premature termination. Installed by lead in Phase 3 from `refe
 
 | Hook | File | Trigger | Exit 2 Condition |
 |------|------|---------|-----------------|
-| Stop | `pipeline-keepalive.sh` | Claude tries to stop | `.pipeline/state.json` has `complete: false` |
-| TeammateIdle | `worker-keepalive.sh` | Worker goes idle | `.pipeline/worker-{name}-active.flag` exists |
+| Stop | `pipeline-keepalive.sh` | Claude tries to stop | `complete: false` AND `session_id` matches `.pipeline/lead-session.id` |
+| TeammateIdle | `worker-keepalive.sh` | Worker goes idle | `active.flag` exists AND `done.flag` does NOT exist |
+
+**Flag lifecycle:**
+```
+SPAWNED   → lead creates .pipeline/worker-{name}-active.flag
+EXECUTING → active.flag exists, done.flag absent → TeammateIdle returns exit 2
+REPORTING → worker writes .pipeline/worker-{name}-done.flag after SendMessage
+            → TeammateIdle returns exit 0 → worker goes idle (can receive shutdown_request)
+SHUTDOWN  → lead removes both flags, sends shutdown_request → worker approves and exits
+```
 
 **Lead responsibilities:**
 - Write `.pipeline/state.json` with `complete: false` at pipeline start (Phase 3)
+- Write `.pipeline/lead-session.id` with current session_id (Phase 3) — Stop hook only keeps lead alive
 - Create `.pipeline/worker-{name}-active.flag` when assigning stage
-- Remove flag when worker reports stage completion
+- Remove both `active.flag` and `done.flag` when worker reports stage completion
 - Set `complete: true` in Phase 5 before cleanup
 
 ## Lead Heartbeat Loop
