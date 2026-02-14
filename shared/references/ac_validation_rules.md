@@ -127,6 +127,28 @@ IF ANY criterion FAIL → Story needs revision
 IF ALL criteria PASS → Story ready for Task decomposition
 ```
 
+## 5. Verification Methods (Goal-Driven Execution)
+
+Each task AC must include a verification method — defines HOW executor (ln-401) checks that AC is satisfied after implementation.
+
+| Method | When to Use | Format |
+|--------|-------------|--------|
+| **test** | Existing or planned test covers AC | `verify: test (test_name or test file)` |
+| **command** | CLI command can validate outcome | `verify: command (exact command + expected output)` |
+| **inspect** | Manual file/output inspection | `verify: inspect (what to check + expected content)` |
+
+**Examples:**
+- AC "POST /users returns 201" → `verify: command (curl -s -o /dev/null -w "%{http_code}" -X POST localhost:3000/users -d '{"email":"test@test.com"}' → 201)`
+- AC "Users table has email column" → `verify: inspect (migration file contains email column definition)`
+- AC "Invalid email returns 400" → `verify: test (test_user_validation.py::test_invalid_email)`
+
+**Quick Checklist:**
+```
+□ Every task AC has verify: method
+□ Verify methods are executable (not vague)
+□ At least 1 AC uses test or command (not all inspect)
+```
+
 ## Usage
 
 ```markdown

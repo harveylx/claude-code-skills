@@ -51,7 +51,7 @@ Detailed criteria table for Phase 4 auto-fix execution and Phase 2 penalty calcu
 | 1 | Story Structure | 8 sections per template | LOW (1) | Add/reorder sections with TODO placeholders; update Linear |
 | 2 | Tasks Structure | Each Task has 7 sections | LOW (1) | Load each Task; add/reorder sections; update Linear |
 | 3 | Story Statement | As a/I want/So that clarity | LOW (1) | Rewrite using persona/capability/value; update Linear |
-| 4 | Acceptance Criteria | Given/When/Then, 3-5 items | MEDIUM (3) | Normalize to G/W/T; add edge cases; update Linear |
+| 4 | Acceptance Criteria | Given/When/Then, 3-5 items; each task AC has `verify:` method | MEDIUM (3) | Normalize to G/W/T; add edge cases; generate `verify:` methods for task ACs missing them (test/command/inspect based on AC content); update Linear |
 
 ## Standards (#5)
 
@@ -105,7 +105,13 @@ Detailed criteria table for Phase 4 auto-fix execution and Phase 2 penalty calcu
 |---|-----------|----------------|---------|------------------|
 | 20 | Risk Analysis | Unmitigated implementation risks (architecture, errors, scalability, data integrity, integration, SPOF) | HIGH (5) per risk, max 15 | Score via Impact x Probability matrix; add TODO sections for Priority 15-19; FLAG for human review at Priority >= 20; skip at Priority <= 8 |
 
-**Maximum Penalty:** 85 points (sum of all 21 criteria; #20 capped at 15)
+## Verification Methods (#22)
+
+| # | Criterion | What it checks | Penalty | Auto-fix actions |
+|---|-----------|----------------|---------|------------------|
+| 22 | AC Verify Methods | Every task AC has `verify:` method (test/command/inspect); at least 1 non-inspect per task | MEDIUM (3) | Generate `verify:` methods based on AC content: HTTP endpoints → command, DB operations → inspect, business logic → test; update Linear |
+
+**Maximum Penalty:** 88 points (sum of all 22 criteria; #20 capped at 15)
 
 ---
 **Version:** 1.0.0

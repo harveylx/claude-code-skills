@@ -36,7 +36,7 @@ Validate Stories/Tasks with explicit GO/NO-GO verdict, Readiness Score, and Anti
 | LOW | 1 | Structural/cosmetic issues |
 
 **Workflow:**
-1. Audit: Calculate penalty points for all 21 criteria
+1. Audit: Calculate penalty points for all 22 criteria
 2. Fix: Auto-fix and zero out points
 3. Report: Total Before -> 0 After
 
@@ -75,7 +75,7 @@ Phase 2: Research & Audit
   - Delegate documentation creation to ln-002
   - Research via MCP Ref (RFC, OWASP, library versions)
   - Verify technical claims (Anti-Hallucination)
-  - Calculate Penalty Points (21 criteria)
+  - Calculate Penalty Points (22 criteria)
 
 Phase 3: Audit Results & Fix Plan
   - Display Penalty Points table and fix plan
@@ -119,7 +119,7 @@ Phase 6: Approve & Notify
 - Documentation delegation to ln-002 (guides/manuals/ADRs)
 - MCP research (RFC/OWASP/library versions via Ref + Context7)
 - Anti-Hallucination verification (evidence-based claims)
-- Penalty Points calculation (21 criteria, see Auto-Fix Actions Reference in same file)
+- Penalty Points calculation (22 criteria, see Auto-Fix Actions Reference in same file)
 
 **Always execute for every Story - no exceptions.**
 
@@ -136,7 +136,7 @@ Phase 6: Approve & Notify
 
 ### Phase 4: Auto-Fix
 
-**Execute fixes for ALL 21 criteria on the spot.**
+**Execute fixes for ALL 22 criteria on the spot.**
 
 - Execution order (8 groups):
   1. **Structural (#1-#4)** — Story/Tasks template compliance + AC completeness/specificity
@@ -146,7 +146,8 @@ Phase 6: Approve & Notify
   5. **Quality (#14-#15)** — Documentation complete, hardcoded values
   6. **Dependencies (#18-#19)** — Story/Task independence (no forward dependencies)
   7. **Risk (#20)** — Implementation risk analysis (after dependencies resolved, before traceability)
-  8. **Traceability (#16-#17)** — Story-Task alignment, AC coverage quality (LAST, after all fixes)
+  8. **Verification (#22)** — AC verify methods exist for all task ACs (test/command/inspect)
+  9. **Traceability (#16-#17)** — Story-Task alignment, AC coverage quality (LAST, after all fixes)
 - Use Auto-Fix Actions table below as authoritative checklist
 - Zero out penalty points as fixes applied
 - Test Strategy section must exist but remain empty (testing handled separately)
@@ -185,7 +186,7 @@ Invoke `Skill(skill="ln-311-agent-reviewer", args="{storyId}")`.
 - Dependencies (#18-#19): No forward dependencies
 - Risk (#20): Implementation risk analysis
 
-**Maximum Penalty:** 85 points (sum of all 21 criteria; #20 capped at 15)
+**Maximum Penalty:** 88 points (sum of all 22 criteria; #20 capped at 15)
 
 ## Final Assessment Model
 
@@ -241,10 +242,10 @@ Output explicit mapping:
 
 ## Self-Audit Protocol (Mandatory)
 
-Verify all 21 criteria (#1-#21) from Auto-Fix Actions pass with concrete evidence (doc path, MCP result, Linear update) before proceeding to Phase 6.
+Verify all 22 criteria (#1-#22) from Auto-Fix Actions pass with concrete evidence (doc path, MCP result, Linear update) before proceeding to Phase 6.
 
 ## Critical Rules
-- All 21 criteria MUST be verified with concrete evidence (doc path, MCP result, Linear update) before Phase 6 (Self-Audit Protocol)
+- All 22 criteria MUST be verified with concrete evidence (doc path, MCP result, Linear update) before Phase 6 (Self-Audit Protocol)
 - Fix execution order is strict: Structural -> Standards -> Solution -> Workflow -> Quality -> Dependencies -> Risk -> Traceability (standards before YAGNI/KISS)
 - Never approve with Penalty Points > 0; all violations must be auto-fixed to zero. If auto-fix is impossible for a criterion (e.g., MCP Ref unavailable, external dependency), mark as FLAGGED with reason — penalty stays, Gate = NO-GO, user must resolve manually
 - Test Strategy section must exist but remain empty (testing handled separately by other skills)
@@ -253,7 +254,7 @@ Verify all 21 criteria (#1-#21) from Auto-Fix Actions pass with concrete evidenc
 ## Definition of Done
 
 - Phases 1-6 completed: metadata loaded, research done, penalties calculated, fixes applied, agent review done, Story approved.
-- Penalty Points = 0 (all 21 criteria fixed). Readiness Score ≥ 5.
+- Penalty Points = 0 (all 22 criteria fixed). Readiness Score ≥ 5.
 - Anti-Hallucination: VERIFIED (all claims sourced via MCP).
 - AC Coverage: 100% (each AC mapped to ≥1 Task).
 - Agent Review: ln-311 invoked; suggestions aggregated, validated, accepted applied (or SKIPPED if no agents).
@@ -319,7 +320,7 @@ Verify all 21 criteria (#1-#21) from Auto-Fix Actions pass with concrete evidenc
   - `references/traceability_validation.md` (criteria #16-#17)
   - `references/domain_patterns.md` (pattern registry for ln-002 delegation)
   - `references/penalty_points.md` (penalty system details)
-- **Prevention checklist:** `shared/references/creation_quality_checklist.md` (creator-facing mapping of 21 criteria)
+- **Prevention checklist:** `shared/references/creation_quality_checklist.md` (creator-facing mapping of 22 criteria)
 - **Linear integration:** `../shared/templates/linear_integration.md`
 
 ---

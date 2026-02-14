@@ -192,6 +192,54 @@ Automated validation hooks that run during development:
 
 ---
 
+## MCP Servers (Optional)
+
+Skills use MCP servers for research, documentation lookup, and Linear integration. All skills work without MCP — they gracefully skip MCP-dependent steps when servers are unavailable.
+
+| Server | Purpose | API Key | Used by |
+|--------|---------|---------|---------|
+| **[Context7](https://github.com/upstash/context7)** | Library docs, APIs, migration guides | Optional ([dashboard](https://context7.com/dashboard)) | ln-001, ln-002, ln-310, ln-511, ln-640+ |
+| **[Ref](https://docs.ref.tools/install)** | Standards, RFCs, best practices | Required ([ref.tools/keys](https://ref.tools/keys)) | ln-001, ln-002, ln-310, ln-511, ln-640+ |
+| **[Linear](https://linear.app/docs/mcp)** | Issue tracking (Agile workflow) | OAuth via browser | ln-300+, ln-400+, ln-500+ |
+
+**CLI setup:**
+```bash
+# Context7 — library documentation
+claude mcp add context7 -- npx -y @upstash/context7-mcp
+
+# Ref — standards & best practices search (API key required)
+claude mcp add --transport http Ref https://api.ref.tools/mcp?apiKey=YOUR_API_KEY
+
+# Linear — issue tracking (OAuth via browser after adding)
+claude mcp add linear-server -- npx -y mcp-remote https://mcp.linear.app/sse
+```
+
+<details>
+<summary><b>JSON config alternative</b></summary>
+
+Add to `~/.claude/settings.json`:
+```json
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "Ref": {
+      "type": "http",
+      "url": "https://api.ref.tools/mcp?apiKey=YOUR_API_KEY"
+    },
+    "linear-server": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
+    }
+  }
+}
+```
+</details>
+
+---
+
 ## Workflow
 
 ```
