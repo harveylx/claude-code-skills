@@ -239,16 +239,18 @@ Two hooks prevent premature termination. Installed by lead in Phase 3 from `refe
 ```
 SPAWNED   → lead creates .pipeline/worker-{name}-active.flag
 EXECUTING → active.flag exists, done.flag absent → TeammateIdle returns exit 2
-REPORTING → worker writes .pipeline/worker-{name}-done.flag after SendMessage
+REPORTING → worker writes .pipeline/worker-{name}-done.flag BEFORE SendMessage
             → TeammateIdle returns exit 0 → worker goes idle (can receive shutdown_request)
-SHUTDOWN  → lead removes both flags, sends shutdown_request → worker approves and exits
+PROCESSED → lead receives completion message, removes both flags AT START of handler
+            → lead processes message (state transitions, spawn next worker)
+SHUTDOWN  → lead sends shutdown_request → worker approves and exits
 ```
 
 **Lead responsibilities:**
 - Write `.pipeline/state.json` with `complete: false` at pipeline start (Phase 3)
 - Write `.pipeline/lead-session.id` with current session_id (Phase 3) — Stop hook only keeps lead alive
 - Create `.pipeline/worker-{name}-active.flag` when assigning stage
-- Remove both `active.flag` and `done.flag` when worker reports stage completion
+- Remove both `active.flag` and `done.flag` AT START of completion message handler (before state transitions)
 - Set `complete: true` in Phase 5 before cleanup
 
 ## Lead Heartbeat Loop

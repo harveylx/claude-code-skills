@@ -28,27 +28,33 @@ Status for {id}: Stage {N} {EXECUTING|WAITING|ERROR}. Current step: {description
 
 ## Checkpoint Protocol
 
-Workers write checkpoint files after significant steps to enable crash recovery. See `references/checkpoint_format.md` for schema.
+Workers write checkpoint files after significant steps to enable crash recovery. See `references/checkpoint_format.md` for complete schema.
 
-```
-Write .pipeline/checkpoint-{storyId}.json after each significant step:
+**Base fields (all stages):**
+```json
 {
   "storyId": "{storyId}",
   "stage": {N},
-  "agentId": <your agent ID from Task context>,
-  "tasksCompleted": [<completed task IDs>],
-  "tasksRemaining": [<remaining task IDs>],
+  "agentId": "<your agent ID from Task context>",
+  "tasksCompleted": ["<completed task IDs>"],
+  "tasksRemaining": ["<remaining task IDs>"],
   "lastAction": "<description of last completed action>",
   "timestamp": "<ISO 8601>"
 }
 ```
 
-| Stage | When to Write |
-|-------|--------------|
-| 0 | After tasks created |
-| 1 | After validation completes |
-| 2 | After EACH task completes (critical — most work happens here) |
-| 3 | After quality gate completes |
+**Stage-specific required fields:**
+- **Stage 0:** Add `"planScore": <0-4>` (task plan quality from ln-300)
+- **Stage 1:** Add `"readiness": <1-10>`, `"verdict": "GO|NO-GO"`, `"reason": "<reason>"` (reason only if NO-GO)
+- **Stage 2:** No additional fields
+- **Stage 3:** Add `"verdict": "PASS|CONCERNS|WAIVED|FAIL"`, `"qualityScore": <0-100>`, `"issues": "<issues>"` (issues only if FAIL)
+
+| Stage | When to Write | Critical Fields |
+|-------|--------------|----------------|
+| 0 | After tasks created | planScore, tasksRemaining |
+| 1 | After validation completes | readiness, verdict, reason (if NO-GO) |
+| 2 | After EACH task completes (critical — most work happens here) | tasksCompleted/tasksRemaining tracking |
+| 3 | After quality gate completes | verdict, qualityScore, issues (if FAIL) |
 
 ## Spawn Template
 
@@ -90,7 +96,9 @@ Step 2: After ln-300 completes, check result:
   - Error or plan score <2/4: Report failure (Step 4b)
 
 Step 3: Write checkpoint:
-  Write .pipeline/checkpoint-{storyId}.json with stage=0, tasksCompleted=[], tasksRemaining=[created task IDs]
+  Write .pipeline/checkpoint-{storyId}.json with:
+    stage=0, tasksCompleted=[], tasksRemaining=[created task IDs],
+    planScore={score from ln-300 (0-4)}
 
 Step 4: Signal completion flag (enables worker idle after shutdown approval):
   Write empty file: .pipeline/worker-{workerName}-done.flag
@@ -144,7 +152,10 @@ Step 2: After ln-310 completes, check result:
   - If NO-GO: Report failure with reason to lead
 
 Step 3: Write checkpoint:
-  Write .pipeline/checkpoint-{storyId}.json with stage=1, tasksCompleted=[], tasksRemaining=[]
+  Write .pipeline/checkpoint-{storyId}.json with:
+    stage=1, tasksCompleted=[], tasksRemaining=[],
+    readiness={score from ln-310 (1-10)}, verdict={GO or NO-GO},
+    reason={reason if NO-GO, omit if GO}
 
 Step 4: Signal completion flag (enables worker idle after shutdown approval):
   Write empty file: .pipeline/worker-{workerName}-done.flag
@@ -258,7 +269,10 @@ Step 2: After ln-500 completes, check verdict:
   - WAIVED: Report success with waiver reason
 
 Step 3: Write checkpoint:
-  Write .pipeline/checkpoint-{storyId}.json with stage=3, all tasks in tasksCompleted
+  Write .pipeline/checkpoint-{storyId}.json with:
+    stage=3, all tasks in tasksCompleted,
+    verdict={PASS/CONCERNS/WAIVED/FAIL from ln-500}, qualityScore={score from ln-500 (0-100)},
+    issues={issues if FAIL, omit otherwise}
 
 Step 4: Signal completion flag (enables worker idle after shutdown approval):
   Write empty file: .pipeline/worker-{workerName}-done.flag
@@ -302,4 +316,4 @@ Workers NEVER receive follow-up stage commands. One stage = one worker lifecycle
 
 ---
 **Version:** 1.0.0
-**Last Updated:** 2026-02-13
+**Last Updated:** 2026-02-14

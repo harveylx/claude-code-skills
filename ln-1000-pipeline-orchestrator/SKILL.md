@@ -342,429 +342,48 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
       FOR EACH s IN priority_queue: story_state[s.id] = "PAUSED"
       ESCALATE: "Deadlocked: remaining stories depend on PAUSED/incomplete stories: {ids}"
 
-  # 2. Process worker messages (delivered by heartbeat cycle)
-  #    Messages from workers arrive as conversation context in each heartbeat iteration.
-  #    Match against ON handlers below. If no match → ON NO NEW MESSAGES at bottom.
+  # 2. Process worker messages (reactive message handling)
   #
-  # SENDER VALIDATION: Before processing ANY completion message, verify sender:
-  #   VERIFY message.sender == worker_map[id]
-  #   IF mismatch: LOG "Ignoring stale message from {sender} for {id}"; SKIP handler
-  #   This prevents old/dead workers from corrupting pipeline state.
+  **MANDATORY READ:** Load `references/phases/phase4_handlers.md` for all ON message handlers:
+  - Stage 0 COMPLETE / ERROR (task planning outcomes)
+  - Stage 1 COMPLETE (GO / NO-GO validation outcomes with retry logic)
+  - Stage 2 COMPLETE / ERROR (execution outcomes)
+  - Stage 3 COMPLETE (PASS/CONCERNS/WAIVED/FAIL quality gate outcomes with rework cycles)
+  - Worker crash detection (3-step protocol: flag → probe → respawn)
+
+  Handlers include sender validation and state guards to prevent duplicate processing.
+
+  # 2.5. Active done-flag verification (proactive health monitoring)
   #
-  # STATE GUARD: Before processing ANY stage completion, verify story is in expected state:
-  #   Stage 0 COMPLETE → story_state[id] must be "STAGE_0"
-  #   Stage 1 COMPLETE → story_state[id] must be "STAGE_1"
-  #   Stage 2 COMPLETE → story_state[id] must be "STAGE_2"
-  #   Stage 3 COMPLETE → story_state[id] must be "STAGE_3"
-  #   IF mismatch: LOG "Duplicate/stale message for {id} (state={story_state[id]})"; SKIP handler
-  #   This prevents double-spawn when same completion message is delivered across heartbeats.
+  **MANDATORY READ:** Load `references/phases/phase4_heartbeat.md` for bidirectional health monitoring:
+  - Lost message detection (done-flag exists but state not advanced)
+  - Synthetic recovery from checkpoint + kanban verification (all 4 stages)
+  - Fallback to probe protocol when checkpoint missing
+  - Structured heartbeat output (table format with worker status)
+  - Helper functions (skill_name_from_stage, predict_next_step)
 
-  ON "Stage 0 COMPLETE for {id}. {N} tasks created. Plan score: {score}/4.":
-    Re-read kanban board
-    ASSERT tasks exist under Story {id}         # Guard: verify ln-300 output
-    IF tasks missing: story_state[id] = "PAUSED"; ESCALATE; CONTINUE
-    story_state[id] = "STAGE_1"
-    # Shutdown old worker, spawn fresh for Stage 1
-    Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-    SendMessage(type: "shutdown_request", recipient: worker_map[id])
-    next_worker = "story-{id}-s1"
-    Task(name: next_worker, team_name: "pipeline-{date}",
-         model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",
-         prompt: worker_prompt(story, 1, business_answers, worktree_map[id]))
-    worker_map[id] = next_worker
-    Write .pipeline/worker-{next_worker}-active.flag
-    story_results[id].stage0 = "{N} tasks, {score}/4"
+  This complements reactive crash detection (ON TeammateIdle) with proactive polling every ~60s.
 
-  ON "Stage 0 ERROR for {id}: {details}":
-    story_state[id] = "PAUSED"
-    active_workers--
-    Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-    # Cleanup worktree if exists (prevents orphaned worktrees)
-    IF worktree_map[id]:
-      Bash: git worktree remove .worktrees/story-{id} --force
-      worktree_map[id] = null
-    ESCALATE to user: "Cannot create tasks for Story {id}: {details}"
-    SendMessage(type: "shutdown_request", recipient: worker_map[id])
-    story_results[id].stage0 = "ERROR: {details}"
-    Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
-
-  ON "Stage 1 COMPLETE for {id}. Verdict: GO. Readiness: {score}.":
-    Re-read kanban board
-    ASSERT Story {id} status = Todo              # Guard: verify ln-310 output
-    story_state[id] = "STAGE_2"
-    # Shutdown old worker, spawn fresh for Stage 2
-    Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-    SendMessage(type: "shutdown_request", recipient: worker_map[id])
-    next_worker = "story-{id}-s2"
-    Task(name: next_worker, team_name: "pipeline-{date}",
-         model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",      # Stage 2 medium effort
-         prompt: worker_prompt(story, 2, business_answers, worktree_map[id]))
-    worker_map[id] = next_worker
-    Write .pipeline/worker-{next_worker}-active.flag
-    story_results[id].stage1 = "GO, {score}"
-
-  ON "Stage 1 COMPLETE for {id}. Verdict: NO-GO. Readiness: {score}. Reason: {reason}":
-    validation_retries[id]++
-    IF validation_retries[id] <= 1:
-      # Shutdown old worker, spawn fresh for Stage 1 retry
-      Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-      SendMessage(type: "shutdown_request", recipient: worker_map[id])
-      next_worker = "story-{id}-s1-retry"
-      Task(name: next_worker, team_name: "pipeline-{date}",
-           model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",    # Stage 1 = review
-           prompt: worker_prompt(story, 1, business_answers, worktree_map[id]))
-      worker_map[id] = next_worker
-      Write .pipeline/worker-{next_worker}-active.flag
-    ELSE:
-      story_state[id] = "PAUSED"
-      active_workers--
-      Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-      # Cleanup worktree if exists (prevents orphaned worktrees)
-      IF worktree_map[id]:
-        Bash: git worktree remove .worktrees/story-{id} --force
-        worktree_map[id] = null
-      ESCALATE to user: "Story {id} failed validation twice: {reason}"
-      SendMessage(type: "shutdown_request", recipient: worker_map[id])
-      story_results[id].stage1 = "NO-GO, {score}, {reason} (retries exhausted)"
-      Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
-
-  ON "Stage 2 ERROR for {id}: {details}":
-    story_state[id] = "PAUSED"
-    active_workers--
-    Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-    # Cleanup worktree if exists (prevents orphaned worktrees)
-    IF worktree_map[id]:
-      Bash: git worktree remove .worktrees/story-{id} --force
-      worktree_map[id] = null
-    ESCALATE to user: "Story {id} execution failed: {details}"
-    SendMessage(type: "shutdown_request", recipient: worker_map[id])
-    story_results[id].stage2 = "ERROR: {details}"
-    Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
-
-  ON "Stage 2 COMPLETE for {id}. All tasks Done. Story set to To Review.":
-    Re-read kanban board
-    ASSERT Story {id} status = To Review         # Guard: verify ln-400 output
-    story_state[id] = "STAGE_3"
-    # Shutdown old worker, spawn fresh for Stage 3
-    Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-    SendMessage(type: "shutdown_request", recipient: worker_map[id])
-    next_worker = "story-{id}-s3"
-    Task(name: next_worker, team_name: "pipeline-{date}",
-         model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",      # Stage 3 = QA
-         prompt: worker_prompt(story, 3, business_answers, worktree_map[id]))
-    worker_map[id] = next_worker
-    Write .pipeline/worker-{next_worker}-active.flag
-    story_results[id].stage2 = "Done"
-
-  ON "Stage 3 COMPLETE for {id}. Verdict: PASS|CONCERNS|WAIVED. Quality Score: {score}/100.":
-    story_state[id] = "DONE"
-    active_workers--
-    Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-    Update .pipeline/state.json: active_workers, stories_remaining, last_check
-    Squash merge (see Phase 4a below)
-    Update kanban: Story → Done
-    SendMessage(type: "shutdown_request", recipient: worker_map[id])
-    story_results[id].stage3 = "{verdict} {score}/100"
-
-  ON "Stage 3 COMPLETE for {id}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues}":
-    quality_cycles[id]++
-    IF quality_cycles[id] < 2:
-      story_state[id] = "STAGE_2"
-      # Shutdown old worker, spawn fresh for Stage 2 re-entry (fix tasks)
-      Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-      SendMessage(type: "shutdown_request", recipient: worker_map[id])
-      next_worker = "story-{id}-s2-fix{quality_cycles[id]}"
-      Task(name: next_worker, team_name: "pipeline-{date}",
-           model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",    # Stage 2 medium effort (fix)
-           prompt: worker_prompt(story, 2, business_answers, worktree_map[id]))
-      worker_map[id] = next_worker
-      Write .pipeline/worker-{next_worker}-active.flag
-    ELSE:
-      story_state[id] = "PAUSED"
-      active_workers--
-      Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-      # Cleanup worktree if exists (prevents orphaned worktrees)
-      IF worktree_map[id]:
-        Bash: git worktree remove .worktrees/story-{id} --force
-        worktree_map[id] = null
-      ESCALATE to user: "Story {id} failed quality gate {quality_cycles[id]} times"
-      SendMessage(type: "shutdown_request", recipient: worker_map[id])
-      story_results[id].stage3 = "FAIL {score}/100 (cycles exhausted)"
-      Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
-
-  ON worker TeammateIdle WITHOUT prior completion message for {id}:
-    # Crash detection: 3-step protocol (see worker_health_contract.md)
-    # Step 1: Flag suspicious
-    suspicious_idle[id] = true
-    # Step 2: Probe
-    SendMessage(recipient: worker_map[id],
-                content: "Status check: are you still working on Stage {N} for {id}?",
-                summary: "{id} health check")
-    # Step 3: Evaluate
-    ON worker responds with parseable status:
-      suspicious_idle[id] = false           # False alarm, continue
-    ON TeammateIdle again WITHOUT response:
-      crash_count[id]++
-      IF crash_count[id] <= 1:
-        active_workers--
-        # Resume protocol (see checkpoint_format.md):
-        checkpoint = read(".pipeline/checkpoint-{id}.json")
-        IF checkpoint.agentId exists:
-          Task(resume: checkpoint.agentId)          # Try 1: full context resume
-        ELSE:
-          new_prompt = worker_prompt(story, checkpoint.stage, business_answers, worktree_map[id]) + CHECKPOINT_RESUME block
-          Task(name: "story-{id}-s{checkpoint.stage}-retry", team_name: "pipeline-{date}",
-               model: "opus", mode: "bypassPermissions", subagent_type: "general-purpose",
-               prompt: new_prompt)                  # Try 2: Opus for crash recovery/troubleshooting
-        worker_map[id] = new_worker_name
-        active_workers++
-      ELSE:
-        story_state[id] = "PAUSED"
-        active_workers--
-        # Cleanup worktree if exists (prevents orphaned worktrees)
-        IF worktree_map[id]:
-          Bash: git worktree remove .worktrees/story-{id} --force
-          worktree_map[id] = null
-        ESCALATE: "Story {id} worker crashed twice at Stage {N}"
-
-  # 2.5. Active done-flag verification (bidirectional health monitoring)
-  #      Detects lost completion messages by checking for done-flags without state transitions.
-  #      Complements reactive crash detection (ON TeammateIdle) with proactive polling.
-  FOR EACH story_id in story_state WHERE state in ["STAGE_0", "STAGE_1", "STAGE_2", "STAGE_3"]:
-    worker_name = worker_map[story_id]
-    done_flag_path = ".pipeline/worker-{worker_name}-done.flag"
-
-    IF exists(done_flag_path):
-      # Worker signaled completion via flag, verify we received the message
-      current_stage = extract_stage_number(story_state[story_id])  # STAGE_0 → 0, STAGE_1 → 1, etc.
-
-      # Determine expected state after completion
-      next_expected_state = "STAGE_{current_stage + 1}" if current_stage < 3 else "DONE"
-
-      # Check if state has advanced (message received and processed)
-      state_advanced = (story_state[story_id] == next_expected_state) OR (story_state[story_id] == "DONE")
-
-      IF NOT state_advanced:
-        # Lost message detected: flag exists but handler never ran
-        Output: "⚠ Lost completion message for {story_id} at Stage {current_stage}. Attempting recovery from checkpoint..."
-
-        checkpoint = read(".pipeline/checkpoint-{story_id}.json") if exists
-        synthetic_recovery_successful = false
-
-        IF checkpoint AND checkpoint.stage == current_stage:
-          # Synthetic recovery based on checkpoint + kanban verification
-          IF current_stage == 0:
-            # Stage 0: Verify tasks created in kanban board
-            Re-read kanban board
-            tasks_exist = count_tasks_under_story(story_id) > 0
-            IF tasks_exist:
-              task_count = count_tasks_under_story(story_id)
-              plan_score = checkpoint.planScore OR "4"  # Default if missing
-              Output: "✓ Recovered Stage 0 completion for {story_id} from checkpoint. {task_count} tasks created."
-              # TRIGGER: Process as if "Stage 0 COMPLETE" message received
-              CALL ON "Stage 0 COMPLETE for {story_id}. {task_count} tasks created. Plan score: {plan_score}/4."
-              synthetic_recovery_successful = true
-            ELSE:
-              Output: "✗ Stage 0 checkpoint invalid for {story_id}: tasks not found despite done.flag"
-              CALL ON "Stage 0 ERROR for {story_id}: Tasks not found despite done.flag"
-              synthetic_recovery_successful = true
-
-          ELSE IF current_stage == 1:
-            # Stage 1: Verify Story moved to Todo (GO) or still Backlog (NO-GO)
-            Re-read kanban board
-            story_status = get_story_status(story_id)
-            IF story_status == "Todo":
-              readiness = checkpoint.readiness OR "7"
-              Output: "✓ Recovered Stage 1 completion for {story_id} from checkpoint. Verdict: GO."
-              CALL ON "Stage 1 COMPLETE for {story_id}. Verdict: GO. Readiness: {readiness}."
-              synthetic_recovery_successful = true
-            ELSE:
-              reason = checkpoint.reason OR "validation failed"
-              readiness = checkpoint.readiness OR "5"
-              Output: "✓ Recovered Stage 1 completion for {story_id} from checkpoint. Verdict: NO-GO."
-              CALL ON "Stage 1 COMPLETE for {story_id}. Verdict: NO-GO. Readiness: {readiness}. Reason: {reason}"
-              synthetic_recovery_successful = true
-
-          ELSE IF current_stage == 2:
-            # Stage 2: Verify Story moved to To Review
-            Re-read kanban board
-            story_status = get_story_status(story_id)
-            IF story_status == "To Review":
-              Output: "✓ Recovered Stage 2 completion for {story_id} from checkpoint. Story in To Review."
-              CALL ON "Stage 2 COMPLETE for {story_id}. All tasks Done. Story set to To Review."
-              synthetic_recovery_successful = true
-            ELSE:
-              Output: "✗ Stage 2 checkpoint invalid for {story_id}: Story not in To Review despite done.flag"
-              CALL ON "Stage 2 ERROR for {story_id}: Story not in To Review despite done.flag"
-              synthetic_recovery_successful = true
-
-          ELSE IF current_stage == 3:
-            # Stage 3: Verify Story status indicates outcome
-            Re-read kanban board
-            story_status = get_story_status(story_id)
-            verdict = checkpoint.verdict OR "PASS"
-            score = checkpoint.qualityScore OR "85"
-            IF verdict in ["PASS", "CONCERNS", "WAIVED"]:
-              Output: "✓ Recovered Stage 3 completion for {story_id} from checkpoint. Verdict: {verdict}."
-              CALL ON "Stage 3 COMPLETE for {story_id}. Verdict: {verdict}. Quality Score: {score}/100."
-              synthetic_recovery_successful = true
-            ELSE:
-              issues = checkpoint.issues OR "unknown issues"
-              Output: "✓ Recovered Stage 3 completion for {story_id} from checkpoint. Verdict: FAIL."
-              CALL ON "Stage 3 COMPLETE for {story_id}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues}"
-              synthetic_recovery_successful = true
-
-        IF NOT synthetic_recovery_successful:
-          # Checkpoint missing/invalid - fallback to probe protocol
-          Output: "⚠ Cannot recover {story_id} from checkpoint. Sending diagnostic probe..."
-          suspicious_idle[story_id] = true
-          SendMessage(recipient: worker_name,
-                     content: "Status check: are you still working on Stage {current_stage} for {story_id}?",
-                     summary: "{story_id} health check")
-          # ON worker responds: handled by existing Step 2 handlers
-
-  # 3. Heartbeat handler — persist ALL state on every cycle
+  # 3. Heartbeat state persistence
+  #
   ON HEARTBEAT (Stop hook stderr: "HEARTBEAT: N workers, M stories..."):
-    Write .pipeline/state.json with ALL state variables:
-      complete, active_workers, stories_remaining, last_check=now,
-      story_state, worker_map, quality_cycles, validation_retries,
-      crash_count, priority_queue_ids, story_results, infra_issues,
-      worktree_map, depends_on
-    # Full state write enables Phase 0 recovery if lead crashes between heartbeats
-
-  ON NO NEW MESSAGES (heartbeat cycle with no worker updates):
-    # CRITICAL: Output brief status (1 line) and IMMEDIATELY let turn end.
-    # DO NOT say "waiting", "standing by", or any passive phrase followed by turn end.
-    # This breaks the heartbeat loop — Stop hook will NOT fire if lead is passively waiting.
-    #
-    # CORRECT: Brief status → turn ends → Stop hook fires → next heartbeat
-    # WRONG: "Waiting for workers..." → turn ends → Stop hook does NOT fire → pipeline stalls
-
-    # Collect structured worker status for table
-    worker_statuses = []
-    FOR EACH story_id in story_state WHERE state in ["STAGE_0", "STAGE_1", "STAGE_2", "STAGE_3"]:
-      checkpoint = read(".pipeline/checkpoint-{story_id}.json") if exists
-      current_stage = extract_stage_number(story_state[story_id])  # STAGE_0 → 0
-
-      # Determine current activity from checkpoint
-      IF checkpoint:
-        activity = checkpoint.lastAction OR skill_name_from_stage(current_stage)
-        progress_fraction = "{len(checkpoint.tasksCompleted)}/{len(checkpoint.tasksCompleted)+len(checkpoint.tasksRemaining)}"
-      ELSE:
-        activity = skill_name_from_stage(current_stage)  # ln-300, ln-310, ln-400, ln-500
-        progress_fraction = "—"
-
-      # Determine status indicator
-      IF checkpoint AND checkpoint.timestamp is recent (<5 min):
-        status = "Ongoing"
-      ELSE IF story just spawned (story in worker_map for <2 min):
-        status = "NEW ⭐"
-      ELSE:
-        status = "Processing"
-
-      worker_statuses.append({
-        "story": story_id,
-        "stage": "Stage {current_stage}",
-        "activity": activity,
-        "progress": progress_fraction,
-        "status": status
-      })
-
-    # Increment heartbeat counter (ephemeral, resets on recovery)
-    heartbeat_count++
-
-    # Structured heartbeat output
-    Output: """
-🔄 Heartbeat #{heartbeat_count} — Pipeline Progress
-
-| Story | Stage | Current Activity | Progress | Status |
-|-------|-------|------------------|----------|--------|
-{FOR EACH worker in worker_statuses:}
-| {worker.story} | {worker.stage} | {worker.activity} | {worker.progress} | {worker.status} |
-{END FOR}
-
-Active Workers: {active_workers}/2
-Stories Remaining: {stories_remaining}
-
-Next Steps:
-{FOR EACH worker in worker_statuses:}
-- {worker.story}: {predict_next_step(current_stage)}
-{END FOR}
-
-Heartbeat saved. Monitoring continues...
-"""
-
-    # FORBIDDEN outputs that break heartbeat:
-    # ❌ "Waiting for workers to complete..."
-    # ❌ "Standing by for worker updates..."
-    # ❌ "No new messages. Continuing to monitor..."
-    # ❌ "Awaiting completion..."
-    #
-    # Turn MUST end here immediately after brief status output.
-    # DO NOT add commentary, DO NOT add follow-up statements.
-    # Stop hook will fire → next heartbeat cycle begins.
+    Write .pipeline/state.json with ALL state variables.
+    # See phase4_heartbeat.md for persistence details
 ```
 
 **`determine_stage(story)` routing:** See `references/pipeline_states.md` Stage-to-Status Mapping table.
 
 #### Phase 4a: Git Flow & Squash Merge
 
-After Stage 3 PASS for each Story. All git commands use `git -C {dir}` where `dir = worktree_map[id] || "."`.
+**MANDATORY READ:** Load `references/phases/phase4a_git_merge.md` for squash-merge procedure:
+- Sync with develop (rebase → fallback to merge on conflict)
+- Squash merge into develop (single commit per Story)
+- Worktree cleanup
+- Context refresh (reload SKILL.md after large merges)
+- Story report appending (stage results + counters + problems)
+- Kanban + Linear verification (sync check)
 
-```
-dir = worktree_map[id] || "."
-
-# 1. Sync with develop (pull latest changes)
-git -C {dir} fetch origin develop
-git -C {dir} rebase origin/develop
-IF rebase conflict:
-  git -C {dir} rebase --abort
-  git -C {dir} merge origin/develop    # Fallback to merge
-  IF merge conflict:
-    ESCALATE to user: "Merge conflict in Story {id}. Manual resolution required."
-    story_state[id] = "PAUSED"
-    # Cleanup worktree if exists (prevents orphaned worktrees)
-    IF worktree_map[id]:
-      git worktree remove .worktrees/story-{id} --force
-      worktree_map[id] = null
-    CONTINUE                           # Skip merge, move to next story
-
-# 2. Squash merge into develop
-git -C {dir} checkout develop
-git -C {dir} merge --squash feature/{id}-{slug}
-git -C {dir} commit -m "{storyId}: {Story Title}"
-git -C {dir} push origin develop
-
-# 3. Cleanup worktree (if exists)
-IF worktree_map[id]:
-  git worktree remove .worktrees/story-{id} --force
-  worktree_map[id] = null
-ELSE:
-  # Solo mode — already on develop after checkout above
-
-# 4. Re-read SKILL.md (context refresh after merge cycle)
-**MANDATORY READ:** Reload this SKILL.md to refresh pipeline context after develop push.
-
-# 5. Append story report section
-Append to docs/tasks/reports/pipeline-{date}.md:
-  ### {storyId}: {storyTitle} — DONE
-  | Stage | Result | Details |
-  |-------|--------|---------|
-  | 0 | {story_results[id].stage0 or "skip"} | |
-  | 1 | {story_results[id].stage1 or "skip"} | retries: {validation_retries[id]} |
-  | 2 | {story_results[id].stage2 or "skip"} | rework cycles: {quality_cycles[id]} |
-  | 3 | {story_results[id].stage3 or "skip"} | crashes: {crash_count[id]} |
-  **Branch:** feature/{id}-{slug}
-  **Problems:** {list from counters, or "None"}
-
-# 6. Verify kanban + Linear sync
-Re-read kanban board → ASSERT Story {id} is in Done section
-IF storage_mode == "linear":
-  Read Linear issue via MCP → ASSERT status matches kanban (Done/Completed)
-  IF mismatch: Update Linear status to match kanban
-  VERIFY assignee, labels
-IF mismatch found: LOG warning but do NOT block pipeline
-```
+Executed after Stage 3 PASS verdict from ln-500-story-quality-gate.
 
 ### Phase 5: Cleanup & Self-Verification
 
@@ -975,6 +594,13 @@ When invoked in Plan Mode, generate execution plan without creating team:
 | 8 | Team cleaned up (workers shutdown, TeamDelete) | `active_workers == 0`, TeamDelete called |
 
 ## Reference Files
+
+### Phase 4 Procedures (Progressive Disclosure)
+- **Message handlers:** `references/phases/phase4_handlers.md` (Stage 0-3 ON handlers, crash detection)
+- **Heartbeat & verification:** `references/phases/phase4_heartbeat.md` (Active done-flag checking, structured heartbeat output)
+- **Git flow:** `references/phases/phase4a_git_merge.md` (Squash merge, worktree cleanup, sync verification)
+
+### Core Infrastructure
 - **Message protocol:** `references/message_protocol.md`
 - **Worker health:** `references/worker_health_contract.md`
 - **Checkpoint format:** `references/checkpoint_format.md`
@@ -986,7 +612,12 @@ When invoked in Plan Mode, generate execution plan without creating team:
 - **Kanban update algorithm:** `shared/references/kanban_update_algorithm.md`
 - **Storage mode detection:** `shared/references/storage_mode_detection.md`
 - **Auto-discovery patterns:** `shared/references/auto_discovery_pattern.md`
-- **Skills invoked:** `../ln-300-task-coordinator/SKILL.md`, `../ln-310-story-validator/SKILL.md`, `../ln-400-story-executor/SKILL.md`, `../ln-500-story-quality-gate/SKILL.md`
+
+### Delegated Skills
+- `../ln-300-task-coordinator/SKILL.md`
+- `../ln-310-story-validator/SKILL.md`
+- `../ln-400-story-executor/SKILL.md`
+- `../ln-500-story-quality-gate/SKILL.md`
 
 ---
 **Version:** 1.0.0
