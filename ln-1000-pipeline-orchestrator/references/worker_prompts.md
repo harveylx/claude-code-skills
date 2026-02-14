@@ -92,8 +92,17 @@ Step 2: After ln-300 completes, check result:
 Step 3: Write checkpoint:
   Write .pipeline/checkpoint-{storyId}.json with stage=0, tasksCompleted=[], tasksRemaining=[created task IDs]
 
-Step 4: Signal completion (BEFORE reporting — prevents zombie worker race condition):
+Step 4: Signal completion flag (enables worker idle after shutdown approval):
   Write empty file: .pipeline/worker-{workerName}-done.flag
+
+  NOTE: This flag is written BEFORE SendMessage (Step 5), creating a race condition where
+  lost messages are not detected by TeammateIdle events. If SendMessage fails/is lost,
+  TeammateIdle hook sees done.flag and returns exit 0 (allows idle), suppressing the
+  TeammateIdle event that would trigger 3-step crash detection.
+
+  MITIGATION: The lead's Active Heartbeat Verification (SKILL.md Phase 4, Step 2.5)
+  handles this by checking for done-flags without corresponding state transitions on each
+  heartbeat cycle (~60s). Lost messages are detected and recovered from checkpoint.
 
 Step 5a: Report SUCCESS to lead:
   SendMessage(type: "message", recipient: "pipeline-lead",
@@ -137,8 +146,17 @@ Step 2: After ln-310 completes, check result:
 Step 3: Write checkpoint:
   Write .pipeline/checkpoint-{storyId}.json with stage=1, tasksCompleted=[], tasksRemaining=[]
 
-Step 4: Signal completion (BEFORE reporting — prevents zombie worker race condition):
+Step 4: Signal completion flag (enables worker idle after shutdown approval):
   Write empty file: .pipeline/worker-{workerName}-done.flag
+
+  NOTE: This flag is written BEFORE SendMessage (Step 5), creating a race condition where
+  lost messages are not detected by TeammateIdle events. If SendMessage fails/is lost,
+  TeammateIdle hook sees done.flag and returns exit 0 (allows idle), suppressing the
+  TeammateIdle event that would trigger 3-step crash detection.
+
+  MITIGATION: The lead's Active Heartbeat Verification (SKILL.md Phase 4, Step 2.5)
+  handles this by checking for done-flags without corresponding state transitions on each
+  heartbeat cycle (~60s). Lost messages are detected and recovered from checkpoint.
 
 Step 5: Report to lead (use EXACT format per verdict):
   IF GO:
@@ -186,8 +204,17 @@ Step 2: After ln-400 completes, check result:
 Step 3: Write final checkpoint:
   Write .pipeline/checkpoint-{storyId}.json with stage=2, all tasks in tasksCompleted
 
-Step 4: Signal completion (BEFORE reporting — prevents zombie worker race condition):
+Step 4: Signal completion flag (enables worker idle after shutdown approval):
   Write empty file: .pipeline/worker-{workerName}-done.flag
+
+  NOTE: This flag is written BEFORE SendMessage (Step 5), creating a race condition where
+  lost messages are not detected by TeammateIdle events. If SendMessage fails/is lost,
+  TeammateIdle hook sees done.flag and returns exit 0 (allows idle), suppressing the
+  TeammateIdle event that would trigger 3-step crash detection.
+
+  MITIGATION: The lead's Active Heartbeat Verification (SKILL.md Phase 4, Step 2.5)
+  handles this by checking for done-flags without corresponding state transitions on each
+  heartbeat cycle (~60s). Lost messages are detected and recovered from checkpoint.
 
 Step 5a: Report SUCCESS to lead:
   SendMessage(type: "message", recipient: "pipeline-lead",
@@ -233,8 +260,17 @@ Step 2: After ln-500 completes, check verdict:
 Step 3: Write checkpoint:
   Write .pipeline/checkpoint-{storyId}.json with stage=3, all tasks in tasksCompleted
 
-Step 4: Signal completion (BEFORE reporting — prevents zombie worker race condition):
+Step 4: Signal completion flag (enables worker idle after shutdown approval):
   Write empty file: .pipeline/worker-{workerName}-done.flag
+
+  NOTE: This flag is written BEFORE SendMessage (Step 5), creating a race condition where
+  lost messages are not detected by TeammateIdle events. If SendMessage fails/is lost,
+  TeammateIdle hook sees done.flag and returns exit 0 (allows idle), suppressing the
+  TeammateIdle event that would trigger 3-step crash detection.
+
+  MITIGATION: The lead's Active Heartbeat Verification (SKILL.md Phase 4, Step 2.5)
+  handles this by checking for done-flags without corresponding state transitions on each
+  heartbeat cycle (~60s). Lost messages are detected and recovered from checkpoint.
 
 Step 5: Report to lead (use EXACT format per verdict):
   IF PASS/CONCERNS/WAIVED:
