@@ -19,7 +19,19 @@ if [ "$COMPLETE" = "false" ]; then
     WORKERS=$(echo "$PIPELINE_STATE" | jq -r '.active_workers // 0')
     REMAINING=$(echo "$PIPELINE_STATE" | jq -r '.stories_remaining // 0')
     LAST=$(echo "$PIPELINE_STATE" | jq -r '.last_check // "unknown"')
-    echo "HEARTBEAT: ${WORKERS} active workers, ${REMAINING} stories remaining. Last check: ${LAST}. Process any queued worker messages now." >&2
+    STORY_STATE=$(echo "$PIPELINE_STATE" | jq -c '.story_state // {}')
+    WORKER_MAP=$(echo "$PIPELINE_STATE" | jq -c '.worker_map // {}')
+    SKILL_REPO=$(echo "$PIPELINE_STATE" | jq -r '.skill_repo_path // ""')
+
+    cat >&2 <<RECOVERY_EOF
+HEARTBEAT: ${WORKERS} active workers, ${REMAINING} stories remaining. Last check: ${LAST}.
+---PIPELINE RECOVERY CONTEXT---
+You are pipeline lead (ln-1000-pipeline-orchestrator).
+STATE: story_state=${STORY_STATE} worker_map=${WORKER_MAP}
+FULL STATE: Read .pipeline/state.json
+PROTOCOL: Read ${SKILL_REPO}/ln-1000-pipeline-orchestrator/SKILL.md Phase 4 + references/phases/phase4_handlers.md + references/phases/phase4_heartbeat.md
+ACTIONS: 1) Process queued worker messages (ON handlers) 2) Verify done-flags (Step 2.5) 3) Write .pipeline/state.json 4) Output status table, end turn
+RECOVERY_EOF
     sleep 60
     exit 2
   fi

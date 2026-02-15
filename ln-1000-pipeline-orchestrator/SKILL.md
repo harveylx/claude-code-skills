@@ -221,7 +221,8 @@ Write .pipeline/state.json (full schema — see checkpoint_format.md):
     "crash_count": {}, "priority_queue_ids": [<all story IDs>],
     "worktree_map": {}, "depends_on": {}, "story_results": {}, "infra_issues": [],
     "status_cache": {<status_name: status_uuid>},    # Empty object if file mode
-    "stage_timestamps": {}, "git_stats": {}, "pipeline_start_time": <now>, "readiness_scores": {} }
+    "stage_timestamps": {}, "git_stats": {}, "pipeline_start_time": <now>, "readiness_scores": {},
+    "skill_repo_path": <absolute path to skills repository root> }   # For Stop hook recovery context
 Write .pipeline/lead-session.id with current session_id   # Stop hook uses this to only keep lead alive
 ```
 
@@ -325,6 +326,19 @@ FOR EACH story IN priority_queue:
 # The Stop hook IS the event loop driver. Each heartbeat = one iteration.
 # Lead MUST NOT say "waiting for messages" and stop — the heartbeat keeps it alive.
 # If no worker messages arrived: output brief status, let turn end → next heartbeat.
+#
+# --- CONTEXT RECOVERY PROTOCOL ---
+# Claude Code may compress conversation history during long pipelines.
+# When this happens, you lose SKILL.md instructions and state variables.
+# The Stop hook includes "---PIPELINE RECOVERY CONTEXT---" in EVERY heartbeat stderr.
+#
+# IF you see this block and don't recall the pipeline protocol:
+#   1. Read .pipeline/state.json → restore ALL state variables listed above (lines 271-286)
+#   2. Re-read THIS file Phase 4 + references/phases/phase4_handlers.md + phase4_heartbeat.md
+#   3. Resume event loop: process messages → verify flags → persist state → end turn
+#
+# Cost: ~3 file reads (~500 lines), one-time per compression event.
+# Normal operation: 0 extra reads. Recovery block in stderr is passive anchor.
 #
 # FRESH WORKER PER STAGE: Each stage transition = shutdown old worker + spawn new one.
 # active_workers stays same (net-zero). Only DONE/PAUSED/ERROR decrement active_workers.

@@ -2,6 +2,34 @@
 
 Bidirectional health monitoring combining reactive message processing (phase4_handlers.md) with proactive done-flag verification.
 
+## Context Recovery (Compression Detection)
+
+When Claude Code compresses conversation history during long pipelines, the lead loses SKILL.md instructions and in-memory state. The Stop hook includes `---PIPELINE RECOVERY CONTEXT---` in every heartbeat to enable self-healing.
+
+### Detection
+
+Lead detects context loss when:
+- It sees `---PIPELINE RECOVERY CONTEXT---` in heartbeat stderr
+- It cannot recall pipeline state variables or ON handlers
+- The recovery block contains inline compact state for immediate situational awareness
+
+### Recovery Steps
+
+1. **Read** `.pipeline/state.json` → restore ALL state variables (story_state, worker_map, quality_cycles, validation_retries, crash_count, priority_queue_ids, story_results, worktree_map, depends_on, stage_timestamps, git_stats, readiness_scores)
+2. **Read** SKILL.md Phase 4 section → restore event loop structure, spawn logic
+3. **Read** `references/phases/phase4_handlers.md` → restore all ON message handlers
+4. **Read** `references/phases/phase4_heartbeat.md` → restore verification + heartbeat output
+5. **Set** ephemeral variables: `suspicious_idle = {}`, `heartbeat_count = 0`
+6. **Resume** event loop: process messages → verify flags → persist state → end turn
+
+### Token Cost
+
+| Scenario | Files Read | Approx Tokens |
+|----------|-----------|---------------|
+| Normal heartbeat (no compression) | 0 | 0 |
+| After compression (one-time recovery) | 3 files | ~2000 |
+| Recovery block in stderr (every heartbeat) | -- | ~120 |
+
 ## Active Done-Flag Verification (Step 2.5)
 
 Detects lost completion messages by checking for done-flags without state transitions. Complements reactive crash detection (ON TeammateIdle) with proactive polling every heartbeat cycle.
