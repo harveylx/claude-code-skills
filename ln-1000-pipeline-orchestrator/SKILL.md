@@ -241,9 +241,9 @@ IF platform == "win32":
 
 #### 3.3 Create Team & Spawn Workers
 
-**Worktrees:** Created lazily in Phase 4 spawn loop — only when a 2nd worker starts (parallel mode). Solo worker runs in project CWD.
+**Worktrees:** Every worker gets its own worktree with a named feature branch (`feature/{id}-{slug}`). Created in Phase 4 spawn loop.
 
-**Model routing:** All stages use `model: "opus"`. Effort routing via prompt: `effort_for_stage(0) = "low"`, `effort_for_stage(1) = "medium"`, `effort_for_stage(2) = "medium"`, `effort_for_stage(3) = "medium"`. Crash recovery = `"high"`. Thinking mode: always enabled (adaptive).
+**Model routing:** All stages use `model: "opus"`. Effort routing via prompt: `effort_for_stage(0) = "low"`, `effort_for_stage(1) = "medium"`, `effort_for_stage(2) = "medium"`, `effort_for_stage(3) = "medium"`. Crash recovery = same as target stage. Thinking mode: always enabled (adaptive).
 
 1. Ensure `develop` branch exists:
    ```
@@ -335,14 +335,10 @@ FOR EACH story IN priority_queue:
 # The Stop hook includes "---PIPELINE RECOVERY CONTEXT---" in EVERY heartbeat stderr.
 #
 # IF you see this block and don't recall the pipeline protocol:
-#   1. Read .pipeline/state.json → restore ALL state (including team_name, business_answers)
-#   2. Re-read THIS file (FULL) → restore phases, rules, error handling, known issues
-#   3. Read references/phases/phase4_handlers.md + phase4_heartbeat.md
-#   4. Read references/known_issues.md → self-diagnostic patterns
-#   5. ToolSearch("+hashline-edit") → reload MCP tools
-#   6. Resume event loop: process messages → verify flags → persist state → end turn
+#   Follow CONTEXT RECOVERY PROTOCOL in references/phases/phase4_heartbeat.md (7 steps).
+#   Quick summary: state.json → SKILL.md(FULL) → handlers → heartbeat → known_issues → ToolSearch → resume
 #
-# Cost: ~4 file reads (~800 lines), one-time per compression event.
+# Cost: ~5 file reads (~1300 lines, ~2500 tokens), one-time per compression event.
 # Normal operation: 0 extra reads. Recovery block in stderr is passive anchor.
 #
 # FRESH WORKER PER STAGE: Each stage transition = shutdown old worker + spawn new one.
@@ -369,12 +365,8 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
     target_stage = determine_stage(story)    # See pipeline_states.md guards
     worker_name = "story-{story.id}-s{target_stage}"
 
-    # Conditional worktree: only when parallel (another worker already active)
-    IF active_workers >= 1:
-      worktree_dir = ".worktrees/story-{story.id}"
-      git worktree add {worktree_dir} develop
-    ELSE:
-      worktree_dir = null                    # Solo mode — work in project CWD
+    worktree_dir = ".worktrees/story-{story.id}"
+    git worktree add -b feature/{story.id}-{slug} {worktree_dir} develop
 
     worktree_map[story.id] = worktree_dir
     project_root = Bash("pwd")           # Absolute path for PIPELINE_DIR in worktree mode
@@ -395,7 +387,7 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
 
   # 1b. Deadlock detection: all remaining stories blocked on non-DONE dependencies
   IF active_workers == 0 AND priority_queue NOT EMPTY:
-    unblockable = [s for s in priority_queue if ANY d in depends_on[s.id]: story_state[d] == "DONE"]
+    unblockable = [s for s in priority_queue if ALL d in depends_on[s.id]: story_state[d] == "DONE"]
     IF unblockable EMPTY:
       FOR EACH s IN priority_queue: story_state[s.id] = "PAUSED"
       ESCALATE: "Deadlocked: remaining stories depend on PAUSED/incomplete stories: {ids}"
@@ -626,10 +618,10 @@ Delete .pipeline/ directory
 ## Critical Rules
 
 1. **Max 3 concurrent Stories.** Never spawn more than 3 story-workers simultaneously
-2. **Delegate mode.** Lead coordinates only — never invoke ln-310/ln-400/ln-500 directly. Workers do all execution
+2. **Delegate mode.** Lead coordinates only — never invoke ln-300/ln-310/ln-400/ln-500 directly. Workers do all execution
 3. **Skills as-is.** Never modify or bypass existing skill logic. Workers call `Skill("ln-310-story-validator", args)` exactly as documented
 4. **Kanban verification.** Workers update Linear/kanban via skills. Lead re-reads and ASSERTs expected state after each stage. In file mode, lead resolves merge conflicts
-5. **Quality cycle limit.** Max 2 quality FAILs per Story (1 retry cycle). After 2nd FAIL, escalate to user
+5. **Quality cycle limit.** Max 2 quality FAILs per Story (original + 1 rework cycle). After 2nd FAIL, escalate to user
 6. **Squash per Story.** Each Story that passes quality gate gets squash-merged to develop separately. No batch merges
 7. **Re-read kanban.** After every stage completion, re-read board for fresh state. Never cache
 8. **Graceful shutdown.** Always shutdown workers via shutdown_request. Never force-kill
@@ -687,7 +679,7 @@ When invoked in Plan Mode, generate execution plan without creating team:
 | 4 | ALL Stories processed: state = DONE or PAUSED | `ALL story_state[id] IN ("DONE", "PAUSED")` |
 | 5 | Every DONE Story squash-merged into develop | Feature branches merged, on develop branch |
 | 6 | Pipeline summary shown to user | Phase 5 table output |
-| 8 | Team cleaned up (workers shutdown, TeamDelete) | `active_workers == 0`, TeamDelete called |
+| 7 | Team cleaned up (workers shutdown, TeamDelete) | `active_workers == 0`, TeamDelete called |
 
 ## Reference Files
 

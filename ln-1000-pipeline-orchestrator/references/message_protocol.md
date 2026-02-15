@@ -50,6 +50,7 @@ Lead extracts structured data from worker messages:
 ```
 # Stage completion (all stages)
 ^Stage (\d) (COMPLETE|ERROR) for ([A-Z]+-\d+)\.\s*(.*)$
+# NOTE: Story ID pattern [A-Z]+-\d+ requires uppercase prefix (e.g., PROJ-42). Non-standard formats will fail parsing.
 
 # Group 1: stage number
 # Group 2: COMPLETE or ERROR

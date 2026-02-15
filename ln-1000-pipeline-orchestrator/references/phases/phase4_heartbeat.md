@@ -142,11 +142,16 @@ FOR EACH story_id in story_state WHERE state in ["STAGE_0", "STAGE_1", "STAGE_2"
 ```
 ON HEARTBEAT (Stop hook stderr: "HEARTBEAT: N workers, M stories..."):
   Write .pipeline/state.json with ALL state variables:
-    complete, active_workers, stories_remaining, last_check=now,
+    complete, active_workers,
+    stories_remaining = count(story_state[id] NOT IN ("DONE", "PAUSED")),
+    last_check=now,
     story_state, worker_map, quality_cycles, validation_retries,
     crash_count, priority_queue_ids, story_results, infra_issues,
-    worktree_map, depends_on
+    worktree_map, depends_on, stage_timestamps, git_stats,
+    pipeline_start_time, readiness_scores, team_name,
+    business_answers, storage_mode, status_cache, skill_repo_path
   # Full state write enables Phase 0 recovery if lead crashes between heartbeats
+  # ALL fields from checkpoint_format.md Pipeline State Schema must be persisted
 ```
 
 ## Structured Heartbeat Output

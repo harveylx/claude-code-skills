@@ -24,7 +24,7 @@
                 <li><strong>Auto Merge:</strong> After quality gate PASS, squash-merge to develop</li>
                 <li><strong>Error Recovery:</strong> Quality cycle limit (2), validation retry (1), rework escalation (3), crash resume via checkpoint</li>
                 <li><strong>Lead Recovery:</strong> Phase 0 restores all state from .pipeline/state.json on restart (full schema persisted every heartbeat)</li>
-                <li><strong>Git Worktree:</strong> Conditional — only created when 2nd worker starts (parallel isolation). Solo worker runs in project CWD</li>
+                <li><strong>Git Worktree:</strong> Every worker gets its own worktree with named feature branch (feature/{id}-{slug})</li>
                 <li><strong>Dependencies:</strong> Stories with Depends On fields are scheduled after prerequisites complete (dependency guard in Phase 4)</li>
                 <li><strong>Keepalive:</strong> Stop hook prevents lead exit, TeammateIdle hook prevents worker idle during stages</li>
                 <li><strong>Fresh Per Stage:</strong> Each stage = new worker with clean context. Prevents context exhaustion in long pipelines</li>
@@ -132,10 +132,9 @@ stateDiagram-v2
         CheckDeps: Check dependency guard (depends_on satisfied?)
         state DepResult <<choice>>
         CheckDeps --> DepResult
-        DepResult --> CreateWorktree: Unblocked + parallel (active_workers >= 1)
-        DepResult --> AssignStages: Unblocked + solo (active_workers == 0)
+        DepResult --> CreateWorktree: Unblocked story
         DepResult --> SkipBlocked: All deps unresolved
-        CreateWorktree: git worktree add (lazy, only for parallel)
+        CreateWorktree: git worktree add -b feature/{id}-{slug}
         CreateWorktree --> AssignStages
         SkipBlocked: Skip to next candidate or wait
         SkipBlocked --> DeadlockCheck
@@ -213,7 +212,7 @@ stateDiagram-v2
         ShutdownWorkers --> DeleteTeam
         DeleteTeam: TeamDelete
         DeleteTeam --> RemoveWorktrees
-        RemoveWorktrees: git worktree remove (if any created)
+        RemoveWorktrees: git worktree remove (all story worktrees)
         RemoveWorktrees --> EnsureDevelop
         EnsureDevelop: git checkout develop
         EnsureDevelop --> CleanPipeline
@@ -336,8 +335,8 @@ stateDiagram-v2
         DiagnosticProbe --> Recovered: Worker responds
         DiagnosticProbe --> ConfirmedCrash: Still idle, no response
         Recovered --> [*]
-        ConfirmedCrash --> TryResume: crash_count <= 1
-        ConfirmedCrash --> Escalate: crash_count > 1
+        ConfirmedCrash --> TryResume: crash_count ≤ 1
+        ConfirmedCrash --> Escalate: crash_count ≥ 2
         TryResume: Task(resume: agentId) from checkpoint
         TryResume --> ResumeOK: Resume succeeds
         TryResume --> CheckpointFallback: Resume fails

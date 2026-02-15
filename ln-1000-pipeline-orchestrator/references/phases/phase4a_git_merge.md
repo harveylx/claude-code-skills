@@ -2,11 +2,9 @@
 
 Git operations for merging completed Stories into develop branch. Executed after Stage 3 PASS verdict from ln-500-story-quality-gate.
 
-## Worktree vs Solo Mode
+## Git Context
 
-All git commands use `git -C {dir}` where `dir = worktree_map[id] || "."`:
-- **Worktree mode:** `dir = .worktrees/story-{id}/` (parallel development)
-- **Solo mode:** `dir = .` (single-threaded, no worktrees)
+All git commands use `git -C {worktree_map[id]}`. Every worker operates in its own worktree with a named feature branch (`feature/{id}-{slug}`).
 
 ## Merge Procedure
 
@@ -15,7 +13,7 @@ All git commands use `git -C {dir}` where `dir = worktree_map[id] || "."`:
 Pull latest changes from origin/develop into feature branch.
 
 ```
-dir = worktree_map[id] || "."
+dir = worktree_map[id]
 
 git -C {dir} fetch origin develop
 git -C {dir} rebase origin/develop
@@ -27,10 +25,8 @@ IF rebase conflict:
   IF merge conflict:
     ESCALATE to user: "Merge conflict in Story {id}. Manual resolution required."
     story_state[id] = "PAUSED"
-    # Cleanup worktree if exists (prevents orphaned worktrees)
-    IF worktree_map[id]:
-      git worktree remove .worktrees/story-{id} --force
-      worktree_map[id] = null
+    git worktree remove .worktrees/story-{id} --force
+    worktree_map[id] = null
     CONTINUE                           # Skip merge, move to next story
 ```
 
@@ -70,14 +66,12 @@ Example: `API-457: Implement user authentication endpoint`
 
 ### Step 3: Cleanup Worktree
 
-Remove feature branch worktree after successful merge.
+Remove worktree directory after successful merge. Feature branch is preserved for history.
 
 ```
-IF worktree_map[id]:
-  git worktree remove .worktrees/story-{id} --force
-  worktree_map[id] = null
-ELSE:
-  # Solo mode — already on develop after checkout above
+git worktree remove .worktrees/story-{id} --force
+worktree_map[id] = null
+# NOTE: Feature branch feature/{id}-{slug} is NOT deleted — preserved for git history and audit.
 ```
 
 ### Step 4: Context Refresh

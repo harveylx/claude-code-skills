@@ -69,7 +69,7 @@ Task(
 )
 ```
 
-**Note:** Stage templates include `WORKING DIRECTORY` and `PIPELINE_DIR` blocks conditionally based on `worktree_dir` parameter. When absent, the worker operates in the project root (CWD) and PIPELINE_DIR defaults to `.pipeline`. When present, PIPELINE_DIR is set to the absolute project root path to ensure `.pipeline/` files (checkpoint, done.flag) always land in the project root, not the worktree.
+**Note:** Every worker operates in its own worktree (`WORKING DIRECTORY`). `PIPELINE_DIR` is always set to the absolute project root path to ensure `.pipeline/` files (checkpoint, done.flag) land in the project root, not the worktree.
 
 **Worker name:** The `{workerName}` variable in templates = the `name` parameter from Task() spawn. Workers derive it from prompt context: `story-{storyId}-s{stage}` (or `-retry` suffix for retries).
 
@@ -81,14 +81,10 @@ THINKING: Always enabled (adaptive). Reasoning effort: low.
 - Think efficiently. Template-based task creation — apply Foundation-First pattern, fill template fields. Don't overanalyze.
 Your assignment: Story {storyId} "{storyTitle}"
 
-{IF worktree_dir:}
 WORKING DIRECTORY: {worktree_dir}
 ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
 PIPELINE_DIR: {project_root}/.pipeline
 ALL .pipeline/ file operations (checkpoint, done.flag) MUST use PIPELINE_DIR absolute path.
-{ELSE:}
-PIPELINE_DIR: .pipeline
-{ENDIF}
 
 TASK: Execute Stage 0 — Task Planning (create implementation tasks).
 
@@ -136,14 +132,10 @@ THINKING: Always enabled (adaptive). Reasoning effort: medium.
 - Think adequately. Balance speed and thoroughness. Focus on core path.
 Your assignment: Story {storyId} "{storyTitle}"
 
-{IF worktree_dir:}
 WORKING DIRECTORY: {worktree_dir}
 ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
 PIPELINE_DIR: {project_root}/.pipeline
 ALL .pipeline/ file operations (checkpoint, done.flag) MUST use PIPELINE_DIR absolute path.
-{ELSE:}
-PIPELINE_DIR: .pipeline
-{ENDIF}
 
 TASK: Execute Stage 1 — Story Validation.
 
@@ -193,14 +185,10 @@ THINKING: Always enabled (adaptive). Reasoning effort: medium.
 - Think adequately. Balance speed and thoroughness. Focus on core path.
 Your assignment: Story {storyId} "{storyTitle}"
 
-{IF worktree_dir:}
 WORKING DIRECTORY: {worktree_dir}
 ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
 PIPELINE_DIR: {project_root}/.pipeline
 ALL .pipeline/ file operations (checkpoint, done.flag) MUST use PIPELINE_DIR absolute path.
-{ELSE:}
-PIPELINE_DIR: .pipeline
-{ENDIF}
 
 MCP TOOL PREFERENCES (code editing only):
 When mcp__hashline-edit__* tools are available (check via ToolSearch "+hashline-edit"),
@@ -260,14 +248,10 @@ THINKING: Always enabled (adaptive). Reasoning effort: medium.
 - Think adequately. Checklist-based quality checks — systematic verification, not creative analysis.
 Your assignment: Story {storyId} "{storyTitle}"
 
-{IF worktree_dir:}
 WORKING DIRECTORY: {worktree_dir}
 ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
 PIPELINE_DIR: {project_root}/.pipeline
 ALL .pipeline/ file operations (checkpoint, done.flag) MUST use PIPELINE_DIR absolute path.
-{ELSE:}
-PIPELINE_DIR: .pipeline
-{ENDIF}
 
 TASK: Execute Stage 3 — Quality Gate.
 

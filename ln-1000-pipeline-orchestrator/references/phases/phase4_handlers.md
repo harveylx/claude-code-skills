@@ -63,11 +63,12 @@ story_results[id].stage0 = "{N} tasks, {score}/4"
 ```
 story_state[id] = "PAUSED"
 active_workers--
+# ACK: confirm receipt before shutdown (prevents worker retry latency)
+SendMessage(recipient: worker_map[id],
+  content: "ACK Stage 0 for {id}", summary: "{id} Stage 0 ACK")
 Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-# Cleanup worktree if exists (prevents orphaned worktrees)
-IF worktree_map[id]:
-  Bash: git worktree remove .worktrees/story-{id} --force
-  worktree_map[id] = null
+Bash: git worktree remove .worktrees/story-{id} --force
+worktree_map[id] = null
 ESCALATE to user: "Cannot create tasks for Story {id}: {details}"
 SendMessage(type: "shutdown_request", recipient: worker_map[id])
 story_results[id].stage0 = "ERROR: {details}"
@@ -104,6 +105,9 @@ readiness_scores[id] = {score}            # Preserve for Stage 3 fast-track deci
 
 ```
 validation_retries[id]++
+# ACK: confirm receipt before shutdown (prevents worker retry latency)
+SendMessage(recipient: worker_map[id],
+  content: "ACK Stage 1 for {id}", summary: "{id} Stage 1 ACK")
 IF validation_retries[id] <= 1:
   # Shutdown old worker, spawn fresh for Stage 1 retry
   Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
@@ -118,10 +122,8 @@ ELSE:
   story_state[id] = "PAUSED"
   active_workers--
   Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-  # Cleanup worktree if exists (prevents orphaned worktrees)
-  IF worktree_map[id]:
-    Bash: git worktree remove .worktrees/story-{id} --force
-    worktree_map[id] = null
+  Bash: git worktree remove .worktrees/story-{id} --force
+  worktree_map[id] = null
   ESCALATE to user: "Story {id} failed validation twice: {reason}"
   SendMessage(type: "shutdown_request", recipient: worker_map[id])
   story_results[id].stage1 = "NO-GO, {score}, {reason} (retries exhausted)"
@@ -135,11 +137,12 @@ ELSE:
 ```
 story_state[id] = "PAUSED"
 active_workers--
+# ACK: confirm receipt before shutdown (prevents worker retry latency)
+SendMessage(recipient: worker_map[id],
+  content: "ACK Stage 2 for {id}", summary: "{id} Stage 2 ACK")
 Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-# Cleanup worktree if exists (prevents orphaned worktrees)
-IF worktree_map[id]:
-  Bash: git worktree remove .worktrees/story-{id} --force
-  worktree_map[id] = null
+Bash: git worktree remove .worktrees/story-{id} --force
+worktree_map[id] = null
 ESCALATE to user: "Story {id} execution failed: {details}"
 SendMessage(type: "shutdown_request", recipient: worker_map[id])
 story_results[id].stage2 = "ERROR: {details}"
@@ -174,17 +177,19 @@ story_results[id].stage2 = "Done"
 ### ON "Stage 3 COMPLETE for {id}. Verdict: PASS|CONCERNS|WAIVED. Quality Score: {score}/100."
 
 ```
-story_state[id] = "DONE"
 # ACK: confirm receipt before shutdown
 SendMessage(recipient: worker_map[id],
   content: "ACK Stage 3 for {id}", summary: "{id} Stage 3 ACK")
 stage_timestamps[id].stage_3_end = now()
 active_workers--
 Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-Update .pipeline/state.json: active_workers, stories_remaining, last_check
-Squash merge (see phase4a_git_merge.md)
-Update kanban: Story → Done
 SendMessage(type: "shutdown_request", recipient: worker_map[id])
+# Squash merge BEFORE marking DONE (crash between merge and DONE = recoverable)
+Squash merge (see phase4a_git_merge.md)
+# Only set DONE after successful merge (phase4a sets PAUSED on conflict)
+story_state[id] = "DONE"
+Update kanban: Story → Done
+Update .pipeline/state.json: active_workers, stories_remaining, last_check
 story_results[id].stage3 = "{verdict} {score}/100"
 ```
 
@@ -192,6 +197,9 @@ story_results[id].stage3 = "{verdict} {score}/100"
 
 ```
 quality_cycles[id]++
+# ACK: confirm receipt before shutdown (prevents worker retry latency)
+SendMessage(recipient: worker_map[id],
+  content: "ACK Stage 3 for {id}", summary: "{id} Stage 3 ACK")
 stage_timestamps[id].stage_3_end = now()
 IF quality_cycles[id] < 2:
   story_state[id] = "STAGE_2"
@@ -209,10 +217,8 @@ ELSE:
   story_state[id] = "PAUSED"
   active_workers--
   Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
-  # Cleanup worktree if exists (prevents orphaned worktrees)
-  IF worktree_map[id]:
-    Bash: git worktree remove .worktrees/story-{id} --force
-    worktree_map[id] = null
+  Bash: git worktree remove .worktrees/story-{id} --force
+  worktree_map[id] = null
   ESCALATE to user: "Story {id} failed quality gate {quality_cycles[id]} times"
   SendMessage(type: "shutdown_request", recipient: worker_map[id])
   story_results[id].stage3 = "FAIL {score}/100 (cycles exhausted)"
@@ -256,11 +262,10 @@ ON TeammateIdle again WITHOUT response:
   ELSE:
     story_state[id] = "PAUSED"
     active_workers--
-    # Cleanup worktree if exists (prevents orphaned worktrees)
-    IF worktree_map[id]:
-      Bash: git worktree remove .worktrees/story-{id} --force
-      worktree_map[id] = null
+    Bash: git worktree remove .worktrees/story-{id} --force
+    worktree_map[id] = null
     ESCALATE: "Story {id} worker crashed twice at Stage {N}"
+    story_results[id].crash = "Crashed at Stage {N} (crash_count={crash_count[id]})"
 ```
 
 ## Related Files
