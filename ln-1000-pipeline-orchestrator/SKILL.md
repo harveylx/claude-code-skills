@@ -22,7 +22,7 @@ Meta-orchestrator that reads the kanban board, builds a priority queue of Storie
 ```
 L0: ln-1000-pipeline-orchestrator (TeamCreate lead, delegate mode)
   +-- Story Workers (fresh per stage, shutdown after completion)
-       |   All stages: Opus 4.6  |  Effort: Stage 0,3 = high | Stage 1,2 = medium
+       |   All stages: Opus 4.6  |  Effort: Stage 0 = low | Stage 1,2 = medium | Stage 3 = medium
        +-- L1: ln-300 / ln-310 / ln-400 / ln-500 (invoked via Skill tool, as-is)
             +-- L2/L3: existing hierarchy unchanged
 ```
@@ -105,7 +105,8 @@ IF .pipeline/state.json exists AND complete == false:
   # Previous run interrupted — resume from saved state
   1. Read .pipeline/state.json → restore: story_state, worker_map,
      quality_cycles, validation_retries, crash_count, priority_queue_ids,
-     story_results, infra_issues, worktree_map, depends_on
+     story_results, infra_issues, worktree_map, depends_on,
+     stage_timestamps, git_stats, pipeline_start_time, readiness_scores
   2. Read .pipeline/checkpoint-*.json → validate story_state consistency
      (checkpoint.stage should match story_state[id])
   3. Re-read kanban board → rebuild priority_queue from priority_queue_ids
@@ -178,6 +179,20 @@ IF .pipeline/state.json NOT exists OR complete == true:
 
 **MANDATORY READ:** Load `references/settings_template.json` for required permissions and hooks.
 
+#### 3.0 Linear Status Cache (Linear mode only)
+
+```
+IF storage_mode == "linear":
+  statuses = list_issue_statuses(teamId=team_id)
+  status_cache = {status.name: status.id FOR status IN statuses}
+
+  REQUIRED = ["Backlog", "Todo", "In Progress", "To Review", "To Rework", "Done"]
+  missing = [s for s in REQUIRED if s not in status_cache]
+  IF missing: ABORT "Missing Linear statuses: {missing}. Configure workflow."
+
+  # Persist in state.json (added in 3.2) and pass to workers via prompt CONTEXT
+```
+
 #### 3.1 Pre-flight: Settings Verification
 
 Verify `.claude/settings.local.json` in target project:
@@ -204,15 +219,28 @@ Write .pipeline/state.json (full schema — see checkpoint_format.md):
   { "complete": false, "active_workers": 0, "stories_remaining": N, "last_check": <now>,
     "story_state": {}, "worker_map": {}, "quality_cycles": {}, "validation_retries": {},
     "crash_count": {}, "priority_queue_ids": [<all story IDs>],
-    "worktree_map": {}, "depends_on": {}, "story_results": {}, "infra_issues": [] }
+    "worktree_map": {}, "depends_on": {}, "story_results": {}, "infra_issues": [],
+    "status_cache": {<status_name: status_uuid>},    # Empty object if file mode
+    "stage_timestamps": {}, "git_stats": {}, "pipeline_start_time": <now>, "readiness_scores": {} }
 Write .pipeline/lead-session.id with current session_id   # Stop hook uses this to only keep lead alive
+```
+
+#### 3.2a Sleep Prevention (Windows only)
+
+```
+IF platform == "win32":
+  Bash: cp {skill_repo}/ln-1000-pipeline-orchestrator/references/hooks/prevent-sleep.ps1 .claude/hooks/prevent-sleep.ps1
+  Bash: powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File .claude/hooks/prevent-sleep.ps1 &
+  sleep_prevention_pid = $!
+  # Script polls .pipeline/state.json — self-terminates when complete=true
+  # Fallback: Windows auto-releases execution state on process exit
 ```
 
 #### 3.3 Create Team & Spawn Workers
 
 **Worktrees:** Created lazily in Phase 4 spawn loop — only when a 2nd worker starts (parallel mode). Solo worker runs in project CWD.
 
-**Model routing:** All stages use `model: "opus"`. Effort routing via prompt: `effort_for_stage(0) = "high"`, `effort_for_stage(1) = "medium"`, `effort_for_stage(2) = "medium"`, `effort_for_stage(3) = "high"`. Crash recovery = `"high"`. Thinking mode: always enabled (adaptive).
+**Model routing:** All stages use `model: "opus"`. Effort routing via prompt: `effort_for_stage(0) = "low"`, `effort_for_stage(1) = "medium"`, `effort_for_stage(2) = "medium"`, `effort_for_stage(3) = "medium"`. Crash recovery = `"high"`. Thinking mode: always enabled (adaptive).
 
 1. Ensure `develop` branch exists:
    ```
@@ -252,6 +280,10 @@ worktree_map = {}                     # {storyId: worktree_dir | null} — track
 story_results = {}                    # {storyId: {stage0: "...", stage1: "...", ...}} — for pipeline report
 infra_issues = []                     # [{phase, type, message}] — infrastructure problems for report
 heartbeat_count = 0                   # Heartbeat cycle counter (ephemeral, resets on recovery)
+stage_timestamps = {}                # {storyId: {stage_N_start: ISO, stage_N_end: ISO}}
+git_stats = {}                       # {storyId: {lines_added, lines_deleted, files_changed}}
+pipeline_start_time = now()          # ISO 8601 — wall-clock start for duration metrics
+readiness_scores = {}                # {storyId: readiness_score} — from Stage 1 GO, used for Stage 3 fast-track
 
 # Helper functions for heartbeat formatting
 skill_name_from_stage(stage):
@@ -265,6 +297,13 @@ predict_next_step(current_stage):
   IF current_stage == 1: RETURN "Execution (ln-400) → To Review"
   IF current_stage == 2: RETURN "Quality gate (ln-500) → PASS/FAIL"
   IF current_stage == 3: RETURN "Squash merge to develop → Done"
+
+stage_duration(story_id, stage_num):
+  """Returns formatted duration (Xm Ys) for a stage, or None if timestamps missing."""
+  start = stage_timestamps[story_id].get("stage_{stage_num}_start")
+  end = stage_timestamps[story_id].get("stage_{stage_num}_end")
+  IF start AND end: RETURN format_duration(end - start)
+  RETURN None
 
 # Initialize counters for all queued stories
 FOR EACH story IN priority_queue:
@@ -325,6 +364,8 @@ WHILE ANY story_state[id] NOT IN ("DONE", "PAUSED"):
          prompt: worker_prompt(story, target_stage, business_answers, worktree_dir))
     worker_map[story.id] = worker_name
     story_state[story.id] = "STAGE_{target_stage}"
+    stage_timestamps[story.id] = stage_timestamps.get(story.id, {})
+    stage_timestamps[story.id]["stage_{target_stage}_start"] = now()
     active_workers++
     Write .pipeline/worker-{worker_name}-active.flag     # For TeammateIdle hook
     Update .pipeline/state.json: active_workers, last_check
@@ -421,6 +462,36 @@ Prepend summary header to docs/tasks/reports/pipeline-{date}.md:
   **Note:** Model and token data collected from session analysis (all Task spawns + tool uses).
   Breakdown: Lead (Opus 4.6) + Workers (per-stage model allocation).
 
+# 3b. Stage Duration Breakdown
+Append Stage Duration section:
+  ## Stage Duration Breakdown
+  | Story | Stage 0 | Stage 1 | Stage 2 | Stage 3 | Total | Bottleneck |
+  |-------|---------|---------|---------|---------|-------|------------|
+  FOR EACH story WHERE story_state[id] IN ("DONE", "PAUSED"):
+    durations = {N: stage_timestamps[id]["stage_{N}_end"] - stage_timestamps[id]["stage_{N}_start"]
+                 FOR N IN 0..3 IF both timestamps exist}
+    total = sum(durations.values())
+    bottleneck = key with max(durations)
+    | {id} | {durations[0] or "—"} | {durations[1] or "—"} | {durations[2] or "—"} | {durations[3] or "—"} | {total} | Stage {bottleneck} |
+
+# 3c. Code Output Metrics
+Append Code Output section:
+  ## Code Output Metrics
+  | Story | Files Changed | Lines Added | Lines Deleted | Net Lines |
+  |-------|--------------|-------------|---------------|-----------|
+  FOR EACH story WHERE git_stats[id] exists:
+    | {id} | {git_stats[id].files_changed} | +{git_stats[id].lines_added} | -{git_stats[id].lines_deleted} | {net} |
+  **Total:** {sum files_changed} files, +{sum lines_added} / -{sum lines_deleted} lines
+
+# 3d. Cost Estimate
+Append Cost Estimate section:
+  ## Cost Estimate
+  | Metric | Value |
+  |--------|-------|
+  | Wall-clock time | {now() - pipeline_start_time} |
+  | Total worker spawns | {count of Task() calls in session} |
+  | Hashline-edit usage | {count mcp__hashline-edit__* calls in Stage 2 workers} / {total file edits} |
+
 # 3a. Collect infrastructure issues
 # Analyze entire pipeline session for non-fatal problems:
 # hook/settings failures, git conflicts, worktree errors, merge issues,
@@ -504,6 +575,10 @@ IF .worktrees/ directory exists:
 git checkout develop
 
 # 9. Remove pipeline state files
+
+# 9a. Stop sleep prevention (Windows safety net — script should have self-terminated)
+IF sleep_prevention_pid:
+  kill $sleep_prevention_pid 2>/dev/null || true
 Delete .pipeline/ directory
 
 # 10. Report results and report location to user

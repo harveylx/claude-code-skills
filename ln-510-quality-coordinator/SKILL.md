@@ -28,11 +28,14 @@ Single-pass coordinator for code quality checks. Invokes workers and returns agg
 1) Auto-discover team/config from `docs/tasks/kanban_board.md`
 2) Load Story + task metadata from Linear (no full descriptions)
 
+**Fast-track mode:** When invoked with `--fast-track` flag (readiness 10/10), skip Phase 2 (ln-511/ln-512). Run Phase 3 (criteria), Phase 4 (linters), Phase 5 (ln-513) only.
+
 **Input:** Story ID from ln-500-story-quality-gate
 
-### Phase 2: Code Quality (MANDATORY — delegate to ln-511)
+### Phase 2: Code Quality (delegate to ln-511 — SKIP if --fast-track)
 
-> **MANDATORY STEP:** ln-511 invocation required. ln-511 internally invokes ln-512 for agent review — this chain MUST NOT be broken.
+> **MANDATORY STEP (full gate):** ln-511 invocation required. ln-511 internally invokes ln-512 for agent review — this chain MUST NOT be broken.
+> **Fast-track:** SKIP this phase entirely (ln-511 + ln-512). Readiness 10/10 = pre-validated code quality.
 
 1) **Invoke ln-511-code-quality-checker** via Skill tool
    - ln-511 runs code metrics, MCP Ref validation (OPT/BP/PERF), static analysis
@@ -117,7 +120,7 @@ issues:
 - Do not create tasks or change statuses; ln-500 decides next actions
 
 ## Definition of Done
-- ln-511 invoked, code quality score returned
+- ln-511 invoked (or skipped if --fast-track), code quality score returned
 - Criteria Validation completed (3 checks)
 - Linters executed
 - ln-513 invoked, regression results returned

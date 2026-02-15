@@ -82,7 +82,7 @@ Target: 400-600 lines for core principles, 600-800 lines with advanced documenta
 | **Restrict Sentence Length** | Max 20-25 words per sentence | 0%, +40% readability | All paragraphs |
 | **Short Paragraphs** | 3-5 sentences max, 1 idea per paragraph | 0%, +50% scannability | All sections |
 | **Use Cases** | 3-5 real scenarios with Input/Action/Output | +20% size, +70% comprehension | How-to sections |
-| **Conversational Tone** | "you" instead of "user", simple present tense | -10 to -15% | All text |
+| **Writing Tone** | Guides/docs: "you" (conversational). SKILL.md body: imperative form ("Load", "Delegate"). Description: third-person triggers ("This skill should be used when...") | -10 to -15% | Match context |
 | **Task-Oriented Titles** | Start with verb for tasks/tutorials | +5%, +100% actionability | Tutorial/How-to headings |
 | **Context Before Action** | "If X, do Y" (not "Do Y if X") | 0%, +30% clarity | Conditional statements |
 
@@ -238,6 +238,43 @@ Workers (Executors)
 - Progressive resource loading (lazy loading)
 
 **Red Flag:** Description > 200 chars = too broad scope
+
+**Size Targets** (reconciled with plugin standards):
+
+| Context | SKILL.md Limit | Rationale |
+|---------|---------------|-----------|
+| **This repo (ln-XXX)** | < 800 lines | Complex orchestrators justified up to 800 |
+| **Plugin skills** | < 500 lines body | Standalone skills, simpler scope (per skill-creator) |
+| **Word target** | 1,500-2,000 words (ideal), <5,000 max | Per skill-development |
+
+Move detailed content to `references/` to stay within limits.
+
+### Description Quality Rules
+
+| Rule | Details | Source |
+|------|---------|--------|
+| **Max length** | < 200 chars (this repo) / < 1024 chars (plugins) | skill-creator |
+| **Format** | WHAT it does + WHEN to use (specific triggers) | skill-development |
+| **Trigger phrases** | Include exact user phrases that activate skill | skill-development |
+| **YAML quoting** | If description contains `:`, MUST wrap in double quotes | skill-creator |
+| **Allowed fields** | name, description (+ license, allowed-tools, metadata for plugins) | skill-creator |
+| **Name format** | hyphen-case, 3-64 chars, no leading/trailing hyphens | skill-creator |
+
+**Good:** `"Orchestrates task operations. Analyzes Story, builds optimal plan (1-8 tasks), delegates to ln-301/ln-302."`
+**Bad:** `Orchestrates task operations: analyzes Story` ← unquoted colon breaks YAML
+
+### Skill Directory Structure
+
+| Directory | Purpose | This Repo | Plugins |
+|-----------|---------|-----------|---------|
+| `SKILL.md` | Metadata + instructions | ✅ Required | ✅ Required |
+| `diagram.html` | Mermaid workflow diagram | ✅ Required | — |
+| `references/` | Docs loaded on-demand | ✅ Common | ✅ Common |
+| `scripts/` | Executable utilities | — | ✅ Optional |
+| `examples/` | Working code examples | — | ✅ Optional |
+| `assets/` | Output files (templates, icons) | — | ✅ Optional |
+
+**This repo convention:** `ln-XXX-name/` with `SKILL.md` + `diagram.html` + `references/`. No `scripts/`, `examples/`, `assets/` (executable code lives in target projects, not skill definitions).
 
 ---
 
@@ -772,6 +809,9 @@ Every User Story should be:
 - [ ] **Reusability**: Can workers be reused by other orchestrators?
 - [ ] **Documentation**: Is there a workflow diagram (mermaid)?
 - [ ] **Versioning**: Does SKILL.md have version and last updated date?
+- [ ] **Description Format**: Includes WHAT + WHEN triggers, < 200 chars, colons in quotes (per skill-creator)
+- [ ] **Name Format**: hyphen-case, no leading/trailing hyphens (per skill-creator)
+- [ ] **No Resource Duplication**: Information in EITHER SKILL.md OR references/, NOT both (per skill-creator)
 
 ### Task Creation Checklist
 

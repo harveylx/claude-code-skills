@@ -7,6 +7,7 @@
 **Epic:** [Epic N - Epic Name](link) *(optional)*
 **User Story:** [{{TEAM_ID}}XXX Story Name](link) *(parent task - this task will have parentId={{TEAM_ID}}XXX)*
 **Related:** {{TEAM_ID}}-XX, {{TEAM_ID}}-YY
+**Parallel Group:** {N}
 
 ---
 

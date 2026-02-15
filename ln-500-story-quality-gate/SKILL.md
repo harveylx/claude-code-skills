@@ -62,18 +62,46 @@ Additional prefixes: `TEST-` (coverage gaps), `ARCH-` (architecture), `DOC-` (do
 2) Load Story + task metadata from Linear (no full descriptions)
 3) Detect test task status (exists? Done?)
 
+### Phase 1.5: Fast-Track Decision
+
+Stories with high readiness (validated pre-execution) can skip expensive checks.
+
+```
+IF readiness_score available in CONTEXT:
+  IF readiness_score == 10:
+    fast_track = true
+  ELSE:
+    fast_track = false
+ELSE:
+  fast_track = false    # No readiness data — full gate
+```
+
+**Fast-track matrix (readiness == 10):**
+
+| Component | Full Gate | Fast-Track | Why |
+|-----------|-----------|------------|-----|
+| ln-513 regression tests | RUN | RUN | Always critical, cheap |
+| Linters | RUN | RUN | Cheap, catches formatting |
+| Criteria Validation (3 checks) | RUN | RUN | Cheap, validates AC coverage |
+| ln-511 code quality | RUN | **SKIP** | Expensive, redundant at 10/10 |
+| ln-512 agent review (via ln-511) | RUN | **SKIP** | Expensive external calls |
+| ln-520 test planning | RUN | **SKIP** | Redundant for pre-validated |
+| NFR validation | All dims | **Security only** | Perf/Maintainability less critical |
+
 ### Phase 2: Quality Checks (delegate to ln-510)
 
 1) **Invoke ln-510-quality-coordinator** via Skill tool
-   - Pass: Story ID
-   - ln-510 runs: code quality (ln-511) -> criteria validation -> linters -> regression (ln-513)
+   - Pass: Story ID (+ `--fast-track` flag if fast_track == true)
+   - Full: ln-510 runs: code quality (ln-511) -> criteria validation -> linters -> regression (ln-513)
+   - Fast-track: ln-510 runs: criteria validation -> linters -> regression (ln-513) — skips ln-511/ln-512
 2) **If ln-510 returns FAIL:**
    - Create fix/refactor tasks via ln-301
    - Stop — return to ln-400
 
 ### Phase 3: Test Planning (delegate to ln-520)
 
-1) Check test task status:
+1) **IF fast_track: SKIP Phase 3 entirely** (proceed to Phase 4)
+2) Check test task status:
    - **No test task** -> invoke ln-520-test-planner to create
    - **Test task exists, not Done** -> report status, stop
    - **Test task Done** -> proceed to Phase 4
@@ -95,7 +123,7 @@ Additional prefixes: `TEST-` (coverage gaps), `ARCH-` (architecture), `DOC-` (do
 ### Phase 5: Final Verdict
 
 1) **Calculate Quality Score** (see formula above)
-2) **Run NFR checks** per dimensions table
+2) **Run NFR checks** per dimensions table (fast_track: Security only; full: all dimensions)
 3) **Assign issue prefixes:** SEC-, PERF-, MNT-, TEST-, ARCH-, DOC-
 4) **Determine Gate verdict** per 4-Level Gate Model
 5) Post Linear comment with gate verdict

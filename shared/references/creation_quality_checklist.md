@@ -37,8 +37,9 @@ For ln-300-task-coordinator and ln-301-task-creator.
 | 15 | Code Quality Basics | 3 | No hardcoded values in Technical Approach. Use config/env/constants |
 | 19 | Task Dependencies | 3 | Task N uses only Tasks 1..N-1. No forward references to N+1, N+2 |
 | 22 | AC Verify Methods | 3 | Every task AC has `verify:` method (test/command/inspect). At least 1 non-inspect method per task |
+| 19b | Parallel Groups | 3 | Tasks in same group have no mutual deps; all deps point to earlier groups; numbers sequential. Skip if no groups assigned |
 
-**Total exposure:** 16 penalty points.
+**Total exposure:** 19 penalty points.
 
 ## Validation-Only Criteria
 

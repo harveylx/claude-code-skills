@@ -77,8 +77,8 @@ Task(
 
 ```
 You are a pipeline worker in team "pipeline-{date}".
-THINKING: Always enabled (adaptive). Reasoning effort: high.
-- Think thoroughly. Deep analysis, strong reasoning. Cover edge cases.
+THINKING: Always enabled (adaptive). Reasoning effort: low.
+- Think efficiently. Template-based task creation — apply Foundation-First pattern, fill template fields. Don't overanalyze.
 Your assignment: Story {storyId} "{storyTitle}"
 
 {IF worktree_dir:}
@@ -100,33 +100,28 @@ Step 3: Write checkpoint:
     stage=0, tasksCompleted=[], tasksRemaining=[created task IDs],
     planScore={score from ln-300 (0-4)}
 
-Step 4: Signal completion flag (enables worker idle after shutdown approval):
-  Write empty file: .pipeline/worker-{workerName}-done.flag
-
-  NOTE: This flag is written BEFORE SendMessage (Step 5), creating a race condition where
-  lost messages are not detected by TeammateIdle events. If SendMessage fails/is lost,
-  TeammateIdle hook sees done.flag and returns exit 0 (allows idle), suppressing the
-  TeammateIdle event that would trigger 3-step crash detection.
-
-  MITIGATION: The lead's Active Heartbeat Verification (SKILL.md Phase 4, Step 2.5)
-  handles this by checking for done-flags without corresponding state transitions on each
-  heartbeat cycle (~60s). Lost messages are detected and recovered from checkpoint.
-
-Step 5a: Report SUCCESS to lead:
+Step 4a: Report SUCCESS to lead:
   SendMessage(type: "message", recipient: "pipeline-lead",
     content: "Stage 0 COMPLETE for {storyId}. {N} tasks created. Plan score: {score}/4.",
     summary: "{storyId} Stage 0 {N} tasks")
-
-Step 5b: Report ERROR to lead (if Step 2 failed):
+Step 4b: Report ERROR to lead (if Step 2 failed):
   SendMessage(type: "message", recipient: "pipeline-lead",
     content: "Stage 0 ERROR for {storyId}: {details}",
     summary: "{storyId} Stage 0 ERROR")
-
-After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
+Step 5: Wait for ACK from lead:
+  Lead will send "ACK Stage 0 for {storyId}" after processing your report.
+  - ON ACK received: Write .pipeline/worker-{workerName}-done.flag -> approve next shutdown_request
+  - ON shutdown_request (no explicit ACK): Write done.flag -> approve (implicit ACK)
+  - ON lead probe ("Status check"): Respond with status, then retry your report ONCE
+  After 1 retry without ACK: approve shutdown regardless (heartbeat handles final recovery).
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
 CONTEXT:
 {businessAnswers}
+{IF storage_mode == "linear":}
+LINEAR STATUS MAP (use UUIDs for update_issue state parameter, NOT string names):
+{FOR name, uuid IN status_cache: "  {name} = {uuid}"}
+{ENDIF}
 ```
 
 ## Stage 1: Validation (ln-310)
@@ -157,19 +152,7 @@ Step 3: Write checkpoint:
     readiness={score from ln-310 (1-10)}, verdict={GO or NO-GO},
     reason={reason if NO-GO, omit if GO}
 
-Step 4: Signal completion flag (enables worker idle after shutdown approval):
-  Write empty file: .pipeline/worker-{workerName}-done.flag
-
-  NOTE: This flag is written BEFORE SendMessage (Step 5), creating a race condition where
-  lost messages are not detected by TeammateIdle events. If SendMessage fails/is lost,
-  TeammateIdle hook sees done.flag and returns exit 0 (allows idle), suppressing the
-  TeammateIdle event that would trigger 3-step crash detection.
-
-  MITIGATION: The lead's Active Heartbeat Verification (SKILL.md Phase 4, Step 2.5)
-  handles this by checking for done-flags without corresponding state transitions on each
-  heartbeat cycle (~60s). Lost messages are detected and recovered from checkpoint.
-
-Step 5: Report to lead (use EXACT format per verdict):
+Step 4: Report to lead (use EXACT format per verdict):
   IF GO:
     SendMessage(type: "message", recipient: "pipeline-lead",
       content: "Stage 1 COMPLETE for {storyId}. Verdict: GO. Readiness: {score}.",
@@ -178,12 +161,20 @@ Step 5: Report to lead (use EXACT format per verdict):
     SendMessage(type: "message", recipient: "pipeline-lead",
       content: "Stage 1 COMPLETE for {storyId}. Verdict: NO-GO. Readiness: {score}. Reason: {reason}",
       summary: "{storyId} Stage 1 NO-GO")
-
-After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
+Step 5: Wait for ACK from lead:
+  Lead will send "ACK Stage 1 for {storyId}" after processing your report.
+  - ON ACK received: Write .pipeline/worker-{workerName}-done.flag -> approve next shutdown_request
+  - ON shutdown_request (no explicit ACK): Write done.flag -> approve (implicit ACK)
+  - ON lead probe ("Status check"): Respond with status, then retry your report ONCE
+  After 1 retry without ACK: approve shutdown regardless (heartbeat handles final recovery).
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
 CONTEXT:
 {businessAnswers}
+{IF storage_mode == "linear":}
+LINEAR STATUS MAP (use UUIDs for update_issue state parameter, NOT string names):
+{FOR name, uuid IN status_cache: "  {name} = {uuid}"}
+{ENDIF}
 ```
 
 ## Stage 2: Execution (ln-400)
@@ -198,6 +189,16 @@ Your assignment: Story {storyId} "{storyTitle}"
 WORKING DIRECTORY: {worktree_dir}
 ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
 {ENDIF}
+
+MCP TOOL PREFERENCES (code editing only):
+When mcp__hashline-edit__* tools are available (check via ToolSearch "+hashline-edit"),
+prefer them over standard file tools for CODE files (.ts, .py, .js, .go, etc.):
+- Read -> mcp__hashline-edit__read_file (hash-prefixed lines enable verified edits)
+- Edit -> mcp__hashline-edit__edit_file (atomic, hash-verified, batch edits)
+- Grep -> mcp__hashline-edit__grep (results include LINE:HASH for direct editing)
+- Write -> mcp__hashline-edit__write_file (new files or full rewrites)
+DO NOT use hashline-edit for: JSON configs, small YAML, markdown docs (overkill).
+Fallback: if hashline-edit unavailable, use standard tools. No error.
 
 TASK: Execute Stage 2 — Story Execution.
 
@@ -215,41 +216,36 @@ Step 2: After ln-400 completes, check result:
 Step 3: Write final checkpoint:
   Write .pipeline/checkpoint-{storyId}.json with stage=2, all tasks in tasksCompleted
 
-Step 4: Signal completion flag (enables worker idle after shutdown approval):
-  Write empty file: .pipeline/worker-{workerName}-done.flag
-
-  NOTE: This flag is written BEFORE SendMessage (Step 5), creating a race condition where
-  lost messages are not detected by TeammateIdle events. If SendMessage fails/is lost,
-  TeammateIdle hook sees done.flag and returns exit 0 (allows idle), suppressing the
-  TeammateIdle event that would trigger 3-step crash detection.
-
-  MITIGATION: The lead's Active Heartbeat Verification (SKILL.md Phase 4, Step 2.5)
-  handles this by checking for done-flags without corresponding state transitions on each
-  heartbeat cycle (~60s). Lost messages are detected and recovered from checkpoint.
-
-Step 5a: Report SUCCESS to lead:
+Step 4a: Report SUCCESS to lead:
   SendMessage(type: "message", recipient: "pipeline-lead",
     content: "Stage 2 COMPLETE for {storyId}. All tasks Done. Story set to To Review.",
     summary: "{storyId} Stage 2 Done")
-
-Step 5b: Report ERROR to lead (if Step 2 failed):
+Step 4b: Report ERROR to lead (if Step 2 failed):
   SendMessage(type: "message", recipient: "pipeline-lead",
     content: "Stage 2 ERROR for {storyId}: {details}",
     summary: "{storyId} Stage 2 ERROR")
-
-After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
+Step 5: Wait for ACK from lead:
+  Lead will send "ACK Stage 2 for {storyId}" after processing your report.
+  - ON ACK received: Write .pipeline/worker-{workerName}-done.flag -> approve next shutdown_request
+  - ON shutdown_request (no explicit ACK): Write done.flag -> approve (implicit ACK)
+  - ON lead probe ("Status check"): Respond with status, then retry your report ONCE
+  After 1 retry without ACK: approve shutdown regardless (heartbeat handles final recovery).
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
 CONTEXT:
 {businessAnswers}
+{IF storage_mode == "linear":}
+LINEAR STATUS MAP (use UUIDs for update_issue state parameter, NOT string names):
+{FOR name, uuid IN status_cache: "  {name} = {uuid}"}
+{ENDIF}
 ```
 
 ## Stage 3: Quality Gate (ln-500)
 
 ```
 You are a pipeline worker in team "pipeline-{date}".
-THINKING: Always enabled (adaptive). Reasoning effort: high.
-- Think thoroughly. Deep analysis, strong reasoning. Cover edge cases.
+THINKING: Always enabled (adaptive). Reasoning effort: medium.
+- Think adequately. Checklist-based quality checks — systematic verification, not creative analysis.
 Your assignment: Story {storyId} "{storyTitle}"
 
 {IF worktree_dir:}
@@ -274,19 +270,7 @@ Step 3: Write checkpoint:
     verdict={PASS/CONCERNS/WAIVED/FAIL from ln-500}, qualityScore={score from ln-500 (0-100)},
     issues={issues if FAIL, omit otherwise}
 
-Step 4: Signal completion flag (enables worker idle after shutdown approval):
-  Write empty file: .pipeline/worker-{workerName}-done.flag
-
-  NOTE: This flag is written BEFORE SendMessage (Step 5), creating a race condition where
-  lost messages are not detected by TeammateIdle events. If SendMessage fails/is lost,
-  TeammateIdle hook sees done.flag and returns exit 0 (allows idle), suppressing the
-  TeammateIdle event that would trigger 3-step crash detection.
-
-  MITIGATION: The lead's Active Heartbeat Verification (SKILL.md Phase 4, Step 2.5)
-  handles this by checking for done-flags without corresponding state transitions on each
-  heartbeat cycle (~60s). Lost messages are detected and recovered from checkpoint.
-
-Step 5: Report to lead (use EXACT format per verdict):
+Step 4: Report to lead (use EXACT format per verdict):
   IF PASS/CONCERNS/WAIVED:
     SendMessage(type: "message", recipient: "pipeline-lead",
       content: "Stage 3 COMPLETE for {storyId}. Verdict: {PASS|CONCERNS|WAIVED}. Quality Score: {score}/100.",
@@ -295,12 +279,22 @@ Step 5: Report to lead (use EXACT format per verdict):
     SendMessage(type: "message", recipient: "pipeline-lead",
       content: "Stage 3 COMPLETE for {storyId}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues list}",
       summary: "{storyId} Stage 3 FAIL")
-
-After reporting, your work is DONE. Lead will send shutdown_request — approve it immediately.
+Step 5: Wait for ACK from lead:
+  Lead will send "ACK Stage 3 for {storyId}" after processing your report.
+  - ON ACK received: Write .pipeline/worker-{workerName}-done.flag -> approve next shutdown_request
+  - ON shutdown_request (no explicit ACK): Write done.flag -> approve (implicit ACK)
+  - ON lead probe ("Status check"): Respond with status, then retry your report ONCE
+  After 1 retry without ACK: approve shutdown regardless (heartbeat handles final recovery).
 NEVER read ~/.claude/ files. NEVER use sleep loops. Messages arrive automatically.
 
 CONTEXT:
 {businessAnswers}
+READINESS_SCORE: {readiness_scores[storyId] or "unknown"}
+FAST_TRACK: {"true" IF readiness_scores[storyId] == 10 ELSE "false"}
+{IF storage_mode == "linear":}
+LINEAR STATUS MAP (use UUIDs for update_issue state parameter, NOT string names):
+{FOR name, uuid IN status_cache: "  {name} = {uuid}"}
+{ENDIF}
 ```
 
 ## Worker Lifecycle

@@ -59,6 +59,17 @@ SPAWNED -> EXECUTING -> REPORTING -> SHUTDOWN
               +-> CRASHED (no completion, idle without report)
 ```
 
+### Worker Prompt Patterns
+
+Per `plugin-dev:agent-development` → `references/system-prompt-design.md`, worker system prompts follow 4 patterns:
+
+| Stage | Pattern | Characteristics |
+|-------|---------|----------------|
+| 0 (ln-300) | Generation | Create artifacts (tasks) from requirements |
+| 1 (ln-310) | Validation | Check criteria, produce GO/NO-GO verdict |
+| 2 (ln-400) | Orchestration | Coordinate multi-step execution workflow |
+| 3 (ln-500) | Validation | Check quality, produce PASS/FAIL verdict |
+
 ### Design Principles (from Anthropic)
 
 | Principle | Implementation |
@@ -100,6 +111,22 @@ Claude Code may deliver the same message in consecutive heartbeat cycles (contex
 
 **Root cause:** Heartbeat creates new agentic loop iteration. Prior unprocessed messages may re-appear in context. The lead's state transition (e.g., `story_state[id] = "STAGE_2"`) is the only reliable deduplication mechanism.
 
+### ACK Protocol (Reliable Delivery)
+
+Lead sends explicit ACK after processing each worker completion message. Workers defer done.flag write until ACK received.
+
+| Step | Actor | Action |
+|------|-------|--------|
+| 1 | Worker | Sends completion report (no done.flag yet) |
+| 2 | Lead | Processes ON handler, sends `"ACK Stage {N} for {id}"` |
+| 3 | Worker | Receives ACK → writes done.flag → approves shutdown |
+
+**Lost message handling:** No ACK → no done.flag → keepalive hook keeps worker alive → lead probes → worker retries report.
+
+**Duplicate handling:** State guard detects duplicate → re-sends ACK (no reprocessing). This ensures retrying workers always get confirmation.
+
+**Fallback:** After 1 retry without ACK, worker approves shutdown regardless. Lead's heartbeat verification (Phase 4, Step 2.5) is the final safety net.
+
 ## 5. Crash Detection
 
 3-step protocol to distinguish normal idle from actual crash:
@@ -135,6 +162,20 @@ Claude Code may deliver the same message in consecutive heartbeat cycles (contex
 | Settings | `bash` prefix in hook command (no env vars, no execute permission needed) |
 | Troubleshooting | Check `file .claude/hooks/*.sh` — must show "ASCII text", not "CRLF" |
 
+### Sleep Prevention (Windows)
+
+Pipeline runs can exceed Windows idle timeout, causing the system to sleep mid-execution.
+
+| Aspect | Details |
+|--------|---------|
+| API | `SetThreadExecutionState(ES_CONTINUOUS \| ES_SYSTEM_REQUIRED)` via PowerShell P/Invoke |
+| Script | `references/hooks/prevent-sleep.ps1` — started as background process in Phase 3 |
+| Lifecycle | Polls `.pipeline/state.json` every 30s. Self-terminates when `complete=true` or file disappears |
+| Fallback | Process exit auto-releases execution state (Windows kernel guarantee) |
+| Verify | `powercfg /requests` shows SYSTEM request from PowerShell while pipeline runs |
+
+**DO NOT** call `SetThreadExecutionState` from Stop hook — hook fires every 60s, but the API needs a single call with `ES_CONTINUOUS` to hold state persistently.
+
 ## 7. Concurrency & Worktrees
 
 | Rule | Details |
@@ -164,6 +205,9 @@ Pipeline state persisted on **every heartbeat** to `.pipeline/state.json`. Recov
 | Single kanban writer | Only lead updates kanban_board.md. Workers report via SendMessage |
 | Clear task boundaries per worker | Each subagent needs: objective, output format, tool guidance, boundaries |
 | Don't add execution logic to orchestrator | Typecheck, git stash, linting = worker/skill responsibility, not lead's |
+| bypassPermissions ≠ unrestricted tools | `mode: "bypassPermissions"` skips user prompts, but workers use only their assigned skills. Tool restriction via `tools` field not needed — skills self-limit tools internally (per agent-development least-privilege principle) |
+
+**System Prompt Design:** For agent/worker prompt patterns (Analysis, Generation, Validation, Orchestration), see `plugin-dev:agent-development` → `references/system-prompt-design.md`. Pipeline worker prompts follow these patterns (see Section 3, Worker Prompt Patterns).
 
 ## 10. Token Efficiency
 
