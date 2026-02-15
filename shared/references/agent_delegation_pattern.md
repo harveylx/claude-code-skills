@@ -16,7 +16,7 @@ Standard pattern for skills delegating work to external CLI AI agents (Codex, Ge
 | 300 (Task Mgmt) | Codex | gpt-5.3-codex | Opus | Task decomposition, plan review |
 | 400 (Execution) | Opus (native) | claude-opus-4-6 | -- | Direct code writing |
 | 311 (Story Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Story/Tasks review via ln-311 |
-| 512 (Code Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Code review via ln-512 |
+| 513 (Code Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Code review via ln-513 |
 
 ## Dedicated Agent Review Skills
 
@@ -25,7 +25,7 @@ Agent review is encapsulated in dedicated worker skills, not inline in parent sk
 | Worker Skill | Parent | Purpose | Prompt Templates |
 |-------------|--------|---------|-----------------|
 | **ln-311-agent-reviewer** | ln-310 Phase 5 | Story/Tasks review | `story_review.md`, `challenge_review.md` |
-| **ln-512-agent-reviewer** | ln-511 Step 7 | Code implementation review | `code_review.md`, `challenge_review.md` |
+| **ln-513-agent-reviewer** | ln-511 Step 7 | Code implementation review | `code_review.md`, `challenge_review.md` |
 
 **Benefits:**
 - Health check + prompt execution in single invocation (minimal timing gap)
@@ -141,7 +141,7 @@ Phase 1: DISCOVERY
 Phase 2: PLAN ← external agent for analysis/decomposition
 Phase 3: MODE DETECTION
 Phase 4: AUTO-FIX ← 20 criteria, Penalty Points = 0 (ln-310)
-Phase 5: AGENT REVIEW (MANDATORY) ← delegated to ln-311 (ln-310) or ln-512 (ln-511)
+Phase 5: AGENT REVIEW (MANDATORY) ← delegated to ln-311 (ln-310) or ln-513 (ln-511)
 Phase 6: DELEGATE
 Phase 7: AGGREGATE
 Phase 8: REPORT
@@ -149,7 +149,7 @@ Phase 8: REPORT
 
 ## Startup: Agent Availability Check
 
-**Health check is performed inside the dedicated agent review skills (ln-311, ln-512), NOT in parent skills.**
+**Health check is performed inside the dedicated agent review skills (ln-311, ln-513), NOT in parent skills.**
 
 ```bash
 python shared/agents/agent_runner.py --health-check
@@ -161,7 +161,7 @@ python shared/agents/agent_runner.py --health-check
 3. **Only command output determines availability.** Do NOT reason about file existence, environment, or installation — run the command and read its output.
 4. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → return SKIPPED verdict.
 
-Filter output by `skill_groups` matching current skill (e.g., "311" for ln-311, "512" for ln-512).
+Filter output by `skill_groups` matching current skill (e.g., "311" for ln-311, "513" for ln-513).
 
 | Command Output | Impact |
 |----------------|--------|
@@ -272,7 +272,7 @@ Session file format: `{"agent": "codex-review", "session_id": "...", "review_typ
 
 ## Reference Passing Pattern
 
-Standard steps before launching agents (performed inside ln-311/ln-512):
+Standard steps before launching agents (performed inside ln-311/ln-513):
 
 1. **Get references:** Call Linear MCP `get_issue(storyId)` for Story URL + `list_issues(parent)` for Task URLs. If project stores tasks locally → use file paths.
 2. **Ensure .agent-review/:** If `.agent-review/` exists, reuse as-is. If not, create it with `.gitignore` (content: `*` + `!.gitignore`). Create `.agent-review/{agent}/` subdirs only if they don't exist. Do NOT add `.agent-review/` to project root `.gitignore`.
@@ -322,7 +322,7 @@ Standard steps before launching agents (performed inside ln-311/ln-512):
 | Worker | Escalation? | Mechanism |
 |--------|-------------|-----------|
 | ln-311 (Story Review) | No | Suggestions are editorial; ln-310 Gate verdict unchanged |
-| ln-512 (Code Quality) | Yes | Findings with `area=security` or `area=correctness` can escalate PASS -> CONCERNS in ln-511 |
+| ln-513 (Code Quality) | Yes | Findings with `area=security` or `area=correctness` can escalate PASS -> CONCERNS in ln-511 |
 
 ## Anti-Patterns
 
@@ -335,7 +335,7 @@ Standard steps before launching agents (performed inside ln-311/ln-512):
 | Use agents for project file writes | Agents write only to `-o` output file; analysis-only |
 | Chain multiple agent calls | One call per task; challenge/follow-up use `--resume-session` for context continuity |
 | Hard-depend on agent availability | Always have Opus fallback |
-| Run health check in parent skill | Health check inside agent review worker (ln-311/ln-512) |
+| Run health check in parent skill | Health check inside agent review worker (ln-311/ln-513) |
 | Kill agent tasks with TaskStop | Let agents complete; no artificial timeouts |
 | Skip agent review phase | Agent review is MANDATORY in ln-310 Phase 5 and ln-511 Step 7 |
 

@@ -1,5 +1,5 @@
 ---
-name: ln-512-agent-reviewer
+name: ln-513-agent-reviewer
 description: "Worker that runs parallel external agent reviews (Codex + Gemini) on code changes. Background tasks, process-as-arrive, critical verification with debate. Returns filtered suggestions with confidence scoring."
 ---
 
@@ -30,7 +30,7 @@ Runs parallel external agent reviews on code implementation, critically verifies
 **MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md` for Reference Passing Pattern, Review Persistence Pattern, Agent Timeout Policy, and Debate Protocol (Challenge Round 1 + Follow-Up Round).
 
 1) **Health check:** `python shared/agents/agent_runner.py --health-check`
-   - Filter output by `skill_groups` containing "512"
+   - Filter output by `skill_groups` containing "513"
    - If 0 agents available -> return `{verdict: "SKIPPED", reason: "no agents available"}`
    - Display: `"Agent Health: codex-review OK, gemini-review UNAVAILABLE"` (or similar)
 

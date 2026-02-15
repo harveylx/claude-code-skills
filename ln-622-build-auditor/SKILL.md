@@ -37,21 +37,9 @@ Receives `contextStore` with: `tech_stack` (including build_tool, test_framework
 ### 1. Compiler/Linter Errors
 **What:** Syntax errors, compilation failures, linter rule violations
 
-**Detection by Stack:**
+**Detection:** Per `shared/references/ci_tool_detection.md` Command Registry (Build + Linters sections). Check exit code, parse stderr for errors. Use JSON output flags where available.
 
-| Stack | Command | Error Detection |
-|-------|---------|-----------------|
-| Node.js/TypeScript | `npm run build` or `tsc --noEmit` | Check exit code, parse stderr for errors |
-| Python | `python -m py_compile *.py` | Check exit code, parse stderr |
-| Go | `go build ./...` | Check exit code, parse stderr |
-| Rust | `cargo build` | Check exit code, parse stderr |
-| Java | `mvn compile` | Check exit code, parse build log |
-
-**Linters:**
-- ESLint (JS/TS): `npx eslint . --format json` → parse JSON for errors
-- Pylint (Python): `pylint **/*.py --output-format=json`
-- RuboCop (Ruby): `rubocop --format json`
-- golangci-lint (Go): `golangci-lint run --out-format json`
+**Linters:** Per ci_tool_detection.md Linters table. Use `--format json` / `--output-format json` for structured output.
 
 **Severity:**
 - **CRITICAL:** Compilation fails, cannot build project
@@ -84,15 +72,7 @@ Receives `contextStore` with: `tech_stack` (including build_tool, test_framework
 ### 3. Type Errors
 **What:** Type mismatches, missing type annotations, type checker failures
 
-**Detection by Stack:**
-
-| Stack | Tool | Command |
-|-------|------|---------|
-| TypeScript | tsc | `tsc --noEmit --strict` |
-| Python | mypy | `mypy . --strict` |
-| Python | pyright | `pyright --warnings` |
-| Go | go vet | `go vet ./...` |
-| Rust | cargo | `cargo check` (type checks only) |
+**Detection:** Per `shared/references/ci_tool_detection.md` Command Registry (Type Checkers section).
 
 **Severity:**
 - **CRITICAL:** Type error prevents compilation (`tsc` fails, `cargo check` fails)
@@ -107,15 +87,7 @@ Receives `contextStore` with: `tech_stack` (including build_tool, test_framework
 ### 4. Failed or Skipped Tests
 **What:** Test suite failures, skipped tests, missing test coverage
 
-**Detection by Stack:**
-
-| Stack | Framework | Command |
-|-------|-----------|---------|
-| Node.js | Jest | `npm test -- --json --outputFile=test-results.json` |
-| Node.js | Mocha | `mocha --reporter json > test-results.json` |
-| Python | Pytest | `pytest --json-report --json-report-file=test-results.json` |
-| Go | go test | `go test ./... -json` |
-| Rust | cargo test | `cargo test --no-fail-fast` |
+**Detection:** Per `shared/references/ci_tool_detection.md` Command Registry (Test Frameworks section). Use JSON output flags for structured parsing.
 
 **Severity:**
 - **CRITICAL:** Test failures in CI/production code

@@ -69,7 +69,7 @@ Complements crash detection by actively verifying done-flags on each heartbeat. 
 
 **Problem:** Worker writes `done.flag` after receiving ACK from lead (see `worker_prompts.md`). In rare cases, done.flag exists but worker's shutdown was not processed (e.g., lead crashed between ACK and shutdown). TeammateIdle hook returns `exit 0` (allows idle), so crash detection never triggers.
 
-**Solution:** Proactive verification in heartbeat loop (SKILL.md Phase 4, Step 2.5).
+**Solution:** Proactive verification in heartbeat loop (SKILL.md Phase 4, Step 3).
 
 ```
 ON HEARTBEAT (every ~60 seconds):

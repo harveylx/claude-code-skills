@@ -20,9 +20,9 @@
 ## What's Inside
 
 ```
-claude-code-skills/                      # MARKETPLACE: 2 plugins, 102 skills
+claude-code-skills/                      # MARKETPLACE: 2 plugins, 103 skills
 |
-|  ┌─ Plugin: full-development-workflow-skills (70 skills) ─┐
+|  ┌─ Plugin: full-development-workflow-skills (71 skills) ─┐
 |
 |-- ln-001-standards-researcher/       # Research standards via MCP Context7/Ref
 |-- ln-002-best-practices-researcher/  # Create ADRs, guides, manuals
@@ -65,12 +65,13 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 102 skills
 |   |-- ln-403-task-rework/            # Fix tasks marked To Rework
 |   |-- ln-404-test-executor/          # Execute test tasks (E2E-first)
 |
-|-- ln-5XX-*/                          # QUALITY (9 skills)
+|-- ln-5XX-*/                          # QUALITY (10 skills)
 |   |-- ln-500-story-quality-gate/     # Thin orchestrator: verdict + Quality Score
 |   |-- ln-510-quality-coordinator/    # Code quality checks coordinator
 |   |   |-- ln-511-code-quality-checker/  # DRY/KISS/YAGNI violations
-|   |   |-- ln-512-agent-reviewer/        # External agent review (Codex + Gemini)
-|   |   |-- ln-513-regression-checker/    # Run existing test suite
+|   |   |-- ln-512-tech-debt-cleaner/    # Automated safe tech debt cleanup
+|   |   |-- ln-513-agent-reviewer/        # External agent review (Codex + Gemini)
+|   |   |-- ln-514-regression-checker/    # Run existing test suite
 |   |-- ln-520-test-planner/           # Test planning coordinator
 |   |   |-- ln-521-test-researcher/    # Research real-world problems
 |   |   |-- ln-522-manual-tester/      # Manual functional testing
@@ -157,7 +158,7 @@ This marketplace contains **2 plugins** — install together or separately:
 
 | Plugin | Skills | Description |
 |--------|--------|-------------|
-| **full-development-workflow-skills** | 70 | Agile workflow: Documentation, Planning, Execution, Quality, Audit |
+| **full-development-workflow-skills** | 71 | Agile workflow: Documentation, Planning, Execution, Quality, Audit |
 | **claude-code-bootstrap** | 32 | Project bootstrap: CREATE or TRANSFORM to Clean Architecture |
 
 ---
@@ -257,8 +258,8 @@ Multi-model review uses external AI agents (Codex + Gemini) for parallel code/st
 
 | Model | CLI | Version | Used by | Settings |
 |-------|-----|---------|---------|----------|
-| **[Codex](https://github.com/anthropics/codex-cli)** | `codex` | gpt-5.3-codex | ln-311, ln-512 | `--json --full-auto` (read-only, internet access) |
-| **[Gemini](https://github.com/google/gemini-cli)** | `gemini` | gemini-3-flash-preview | ln-311, ln-512 | `--yolo -m gemini-3-flash-preview` (sandbox, auto-approve) |
+| **[Codex](https://github.com/anthropics/codex-cli)** | `codex` | gpt-5.3-codex | ln-311, ln-513 | `--json --full-auto` (read-only, internet access) |
+| **[Gemini](https://github.com/google/gemini-cli)** | `gemini` | gemini-3-flash-preview | ln-311, ln-513 | `--yolo -m gemini-3-flash-preview` (sandbox, auto-approve) |
 
 **Review Workflow:**
 1. **Parallel Execution** — Both agents run simultaneously (background tasks)
@@ -297,7 +298,7 @@ All prompts/results saved to `.agent-review/{agent}/` for transparency:
 <summary><b>Skills using external AI review</b></summary>
 
 - **ln-311-agent-reviewer** — Story/Tasks validation (called by ln-310-story-validator Phase 5)
-- **ln-512-agent-reviewer** — Code implementation review (called by ln-511-code-quality-checker Step 7)
+- **ln-513-agent-reviewer** — Code implementation review (called by ln-511-code-quality-checker Step 7)
 
 Both skills support:
 - Session Resume for multi-round debates

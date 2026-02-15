@@ -31,7 +31,7 @@ Lead detects context loss when:
 | After compression (one-time recovery) | 4 files | ~2500 |
 | Recovery block in stderr (every heartbeat) | -- | ~120 |
 
-## Active Done-Flag Verification (Step 2.5)
+## Active Done-Flag Verification (Step 3)
 
 Detects lost completion messages by checking for done-flags without state transitions. Complements reactive crash detection (ON TeammateIdle) with proactive polling every heartbeat cycle.
 
@@ -137,7 +137,7 @@ FOR EACH story_id in story_state WHERE state in ["STAGE_0", "STAGE_1", "STAGE_2"
         # ON worker responds: handled by existing Step 2 handlers (see phase4_handlers.md)
 ```
 
-## Heartbeat State Persistence (Step 3)
+## Heartbeat State Persistence (Step 4)
 
 ```
 ON HEARTBEAT (Stop hook stderr: "HEARTBEAT: N workers, M stories..."):

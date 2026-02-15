@@ -139,7 +139,7 @@ Next Steps:
 | Task | ln-300 | ln-301, ln-302 |
 | Execution | ln-400 | ln-401, ln-402, ln-403, ln-404 |
 | Quality Gate | ln-500 | ln-510, ln-520 |
-| Quality Checks | ln-510 | ln-511, ln-512, ln-513 |
+| Quality Checks | ln-510 | ln-511, ln-513, ln-514 |
 | Test Planning | ln-520 | ln-521, ln-522, ln-523 |
 | Codebase Audit | ln-620 | ln-621 through ln-629 |
 | Test Audit | ln-630 | ln-631 through ln-635 |

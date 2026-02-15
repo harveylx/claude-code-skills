@@ -362,7 +362,7 @@ FOR EACH story IN priority_queue:
 # FRESH WORKER PER STAGE: Each stage transition = shutdown old worker + spawn new one.
 # active_workers stays same (net-zero). Only DONE/PAUSED/ERROR decrement active_workers.
 #
-# BIDIRECTIONAL HEALTH MONITORING (Phase 4, Step 2.5):
+# BIDIRECTIONAL HEALTH MONITORING (Phase 4, Step 3):
 # - Reactive: ON handlers process worker completion messages
 # - Proactive: Verify done-flags without messages (lost message recovery)
 # - Defense-in-depth: Handles network issues, context overflow, worker crashes
@@ -568,7 +568,7 @@ Append Process Improvement section (auto-generated from pipeline analysis):
   ### Quality (improve output)
   - IF any Stage 3 verdict was CONCERNS: "Story {id} passed with concerns. Tighter AC or stricter test coverage may prevent debt."
   - IF any Stage 3 score < 80: "Low quality ({score}/100) for {id}. Consider: more specific AC, ln-002 research before coding, stricter ln-402 review."
-  - IF agent reviews (ln-512) found issues not caught by ln-402: "External agents caught missed issues. Consider running agent review earlier."
+  - IF agent reviews (ln-514) found issues not caught by ln-402: "External agents caught missed issues. Consider running agent review earlier."
   - IF all scores > 90: "High quality scores. Current process works well — maintain."
 
   ### Process Architecture (structural improvements)

@@ -98,8 +98,9 @@ allowed-tools: Read, Edit
 - [ ] Read `ln-500-story-quality-gate/SKILL.md` - thin orchestrator (verdict + Quality Score)
 - [ ] Read `ln-510-quality-coordinator/SKILL.md` - quality checks coordinator
 - [ ] Read `ln-511-code-quality-checker/SKILL.md` - code quality
-- [ ] Read `ln-512-agent-reviewer/SKILL.md` - external agent review
-- [ ] Read `ln-513-regression-checker/SKILL.md` - regression tests
+- [ ] Read `ln-512-tech-debt-cleaner/SKILL.md` - automated safe tech debt cleanup
+- [ ] Read `ln-513-agent-reviewer/SKILL.md` - external agent review
+- [ ] Read `ln-514-regression-checker/SKILL.md` - regression tests
 - [ ] Read `ln-520-test-planner/SKILL.md` - test planning orchestrator
 - [ ] Read `ln-521-test-researcher/SKILL.md` - test research (common problems, competitors)
 - [ ] Read `ln-522-manual-tester/SKILL.md` - manual AC testing
@@ -112,6 +113,10 @@ allowed-tools: Read, Edit
 - [ ] Read `ln-621-629-*.auditor/SKILL.md` - L3 audit workers
 - [ ] Read `ln-630-test-auditor/SKILL.md` - L2 coordinator (5 workers)
 - [ ] Read `ln-631-635-*.auditor/SKILL.md` - L3 test audit workers
+- [ ] Read `ln-640-pattern-evolution-auditor/SKILL.md` - architectural patterns + drift detection
+- [ ] Read `ln-641-644-*/SKILL.md` - L3 pattern audit workers
+- [ ] Read `ln-650-persistence-performance-auditor/SKILL.md` - L2 coordinator (3 workers)
+- [ ] Read `ln-651-653-*/SKILL.md` - L3 persistence audit workers
 
 **When working with 7XX Bootstrap:**
 - [ ] Read `ln-700-project-bootstrap/SKILL.md` - L1 top orchestrator

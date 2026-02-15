@@ -125,7 +125,7 @@ Lead sends explicit ACK after processing each worker completion message. Workers
 
 **Duplicate handling:** State guard detects duplicate → re-sends ACK (no reprocessing). This ensures retrying workers always get confirmation.
 
-**Fallback:** After 1 retry without ACK, worker approves shutdown regardless. Lead's heartbeat verification (Phase 4, Step 2.5) is the final safety net.
+**Fallback:** After 1 retry without ACK, worker approves shutdown regardless. Lead's heartbeat verification (Phase 4, Step 3) is the final safety net.
 
 ## 5. Crash Detection
 

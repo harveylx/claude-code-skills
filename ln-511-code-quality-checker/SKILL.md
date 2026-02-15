@@ -90,7 +90,7 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
 ## When to Use
 - **Invoked by ln-510-quality-coordinator** Phase 2
 - All implementation tasks in Story status = Done
-- Before regression testing (ln-513) and test planning (ln-520)
+- Before regression testing (ln-514) and test planning (ln-520)
 
 ## Workflow (concise)
 1) Load Story (full) and Done implementation tasks (full descriptions) via Linear; skip tasks with label "tests".
@@ -129,8 +129,9 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
    - ORM queries added
 
 5) **Analyze code for static issues (assign prefixes):**
+   **MANDATORY READ:** `shared/references/clean_code_checklist.md`
    - SEC-: hardcoded creds, unvalidated input, SQL injection, race conditions
-   - MNT-: DRY violations (MNT-DRY-: duplicate logic), dead code (MNT-DC-: per `shared/references/clean_code_checklist.md` — 4 categories: unreachable, unused, commented-out, backward-compat), complex conditionals, poor naming
+   - MNT-: DRY violations (MNT-DRY-: duplicate logic), dead code (MNT-DC-: per checklist), complex conditionals, poor naming
    - ARCH-: layer violations, circular dependencies, guide non-compliance
    - ARCH-LB-: layer boundary violations (HTTP/DB/FS calls outside infrastructure layer)
    - ARCH-TX-: transaction boundary violations (commit() across multiple layers)
@@ -148,16 +149,16 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
    - Subtract issue penalties (see Issue penalties table)
 
 7) Output verdict with score and structured issues. Add Linear comment with findings.
-8) **Agent Review (MANDATORY — Delegated to ln-512):**
+8) **Agent Review (MANDATORY — Delegated to ln-513):**
 
-   > **MANDATORY STEP:** This step MUST execute after Step 7. DO NOT skip. If agents unavailable, ln-512 returns SKIPPED — acceptable. But invocation MUST happen.
+   > **MANDATORY STEP:** This step MUST execute after Step 7. DO NOT skip. If agents unavailable, ln-513 returns SKIPPED — acceptable. But invocation MUST happen.
 
-   Invoke `Skill(skill="ln-512-agent-reviewer", args="{storyId}")`.
-   - ln-512 gets Story/Task references from Linear, builds prompt with references, runs agents in parallel, persists prompts and results in `.agent-review/{agent}/`.
+   Invoke `Skill(skill="ln-513-agent-reviewer", args="{storyId}")`.
+   - ln-513 gets Story/Task references from Linear, builds prompt with references, runs agents in parallel, persists prompts and results in `.agent-review/{agent}/`.
    - Merge returned suggestions into issues list (same prefixes: SEC-, PERF-, MNT-, ARCH-, BP-, OPT-).
    - If verdict = `SUGGESTIONS` with `area=security` or `area=correctness` → escalate PASS → CONCERNS.
    - If verdict = `SKIPPED` → Self-Review fallback (native Claude reviews code).
-   - **Display:** agent stats from ln-512 output.
+   - **Display:** agent stats from ln-513 output.
 
 ## Critical Rules
 - Read guides mentioned in Story/Tasks before judging compliance.
@@ -176,7 +177,7 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
 - ARCH- subcategories checked (LB, TX, DTO, DI, CEH, SES); MNT- subcategories checked (DC, DRY, GOD, SIG, ERR).
 - Issues identified with prefixes and severity, sources from MCP Ref/Context7.
 - Code Quality Score calculated.
-- Agent review: ln-512 invoked; suggestions merged into issues (or SKIPPED/Self-Review fallback).
+- Agent review: ln-513 invoked; suggestions merged into issues (or SKIPPED/Self-Review fallback).
 - **Output format:**
   ```yaml
   verdict: PASS | CONCERNS | ISSUES_FOUND
