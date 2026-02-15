@@ -1,7 +1,7 @@
 # Claude Code Skills
 
 ![Version](https://img.shields.io/badge/version-3.1.0-blue)
-![Skills](https://img.shields.io/badge/skills-100-green)
+![Skills](https://img.shields.io/badge/skills-102-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![GitHub stars](https://img.shields.io/github/stars/levnikolaevich/claude-code-skills?style=social)](https://github.com/levnikolaevich/claude-code-skills)
 
@@ -20,13 +20,14 @@
 ## What's Inside
 
 ```
-claude-code-skills/                      # MARKETPLACE: 2 plugins, 101 skills
+claude-code-skills/                      # MARKETPLACE: 2 plugins, 102 skills
 |
-|  ┌─ Plugin: full-development-workflow-skills (69 skills) ─┐
+|  ┌─ Plugin: full-development-workflow-skills (70 skills) ─┐
 |
 |-- ln-001-standards-researcher/       # Research standards via MCP Context7/Ref
 |-- ln-002-best-practices-researcher/  # Create ADRs, guides, manuals
 |-- ln-003-push-all/                   # Commit and push all changes in one command
+|-- ln-004-agent-sync/                 # Sync skills & MCP settings to Gemini/Codex
 |
 |-- ln-1XX-*/                          # DOCUMENTATION (13 skills)
 |   |-- ln-100-documents-pipeline/     # L1 Orchestrator: complete docs in one command
@@ -156,7 +157,7 @@ This marketplace contains **2 plugins** — install together or separately:
 
 | Plugin | Skills | Description |
 |--------|--------|-------------|
-| **full-development-workflow-skills** | 67 | Agile workflow: Documentation, Planning, Execution, Quality, Audit |
+| **full-development-workflow-skills** | 70 | Agile workflow: Documentation, Planning, Execution, Quality, Audit |
 | **claude-code-bootstrap** | 32 | Project bootstrap: CREATE or TRANSFORM to Clean Architecture |
 
 ---
@@ -201,6 +202,9 @@ Skills use MCP servers for research, documentation lookup, and Linear integratio
 | **[Context7](https://github.com/upstash/context7)** | Library docs, APIs, migration guides | Optional ([dashboard](https://context7.com/dashboard)) | ln-001, ln-002, ln-310, ln-511, ln-640+ |
 | **[Ref](https://docs.ref.tools/install)** | Standards, RFCs, best practices | Required ([ref.tools/keys](https://ref.tools/keys)) | ln-001, ln-002, ln-310, ln-511, ln-640+ |
 | **[Linear](https://linear.app/docs/mcp)** | Issue tracking (Agile workflow) | OAuth via browser | ln-300+, ln-400+, ln-500+ |
+| **[hashline-edit](https://github.com/Submersible/mcp-hashline-edit-server)** | Hash-based file editing with integrity verification | — | ln-1000 workers, all skills¹ |
+
+¹ Requires [Bun](https://bun.sh) runtime: `npm install -g bun` (or `curl -fsSL https://bun.sh/install | bash` on macOS/Linux). Also requires [ripgrep](https://github.com/BurntSushi/ripgrep) for `grep` tool.
 
 **CLI setup:**
 ```bash
@@ -212,6 +216,9 @@ claude mcp add --transport http Ref https://api.ref.tools/mcp?apiKey=YOUR_API_KE
 
 # Linear — issue tracking (OAuth via browser after adding)
 claude mcp add linear-server -- npx -y mcp-remote https://mcp.linear.app/sse
+
+# hashline-edit — hash-based file editing (requires bun + ripgrep)
+claude mcp add hashline-edit -- bunx mcp-hashline-edit-server
 ```
 
 <details>
@@ -232,6 +239,10 @@ Add to `~/.claude/settings.json`:
     "linear-server": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
+    },
+    "hashline-edit": {
+      "command": "bunx",
+      "args": ["mcp-hashline-edit-server"]
     }
   }
 }
@@ -296,6 +307,31 @@ Both skills support:
 
 </details>
 
+<details>
+<summary><b>Sharing skills & MCP between agents</b></summary>
+
+**Share skills** — symlink/junction plugin directory:
+
+| OS | Command |
+|----|---------|
+| Windows (PowerShell) | `New-Item -ItemType Junction -Path "C:\Users\<USER>\.gemini\skills" -Target "<PLUGIN_DIR>"` |
+| Windows (CMD) | `mklink /J "C:\Users\<USER>\.gemini\skills" "<PLUGIN_DIR>"` |
+| macOS / Linux | `ln -s ~/.claude/plugins/<PLUGIN_DIR> ~/.gemini/skills` |
+
+Same for `.codex/skills`. Or use **ln-004-agent-sync** to automate symlinks + MCP sync.
+
+**MCP settings locations** (for manual sharing):
+
+| Agent | Config File | Format | Docs |
+|-------|------------|--------|------|
+| **Claude Code** | `~/.claude/settings.json` | JSON (`mcpServers: {}`) | [docs](https://docs.anthropic.com/en/docs/claude-code) |
+| **Gemini CLI** | `~/.gemini/settings.json` | JSON (`mcpServers: {}`) | [docs](https://github.com/google/gemini-cli) |
+| **Codex CLI** | `~/.codex/config.toml` | TOML (`[mcp_servers.name]`) | [docs](https://developers.openai.com/codex/mcp) |
+
+**Note:** Claude and Gemini use identical JSON format for `mcpServers` — copy the block directly. Codex uses TOML — convert manually.
+
+</details>
+
 ---
 
 ## Workflow
@@ -317,7 +353,7 @@ ln-400-story-executor      # 3. Tasks -> Review -> Quality -> Done
 <details>
 <summary><b>What is Claude Code Skills?</b></summary>
 
-A plugin for [Claude Code](https://claude.ai/code) that provides 99 production-ready skills automating the full Agile development lifecycle — from project bootstrap and documentation through scope decomposition, task execution, quality gates, and comprehensive code audits.
+A plugin for [Claude Code](https://claude.ai/code) that provides 102 production-ready skills automating the full Agile development lifecycle — from project bootstrap and documentation through scope decomposition, task execution, quality gates, and comprehensive code audits.
 
 </details>
 
@@ -394,7 +430,7 @@ Through the Orchestrator-Worker pattern. Instead of feeding the entire codebase 
 <details>
 <summary><b>How is it different from custom prompts or slash commands?</b></summary>
 
-Custom prompts are ad-hoc and context-free. Claude Code Skills provides 101 coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
+Custom prompts are ad-hoc and context-free. Claude Code Skills provides 102 coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
 
 </details>
 
@@ -422,25 +458,7 @@ Bootstrap skills (`ln-7XX`) support React, .NET, and Python project structures. 
 <details>
 <summary><b>Can I share these skills with Gemini CLI or OpenAI Codex?</b></summary>
 
-Yes — create a symlink or junction pointing to the plugin directory:
-
-**Windows (PowerShell):**
-```powershell
-New-Item -ItemType Junction -Path "C:\Users\<USERNAME>\.gemini\skills" -Target "C:\Users\<USERNAME>\<PLUGIN_DIR>"
-New-Item -ItemType Junction -Path "C:\Users\<USERNAME>\.codex\skills" -Target "C:\Users\<USERNAME>\<PLUGIN_DIR>"
-```
-
-**Windows (CMD):**
-```cmd
-mklink /J "C:\Users\<USERNAME>\.gemini\skills" "C:\Users\<USERNAME>\<PLUGIN_DIR>"
-mklink /J "C:\Users\<USERNAME>\.codex\skills" "C:\Users\<USERNAME>\<PLUGIN_DIR>"
-```
-
-**macOS / Linux:**
-```bash
-ln -s ~/.claude/plugins/<PLUGIN_DIR> ~/.gemini/skills
-ln -s ~/.claude/plugins/<PLUGIN_DIR> ~/.codex/skills
-```
+Yes — create symlinks/junctions to the plugin directory, or use `ln-004-agent-sync` to automate it. See [AI Review Models > Sharing skills & MCP between agents](#ai-review-models-optional) for commands and MCP config paths.
 
 </details>
 

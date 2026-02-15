@@ -3,6 +3,7 @@
     "allow": [
       "mcp__Ref",
       "mcp__context7",
+      "mcp__hashline-edit",
       "WebSearch",
       "Web Fetch",
       "Read",

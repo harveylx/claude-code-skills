@@ -29,6 +29,19 @@ L0: ln-1000-pipeline-orchestrator (TeamCreate lead, delegate mode)
 
 **Key principle:** ln-1000 does NOT modify existing skills. Workers invoke ln-300/ln-310/ln-400/ln-500 through Skill tool exactly as a human operator would.
 
+## MCP Tool Preferences
+
+When `mcp__hashline-edit__*` tools are available, workers MUST prefer them over standard file tools:
+
+| Standard Tool | Hashline-Edit Replacement | Why |
+|---------------|--------------------------|-----|
+| `Read` | `mcp__hashline-edit__read_file` | Hash-prefixed lines enable precise edits |
+| `Edit` | `mcp__hashline-edit__edit_file` | Atomic validation prevents corruption |
+| `Write` | `mcp__hashline-edit__write_file` | Same behavior, consistent interface |
+| `Grep` | `mcp__hashline-edit__grep` | Results include hashline refs for follow-up edits |
+
+**Fallback:** If hashline-edit MCP unavailable (tools not in ToolSearch), use standard tools. No error.
+
 ## Task Storage Mode
 
 **MANDATORY READ:** Load `shared/references/storage_mode_detection.md` for Linear vs File mode detection and operations.
@@ -224,22 +237,6 @@ Workers are spawned by Phase 4 spawn loop on first heartbeat — NOT here. This 
 **Lead operates in delegate mode — coordination only, no code writing.**
 
 **MANDATORY READ:** Load `references/checkpoint_format.md` for checkpoint schema and resume protocol.
-
-#### Communication Rules
-
-```
-FORBIDDEN PATTERNS (lead and workers):
-- Reading ~/.claude/teams/*/inboxes/*.json directly
-- Bash sleep loops for polling messages
-- Parsing internal JSON formats (permission_request, idle_notification)
-- Any filesystem access to ~/.claude/ internal structures
-
-CORRECT PATTERNS:
-- Messages arrive automatically as conversation turns (TeammateIdle notifications)
-- Use SendMessage(type: "message") for all communication
-- Use SendMessage(type: "shutdown_request") for shutdown
-- Lead processes messages in event-driven style (ON ... handlers below)
-```
 
 ```
 # --- INITIALIZATION ---
