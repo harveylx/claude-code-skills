@@ -1,7 +1,7 @@
 # Claude Code Skills
 
 ![Version](https://img.shields.io/badge/version-3.1.0-blue)
-![Skills](https://img.shields.io/badge/skills-102-green)
+![Skills](https://img.shields.io/badge/skills-104-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![GitHub stars](https://img.shields.io/github/stars/levnikolaevich/claude-code-skills?style=social)](https://github.com/levnikolaevich/claude-code-skills)
 
@@ -20,14 +20,15 @@
 ## What's Inside
 
 ```
-claude-code-skills/                      # MARKETPLACE: 2 plugins, 103 skills
+claude-code-skills/                      # MARKETPLACE: 2 plugins, 104 skills
 |
-|  ┌─ Plugin: full-development-workflow-skills (71 skills) ─┐
+|  ┌─ Plugin: full-development-workflow-skills (72 skills) ─┐
 |
 |-- ln-001-standards-researcher/       # Research standards via MCP Context7/Ref
 |-- ln-002-best-practices-researcher/  # Create ADRs, guides, manuals
 |-- ln-003-push-all/                   # Commit and push all changes in one command
 |-- ln-004-agent-sync/                 # Sync skills & MCP settings to Gemini/Codex
+|-- ln-005-agent-reviewer/             # Universal context review (Codex + Gemini, debate protocol)
 |
 |-- ln-1XX-*/                          # DOCUMENTATION (13 skills)
 |   |-- ln-100-documents-pipeline/     # L1 Orchestrator: complete docs in one command
