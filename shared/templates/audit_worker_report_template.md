@@ -152,6 +152,7 @@ ln-640 workers use the same file-based approach with two extensions: **4-score A
 | ln-642 | `layer-boundary` | domain-aware | `642-layer-boundary-users.md` / `642-layer-boundary.md` |
 | ln-643 | `api-contract` | domain-aware | `643-api-contract-users.md` / `643-api-contract.md` |
 | ln-644 | `dep-graph` | domain-aware | `644-dep-graph-users.md` / `644-dep-graph.md` |
+| ln-645 | `open-source-replacer` | domain-aware | `645-open-source-replacer-users.md` / `645-open-source-replacer.md` |
 
 **Pattern name slug:** lowercase, hyphens, no spaces: `Job Processing` → `job-processing`.
 
@@ -222,6 +223,11 @@ JSON in HTML comment for coordinator cross-domain aggregation. All ln-640 worker
 **ln-644 (Dependency Graph):**
 ```json
 {"graph_stats":{"modules_analyzed":12,"edges":34,"cycles_detected":2,"ccd":42,"nccd":1.3},"cycles":[{"type":"transitive","path":["auth","billing","notify","auth"],"severity":"CRITICAL"}],"boundary_violations":[{"rule_type":"forbidden","from":"domain","to":"infrastructure","severity":"CRITICAL"}],"sdp_violations":[{"from":"domain","to":"utils","I_from":0.2,"I_to":0.8,"severity":"HIGH"}],"metrics":{"users":{"Ca":3,"Ce":5,"I":0.625}},"baseline":{"new":3,"resolved":1,"frozen":4}}
+```
+
+**ln-645 (Open Source Replacer):**
+```json
+{"modules_scanned":15,"modules_with_alternatives":8,"reuse_opportunity_score":6.5,"replacements":[{"module":"src/utils/email-validator.ts","lines":245,"classification":"utility","goal":"Email validation with MX checking","alternative":"zod + zod-email","confidence":"HIGH","stars":28000,"license":"MIT","license_class":"PERMISSIVE","security_status":"CLEAN","ecosystem_match":true,"feature_coverage":95,"effort":"M","migration_steps":["Install","Create schema","Replace calls","Remove module","Test"]}],"no_replacement_found":[{"module":"src/lib/domain-scorer.ts","reason":"Domain-specific business logic","classification":"domain-specific"}]}
 ```
 
 ## Worker Return Value (ln-640)

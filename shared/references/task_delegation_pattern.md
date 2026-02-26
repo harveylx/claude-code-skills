@@ -43,7 +43,7 @@ Score: 7.9/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
 
 **Coordinator receives:** path + score + counts (enough for aggregation). Reads files only during report assembly (ln-620) or cross-domain aggregation (ln-640).
 
-**Use when:** Coordinator has 7+ workers OR domain-aware mode with N×workers (e.g., ln-620 with 9 workers, ln-640 with 4 workers × N domains).
+**Use when:** Coordinator has 7+ workers OR domain-aware mode with N×workers (e.g., ln-620 with 9 workers, ln-640 with 5 workers × N domains).
 
 ### In-Context JSON Output (other coordinators)
 
@@ -67,7 +67,7 @@ Workers return standardized JSON directly to coordinator:
 }
 ```
 
-**Use when:** Coordinator has <7 workers (e.g., ln-640 with 4, ln-650 with 3).
+**Use when:** Coordinator has <7 workers (e.g., ln-640 with 5, ln-650 with 3).
 
 ## Audit Coordinator → Worker Contract
 

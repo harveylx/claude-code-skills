@@ -28,7 +28,7 @@ Score: 7.9/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
 | Coordinator | Workers | Mode |
 |-------------|---------|------|
 | ln-620 (9 workers) | ln-621..ln-629 | **File-based** (prevents context overflow) |
-| ln-640 (4 workers, domain-aware) | ln-641..ln-644 | **File-based** (up to 20+ invocations in domain-aware mode) |
+| ln-640 (5 workers, domain-aware) | ln-641..ln-645 | **File-based** (up to 25+ invocations in domain-aware mode) |
 | ln-650 (3 workers) | ln-651..ln-653 | In-context JSON (3 workers manageable) |
 | ln-630 (5 workers) | ln-631..ln-635 | In-context JSON (5 workers manageable) |
 

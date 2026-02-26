@@ -20,7 +20,7 @@
 ## What's Inside
 
 ```
-claude-code-skills/                      # MARKETPLACE: 2 plugins, 104 skills
+claude-code-skills/                      # MARKETPLACE: 2 plugins, 105 skills
 |
 |  ┌─ Plugin: full-development-workflow-skills (72 skills) ─┐
 |
@@ -78,7 +78,7 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 104 skills
 |   |   |-- ln-522-manual-tester/      # Manual functional testing
 |   |   |-- ln-523-auto-test-planner/  # Plan E2E/Integration/Unit tests
 |
-|-- ln-6XX-*/                          # AUDIT (28 skills) [WORKS WITHOUT LINEAR]
+|-- ln-6XX-*/                          # AUDIT (29 skills) [WORKS WITHOUT LINEAR]
 |   |-- ln-600-docs-auditor/           # Documentation quality audit
 |   |   |-- ln-601-semantic-content-auditor/ # Scope alignment, fact accuracy
 |   |-- ln-610-code-comments-auditor/  # Code comments audit
@@ -103,6 +103,7 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 104 skills
 |   |   |-- ln-642-layer-boundary-auditor/# Layer violations, I/O isolation
 |   |   |-- ln-643-api-contract-auditor/  # Layer leakage, missing DTOs
 |   |   |-- ln-644-dependency-graph-auditor/ # Cycles, coupling metrics (Ca/Ce/I)
+|   |   |-- ln-645-open-source-replacer/ # Goal-based OSS replacement audit + migration plan
 |   |-- ln-650-persistence-performance-auditor/ # DB performance coordinator:
 |   |   |-- ln-651-query-efficiency-auditor/    # N+1, over-fetching, missing bulk ops
 |   |   |-- ln-652-transaction-correctness-auditor/ # Scope, rollback, long-held txns
@@ -425,7 +426,7 @@ Through the Orchestrator-Worker pattern. Instead of feeding the entire codebase 
 <details>
 <summary><b>What can the audit skills detect?</b></summary>
 
-28 audit skills organized in 7 groups: security vulnerabilities (secrets, XSS, SQL injection), build health (compiler errors, type issues), code principles (DRY/KISS/YAGNI violations), code quality (complexity, magic numbers), dependencies (outdated packages, CVEs), test suite quality (coverage gaps, isolation issues), and architectural patterns (layer violations, coupling metrics).
+29 audit skills organized in 7 groups: security vulnerabilities (secrets, XSS, SQL injection), build health (compiler errors, type issues), code principles (DRY/KISS/YAGNI violations), code quality (complexity, magic numbers), dependencies (outdated packages, CVEs), test suite quality (coverage gaps, isolation issues), architectural patterns (layer violations, coupling metrics), and open-source replacement opportunities (goal-based analysis with migration plans).
 
 </details>
 
@@ -446,7 +447,7 @@ A 4-level hierarchy: L0 meta-orchestrator (`ln-1000-pipeline-orchestrator`) coor
 <details>
 <summary><b>Can it catch technical debt from AI-generated code?</b></summary>
 
-Yes. Audit skills specifically target AI-induced tech debt: `ln-623` checks DRY/KISS/YAGNI violations, `ln-626` finds dead code and unused imports, `ln-640` audits architectural pattern evolution, and `ln-644` detects dependency cycles and coupling metrics. Run `ln-620-codebase-auditor` to scan all 9 categories in parallel.
+Yes. Audit skills specifically target AI-induced tech debt: `ln-623` checks DRY/KISS/YAGNI violations, `ln-626` finds dead code and unused imports, `ln-640` audits architectural pattern evolution, `ln-644` detects dependency cycles and coupling metrics, and `ln-645` finds custom code that can be replaced by battle-tested open-source packages. Run `ln-620-codebase-auditor` to scan all 9 categories in parallel.
 
 </details>
 
