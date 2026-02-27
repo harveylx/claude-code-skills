@@ -17,6 +17,9 @@ You are reviewing a validated Story and its implementation Tasks against the act
 ## Tasks
 {task_refs}
 
+## Goal Articulation
+Before reviewing, state in one sentence: What specific risk must this review catch? What would a surface-level review miss about this Story? State your REAL GOAL at the start of your output before analysis.
+
 ## Instructions
 1. Access the Story and Tasks using the references above (Linear URLs or local file paths)
 2. If you cannot access Linear — use local alternatives: check `docs/tasks/` directory, `git log`, `git diff`, README.md. Produce your review based on available information. Note what you could not access in your output.

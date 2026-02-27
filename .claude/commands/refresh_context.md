@@ -22,7 +22,7 @@ allowed-tools: Read, Edit
 > Goal: fully reload repository structure, skill architecture patterns, and development workflows.
 
 > [!WARNING]
-> Before any work with skills, **ALWAYS read** `docs/SKILL_ARCHITECTURE_GUIDE.md` for best practices 2024-2025: Orchestrator-Worker Pattern, Single Responsibility Principle, Token Efficiency, Task Decomposition guidelines, Red Flags.
+> Before any work with skills, **ALWAYS read** `docs/SKILL_ARCHITECTURE_GUIDE.md` for best practices 2024-2026: Orchestrator-Worker Pattern, Single Responsibility Principle, Token Efficiency, Task Decomposition guidelines, Red Flags.
 
 ---
 
@@ -35,7 +35,7 @@ allowed-tools: Read, Edit
 - [ ] Read `<ENTRY_FILE>` - repository rules, key concepts, versioning workflow
 - [ ] Read `README.md` (sections: Features tables, Key Concepts) - overview of 84 skills in 7 categories
 - [ ] Read `docs/SKILL_ARCHITECTURE_GUIDE.md` (sections: TOC, Core Principles, Orchestrator-Worker Pattern)
-- [ ] Read `docs/DOCUMENTATION_STANDARDS.md` - industry best practices 2024-2025
+- [ ] Read `docs/DOCUMENTATION_STANDARDS.md` - industry best practices 2024-2026
 
 **After loading the base set:** Proceed to section 3. Based on current work type, load additional documents from "Deep Dive" below.
 

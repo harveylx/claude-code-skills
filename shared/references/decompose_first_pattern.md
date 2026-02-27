@@ -10,6 +10,7 @@ Build IDEAL plan FIRST, then check existing state to determine mode.
 
 ```
 Phase N: BUILD IDEAL PLAN
+  0. State REAL GOAL: What is this decomposition actually producing? (Not "create items" — the business capability being enabled). See `goal_articulation_gate.md`.
   1. Analyze current scope/requirements
   2. Design optimal structure (Epics/Stories/Tasks)
   3. Validate against constraints (size, count, INVEST)

@@ -44,11 +44,11 @@ This document captures industry standards and best practices for designing Claud
 
 **Token efficiency = Faster context loading + Lower costs + Better maintainability**
 
-Target: 400-600 lines for core principles, 600-800 lines with advanced documentation techniques (this document: 791 lines, includes 23 advanced documentation principles from 2024-2025 research).
+Target: 400-600 lines for core principles, 600-800 lines with advanced documentation techniques (this document: 791 lines, includes 23 advanced documentation principles from 2024-2026 research).
 
 ---
 
-## Advanced Documentation Principles (2024-2025)
+## Advanced Documentation Principles (2024-2026)
 
 **Source:** Research from Vercel VP, Microsoft Documentation, Nielsen Norman Group, Diátaxis Framework, Flesch-Kincaid readability standards (2024)
 
@@ -148,7 +148,7 @@ Target: 400-600 lines for core principles, 600-800 lines with advanced documenta
 
 ## Table of Contents
 
-1. [Advanced Documentation Principles (2024-2025)](#advanced-documentation-principles-2024-2025)
+1. [Advanced Documentation Principles (2024-2026)](#advanced-documentation-principles-2024-2026)
 2. [Core Principles](#core-principles)
 3. [Orchestrator-Worker Pattern](#orchestrator-worker-pattern)
     - [Delegation Pattern Selection](#delegation-pattern-selection)
@@ -893,7 +893,7 @@ Every User Story should be:
 
 5. **[Claude Agent SDK](https://claude.com/blog/building-agents-with-the-claude-agent-sdk)** - Context compaction, tool design as ACI, poka-yoke approach. Key Insight: "Tool definitions deserve as much prompt engineering as your overall prompts"
 
-### Industry Sources (2024-2025)
+### Industry Sources (2024-2026)
 
 6. **Claude Skills Deep Dive** (leehanchung.github.io) - Single responsibility, orchestrator pattern. Key Insight: "Skill composition > monoliths"
 

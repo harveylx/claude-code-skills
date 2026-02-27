@@ -1,9 +1,9 @@
-# GitHub README Best Practices (2025)
+# GitHub README Best Practices (2026)
 
 <!-- SCOPE: GitHub README writing guidelines ONLY. Contains optimal length, standard structure, anti-patterns, section guidelines, quality checklist. -->
 <!-- DO NOT add here: repository-specific README content → README.md, documentation standards → DOCUMENTATION_STANDARDS.md -->
 
-This document outlines modern best practices for writing effective README files based on industry standards and research from leading open-source projects (2024-2025).
+This document outlines modern best practices for writing effective README files based on industry standards and research from leading open-source projects (2024-2026).
 
 ## Table of Contents
 
@@ -432,4 +432,4 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 **Version:** 1.0.0
 **Last Updated:** 2025-11-17
-**Based on:** GitHub best practices research (2024-2025), industry leader analysis
+**Based on:** GitHub best practices research (2024-2026), industry leader analysis

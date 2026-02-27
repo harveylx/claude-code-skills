@@ -23,7 +23,7 @@
       "name": "Codex CLI (Review Mode)",
       "command": "codex",
       "args": ["exec", "--json", "--full-auto", "-C", "{cwd}", "-o", "{output_file}"],
-      "resume_args": ["exec", "resume", "{session_id}", "--json", "--full-auto", "-C", "{cwd}", "-o", "{output_file}"],
+      "resume_args": ["exec", "resume", "{session_id}", "--json", "--full-auto", "-o", "{output_file}"],
       "resume_prompt_delivery": "positional",
       "session_id_capture": {
         "strategy": "from_jsonl_field",

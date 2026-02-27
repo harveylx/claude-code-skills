@@ -386,13 +386,23 @@ def run_agent(agent_name, prompt, cwd, timeout, registry, output_file=None,
             subprocess_cwd, env, output_file, agent_name
         )
 
-        # Check if resume actually worked
+        # Check if resume actually worked.
+        # "error" has generic "Exit code N"; real CLI errors land
+        # in "response" via stderr (line 286-287).
+        error_text = (
+            (result.get("error") or "") + " "
+            + (result.get("response") or "")
+        ).lower()
         resume_failed = (
             not result["success"]
-            and result.get("error", "")
-            and ("session" in result["error"].lower()
-                 or "not found" in result["error"].lower()
-                 or "expired" in result["error"].lower())
+            and error_text.strip()
+            and ("session" in error_text
+                 or "not found" in error_text
+                 or "expired" in error_text
+                 or "unexpected argument" in error_text
+                 or "unrecognized" in error_text
+                 or "invalid option" in error_text
+                 or "unknown flag" in error_text)
         )
 
         if resume_failed:

@@ -22,7 +22,7 @@ Receive file paths to created documentation (`docs/guides/`, `docs/manuals/`, `d
 
 ## Step 3: Research via MCP
 
-- Query MCP Ref for industry standards: `ref_search_documentation(query="[topic] RFC OWASP best practices 2025")`
+- Query MCP Ref for industry standards: `ref_search_documentation(query="[topic] RFC OWASP best practices {current_year}")`
 - Query Context7 for library versions: `resolve-library-id` + `query-docs`
 - Extract: standards (RFC numbers, OWASP rules), library versions, patterns
 

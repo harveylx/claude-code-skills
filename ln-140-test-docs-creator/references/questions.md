@@ -166,7 +166,7 @@
    - Log: "⚠️ Test directory structure created (will be populated during Story test task execution)"
 
 **MCP Ref Hints:**
-- Research: "[detected_framework] best practices" (e.g., "jest best practices 2024")
+- Research: "[detected_framework] best practices" (e.g., "jest best practices {current_year}")
 - Research: "[detected_framework] naming conventions" (if need to explain patterns)
 <!-- QUESTION_END: 3 -->
 

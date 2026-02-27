@@ -150,7 +150,7 @@ Resolve all identified code quality issues while preserving 100% of existing fun
 
 **Best Practices Research:**
 - [ ] Research DRY patterns (MCP Ref, Context7, WebSearch)
-  - Query: "DRY principle [language] best practices 2024"
+  - Query: "DRY principle [language] best practices {current_year}"
   - Find established patterns for consolidating duplicated code
 - [ ] Research KISS simplification (if applicable)
   - Query: "simplify [over-engineered pattern] [language]"

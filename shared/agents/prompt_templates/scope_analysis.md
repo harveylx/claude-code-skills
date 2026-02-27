@@ -8,6 +8,9 @@ You are analyzing a project scope to decompose it into logical Epics (3-7).
 ## Requirements
 {requirements}
 
+## Goal Articulation
+Before analyzing, state in one sentence: What is the REAL business problem this project solves? (Not "build an app" — the specific user need.) State your REAL GOAL at the start of your output before analysis.
+
 ## Instructions
 1. Identify major functional domains from the scope
 2. Propose 3-7 Epics, each representing a logical module/domain

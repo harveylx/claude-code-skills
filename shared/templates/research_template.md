@@ -17,7 +17,7 @@
 (Clear question formulation. Examples:
 - "Which WebSocket framework best fits our use-case?"
 - "What solutions do competitors use for real-time notifications?"
-- "What is the B2B SaaS market landscape in 2025?")
+- "What is the B2B SaaS market landscape?")
 
 ---
 

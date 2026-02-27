@@ -11,6 +11,9 @@ You are decomposing a Story into implementation tasks (1-6 tasks, 3-5h each).
 ## Acceptance Criteria
 {acceptance_criteria}
 
+## Goal Articulation
+Before decomposing, state in one sentence: What is the REAL deliverable this Story produces for the end user? (Not "implement tasks" — the actual user-facing outcome.) State your REAL GOAL at the start of your output before analysis.
+
 ## Instructions
 1. Build IDEAL task plan with Foundation-First order (DB -> Repository -> Service -> API -> Frontend)
 2. Each task must be independently completable using only preceding tasks

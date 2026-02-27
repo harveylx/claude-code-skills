@@ -44,6 +44,7 @@ Phase 6: REPORT
 
 | Action | Output |
 |--------|--------|
+| **Articulate REAL GOAL** | **1-sentence: what this orchestration delivers (see `goal_articulation_gate.md`)** |
 | Analyze scope | Entity structure, constraints |
 | Build IDEAL plan | Optimal decomposition |
 | Apply guidelines | Size limits, ordering rules |

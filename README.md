@@ -477,6 +477,20 @@ Yes — create symlinks/junctions to the plugin directory, or use `ln-004-agent-
 | **Issues** | [GitHub Issues](https://github.com/levnikolaevich/claude-code-skills/issues) |
 | **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
+## Research & Influences
+
+Papers, docs, and methodologies studied and implemented in the skill architecture.
+
+| Source | Learned | Changed |
+|--------|---------|---------|
+| [STAR Framework](https://arxiv.org/abs/2602.21814) (2025) | Forced goal articulation: +85pp accuracy; structured reasoning > context injection 2.83x | [`goal_articulation_gate.md`](shared/references/goal_articulation_gate.md) — 4-question gate in 6 skills + 6 templates |
+| [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) (Anthropic, 2024) | Orchestrator-Worker, prompt chaining, evaluator-optimizer patterns | Core 4-level hierarchy (L0→L3), single responsibility per skill |
+| [Multi-Agent Research System](https://www.anthropic.com/engineering/multi-agent-research-system) (Anthropic, 2025) | Production orchestration: 90.2% perf improvement with specialized agents | `ln-1000` pipeline orchestrator, parallel agent reviews (`ln-005`) |
+| [Scheduler Agent Supervisor](https://learn.microsoft.com/azure/architecture/patterns/scheduler-agent-supervisor) (Microsoft) | Separation of scheduling, execution, and supervision | `ln-400`/`ln-402`/`ln-500` executor-reviewer-gate split |
+| [DIATAXIS](https://diataxis.fr) | 4-type docs: Tutorial / How-to / Reference / Explanation | Documentation levels in CLAUDE.md, progressive disclosure |
+| Risk-Based Testing (Kent Beck) | "Write tests. Not too many. Mostly integration." | Risk matrix, E2E-first approach |
+| Vertical Slicing ([Humanizing Work](https://www.humanizingwork.com/the-humanizing-work-guide-to-splitting-user-stories/)) | "Never split by architectural layer" | Foundation-First task ordering |
+
 ---
 
 **Author:** [@levnikolaevich](https://github.com/levnikolaevich) · **License:** MIT

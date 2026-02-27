@@ -18,6 +18,9 @@ You are reviewing the provided context against feasibility, internal consistency
 ## Context Files
 {context_refs}
 
+## Goal Articulation
+Before reviewing, state in one sentence: What is the REAL question this context must answer? What would a surface-level "looks good" review miss? State your REAL GOAL at the start of your output before analysis.
+
 ## Instructions
 1. Read ALL referenced files from the working directory — they contain the full context for review
 2. Examine the surrounding codebase in your working directory for additional context
