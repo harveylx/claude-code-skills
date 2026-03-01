@@ -1,6 +1,6 @@
 ---
 name: ln-635-test-isolation-auditor
-description: Test Isolation + Anti-Patterns audit worker (L3). Checks isolation (APIs/DB/FS/Time/Random/Network), determinism (flaky, order-dependent), and 6 anti-patterns.
+description: "Test Isolation + Anti-Patterns audit worker (L3). Checks isolation (APIs/DB/FS/Time/Random/Network), determinism (flaky, order-dependent), and 7 anti-patterns."
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -278,12 +278,25 @@ Receives `contextStore` with: `tech_stack`, `testFilesMetadata`, `codebase_root`
 
 **Effort:** S
 
+### 7. Default Value Blindness (Tests with default config)
+
+**What:** See `shared/references/risk_based_testing_guide.md` → Anti-Pattern 9.
+
+**Detection:**
+- Grep for common defaults in test setup: `:8080`, `:3000`, `30000`, `limit: 20`, `offset: 0`
+- Check if test config values match framework/library defaults
+- Look for `|| DEFAULT` patterns in source code with matching test values
+
+**Severity:** **HIGH**
+
+**Effort:** S
+
 ## Scoring Algorithm
 
 **MANDATORY READ:** Load `shared/references/audit_scoring.md` for unified scoring formula.
 
 **Severity mapping:**
-- Flaky tests, External API not mocked, The Liar → HIGH
+- Flaky tests, External API not mocked, The Liar, Default Value Blindness → HIGH
 - Real database, File system, Time/Date, Network, The Giant, Happy Path Only → MEDIUM
 - Random without seed, Order-dependent, Conjoined Twins → LOW
 
@@ -291,7 +304,7 @@ Receives `contextStore` with: `tech_stack`, `testFilesMetadata`, `codebase_root`
 
 **MANDATORY READ:** Load `shared/templates/audit_worker_report_template.md` for file format.
 
-Write report to `{output_dir}/635-isolation.md` with `category: "Isolation & Anti-Patterns"` and checks: api_isolation, db_isolation, fs_isolation, time_isolation, random_isolation, network_isolation, flaky_tests, anti_patterns.
+Write report to `{output_dir}/635-isolation.md` with `category: "Isolation & Anti-Patterns"` and checks: api_isolation, db_isolation, fs_isolation, time_isolation, random_isolation, network_isolation, flaky_tests, anti_patterns, default_value_blindness.
 
 Return summary to coordinator:
 ```
@@ -315,7 +328,7 @@ Score: X.X/10 | Issues: N (C:N H:N M:N L:N)
 - All 3 audit groups completed:
   - Isolation (6 categories: APIs, DB, FS, Time, Random, Network)
   - Determinism (4 checks: flaky, time-dependent, order-dependent, shared state)
-  - Anti-patterns (6 checks: Liar, Giant, Slow Poke, Conjoined Twins, Happy Path, Framework Tester)
+  - Anti-patterns (7 checks: Liar, Giant, Slow Poke, Conjoined Twins, Happy Path, Framework Tester, Default Value Blindness)
 - Findings collected with severity, location, effort, recommendation
 - Score calculated using penalty algorithm
 - Report written to `{output_dir}/635-isolation.md` (atomic single Write call)

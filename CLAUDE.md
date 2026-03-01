@@ -57,7 +57,7 @@ All 106 skills documented in [README.md](README.md#-features) with workflows in 
 
 **Structural Validation:** ln-310-story-validator auto-fixes Stories/Tasks against template compliance.
 
-**Testing:** Risk-Based Testing (2-5 E2E, 3-8 Integration, 5-15 Unit, Priority >=15). See [risk_based_testing_guide.md](shared/references/risk_based_testing_guide.md).
+**Testing:** Risk-Based Testing (Priority ≥15, Usefulness Criteria). See [risk_based_testing_guide.md](shared/references/risk_based_testing_guide.md).
 
 **Code Comments:** 15-20% ratio. Explain WHY, not WHAT. NO Epic/Task IDs, NO historical notes, NO code examples.
 

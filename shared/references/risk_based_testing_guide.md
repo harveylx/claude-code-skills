@@ -1,15 +1,15 @@
 # Risk-Based Testing Guide
 
-<!-- SCOPE: Risk-Based Testing philosophy and limits ONLY. Contains prioritization rules, test counts (10-28 per Story), Kent Beck principle. -->
+<!-- SCOPE: Risk-Based Testing philosophy and usefulness criteria ONLY. Contains prioritization rules, Test Usefulness Criteria, Kent Beck principle. -->
 <!-- DO NOT add here: Examples → risk_based_testing_examples.md, test planning logic → ln-523-auto-test-planner SKILL.md -->
 
 ## Purpose
 
-This guide replaces the traditional Test Pyramid (70/20/10 ratio) with a **Value-Based Testing Framework** that prioritizes business risk and practical test limits. The goal is to write tests that matter, not to chase coverage metrics.
+This guide replaces the traditional Test Pyramid (70/20/10 ratio) with a **Value-Based Testing Framework** that prioritizes business risk and test usefulness. The goal is to write tests that matter, not to chase coverage metrics or numerical targets.
 
-**Problem solved:** Traditional Test Pyramid approach generates excessive tests (~200 per Story) by mechanically testing every conditional branch. This creates maintenance burden without proportional business value.
+**Problem solved:** Traditional Test Pyramid approach generates excessive tests by mechanically testing every conditional branch. This creates maintenance burden without proportional business value.
 
-**Solution:** Risk-Based Testing with clear prioritization criteria and enforced limits (10-28 tests max per Story).
+**Solution:** Risk-Based Testing with clear prioritization criteria (Priority ≥15) and Test Usefulness Criteria.
 
 ## Core Philosophy
 
@@ -30,20 +30,20 @@ This guide replaces the traditional Test Pyramid (70/20/10 ratio) with a **Value
 ### Start Minimal, Justify Additions
 
 **Baseline for every Story:**
-- **2 E2E tests** per endpoint: Positive scenario (happy path) + Negative scenario (critical error)
-- **0 Integration tests** (E2E covers full stack by default)
-- **0 Unit tests** (E2E covers simple logic by default)
+- **E2E tests** per endpoint: Positive scenario (happy path) + Negative scenario (critical error)
+- **Integration tests** only when E2E doesn't cover interaction
+- **Unit tests** only for complex business logic with Priority ≥15
 
-**Realistic goal: 2-7 tests per Story** (not 10-28!)
+**Each test beyond baseline must pass Test Usefulness Criteria** (see section below).
 
 **Additional tests ONLY with critical justification:**
-- Test #3 and beyond: Each requires documented answer to "Why does this test OUR business logic (not framework/library/database)?"
-- Priority >=15 required for all additional tests
-- Auto-trim to 7 tests if plan exceeds realistic goal
+- Each requires documented answer to "Why does this test OUR business logic (not framework/library/database)?"
+- Priority ≥15 required for all additional tests
+- Each must pass all 6 Usefulness Criteria
 
 ### Critical Justification Questions
 
-Before adding ANY test beyond 2 baseline E2E, answer:
+Before adding ANY test beyond baseline E2E, answer:
 
 1. **Does this test OUR business logic?**
    - YES: Tax calculation with country-specific rules (OUR algorithm)
@@ -51,7 +51,7 @@ Before adding ANY test beyond 2 baseline E2E, answer:
    - NO: Prisma query execution (framework behavior)
    - NO: PostgreSQL LIKE operator (database behavior)
 
-2. **Is this already covered by 2 baseline E2E tests?**
+2. **Is this already covered by baseline E2E tests?**
    - NO: E2E doesn't exercise all branches of complex calculation
    - YES: E2E test validates full flow end-to-end
 
@@ -124,11 +124,9 @@ ELSE Priority <=8 -> SKIP (manual testing sufficient)
 
 ### Step 3: Choose Test Level
 
-**E2E Test (2-5 max per Story):**
-- **BASELINE (ALWAYS): 2 E2E tests per endpoint**
-  - Test 1: Positive scenario (happy path validating main AC)
-  - Test 2: Negative scenario (critical error handling)
-- **ADDITIONAL (3-5): ONLY if Priority >=15 AND justified**
+**E2E Test:**
+- **BASELINE (ALWAYS):** Positive scenario (happy path) + Negative scenario (critical error) per endpoint
+- **ADDITIONAL:** ONLY if Priority ≥15 AND passes Usefulness Criteria
   - Critical edge case from manual testing
   - Second endpoint (if Story implements multiple endpoints)
 - **Examples:**
@@ -136,8 +134,8 @@ ELSE Priority <=8 -> SKIP (manual testing sufficient)
   - User adds product -> proceeds to checkout -> pays -> sees confirmation
   - User uploads file -> sees progress -> file appears in list
 
-**Integration Test (0-8 max per Story):**
-- **DEFAULT: 0 Integration tests** (2 E2E tests cover full stack by default)
+**Integration Test:**
+- **DEFAULT: 0 Integration tests** (E2E covers full stack by default)
 - **ADD ONLY if:** E2E doesn't cover interaction completely AND Priority >=15 AND justified
 - **Examples:**
   - Transaction rollback on error (E2E tests happy path only)
@@ -148,8 +146,8 @@ ELSE Priority <=8 -> SKIP (manual testing sufficient)
   - Testing framework integrations (Prisma client, TypeORM repository, Express app)
   - Testing database query execution (database engine behavior)
 
-**Unit Test (0-15 max per Story):**
-- **DEFAULT: 0 Unit tests** (2 E2E tests cover simple logic by default)
+**Unit Test:**
+- **DEFAULT: 0 Unit tests** (E2E covers simple logic by default)
 - **ADD ONLY for complex business logic with Priority >=15:**
   - Financial calculations (tax, discount, currency conversion) **WITH COMPLEX RULES**
   - Security algorithms (password strength, permission matrix) **WITH CUSTOM LOGIC**
@@ -184,18 +182,20 @@ Before writing ANY test, verify:
 4. **Is this a one-line function?**
    - `getFullName() { return firstName + lastName }` -> SKIP (E2E covers it)
 
-## Test Limits Per Story
+## Test Usefulness Criteria
 
-### Enforced Limits with Realistic Goals
+Every test beyond baseline E2E MUST pass ALL 6 criteria. If ANY criterion fails → SKIP the test.
 
-| Test Type | Minimum | Realistic Goal | Maximum | Purpose |
-|-----------|---------|----------------|---------|---------|
-| **E2E** | 2 | 2 | 5 | Baseline: positive + negative per endpoint |
-| **Integration** | 0 | 0-2 | 8 | ONLY if E2E doesn't cover interaction |
-| **Unit** | 0 | 0-3 | 15 | ONLY complex business logic (financial/security/algorithms) |
-| **TOTAL** | 2 | **2-7** | 28 | Start minimal, add only with justification |
+| # | Criterion | Question | Fail → Action | Source |
+|---|-----------|----------|---------------|--------|
+| 1 | **Risk Priority ≥15** | Business Impact × Probability ≥15? | SKIP — manual testing sufficient | Risk-Based Testing |
+| 2 | **Confidence ROI** | Does this test give meaningful confidence relative to its maintenance cost? | SKIP — cost exceeds value | Kent Dodds, "Write tests. Not too many." |
+| 3 | **Behavioral** | Tests observable behavior, not implementation details? | REWRITE — decouple from internals | Kent Beck, Test Desiderata |
+| 4 | **Predictive** | Passing test = confidence it works in production? | SKIP — false confidence | Kent Beck, Test Desiderata |
+| 5 | **Specific** | When test fails, is the cause immediately obvious? | SPLIT — one assertion per concern | Kent Beck, Test Desiderata |
+| 6 | **Non-Duplicative** | Adds unique business value not covered by existing tests? | SKIP — duplicate coverage | Anti-Duplication Check |
 
-**Key Change:** Test limits are now CEILINGS (maximum allowed), NOT targets to fill. Start with 2 E2E tests, add more only with critical justification.
+**No numerical targets.** Test count is driven by risk assessment, not volume goals. A Story with 1 E2E test covering Priority ≥15 is better than a Story with 20 tests covering framework behavior.
 
 ## Common Over-Testing Anti-Patterns
 
@@ -230,6 +230,14 @@ Trust the framework/database/library. Test OUR business logic.
 
 Performance testing belongs in separate DevOps Epic with k6/JMeter/Locust.
 
+### Anti-Pattern 9: "Default Value Blindness"
+
+Testing with default configuration values (default ports, default timeouts, default limits). Code appears to work but actually ignores configuration — fallback defaults mask the bug.
+
+**Bad:** `timeout=30000` in test when code does `config.timeout || 30000` — test passes even if config is never read.
+
+**Good:** Use non-default values in ALL tests: non-standard ports (9999 not 8080), non-default timeouts (7500 not 30000), non-default limits (3 not 20). If test still passes, code actually reads config.
+
 ## Test Strictness Rules
 
 ### Assertion Hierarchy (Strictest First)
@@ -252,6 +260,12 @@ Performance testing belongs in separate DevOps Epic with k6/JMeter/Locust.
 - "Contains element" instead of exact array comparison
 - Partial object match when full structure is deterministic
 
+### Non-Default Configuration Values
+
+> "If a value is configurable, test with a non-default value."
+
+ALL configurable parameters (API ports, timeouts, limits, pagination, base URLs, feature flags) MUST use non-default values in tests. This verifies code reads configuration rather than relying on hardcoded fallbacks (`value || DEFAULT`).
+
 ## When New Tests Fail
 
 **Principle:** Test = specification. If test fails, first assume **CODE IS WRONG**.
@@ -267,28 +281,24 @@ Performance testing belongs in separate DevOps Epic with k6/JMeter/Locust.
 ### Decision Flowchart (Minimum Viable Testing)
 
 ```
-1. Start with 2 baseline E2E tests (positive + negative) - ALWAYS
+1. Start with baseline E2E tests (positive + negative per endpoint) - ALWAYS
    |
-2. For test #3 and beyond, calculate Risk Priority (Impact x Probability)
+2. For each additional test, calculate Risk Priority (Impact x Probability)
    |
 3. Priority >=15?
    NO (<=14) -> SKIP (manual testing sufficient)
    YES -> Proceed to Step 4
    |
-4. Critical Justification Check (ALL must be YES):
-   Tests OUR business logic? (not framework/library/database)
-   Not already covered by 2 baseline E2E?
-   Unique business value?
-   ANY NO? -> SKIP
-   ALL YES? -> Proceed to Step 5
+4. Test Usefulness Criteria (ALL 6 must pass):
+   Risk Priority ≥15? Confidence ROI? Behavioral?
+   Predictive? Specific? Non-Duplicative?
+   ANY FAIL? -> SKIP
+   ALL PASS? -> Proceed to Step 5
    |
 5. Select Test Type:
-   - User flow? -> E2E #3-5 (with justification)
-   - E2E doesn't cover interaction? -> Integration 0-8 (with justification)
-   - Complex OUR algorithm? -> Unit 0-15 (with justification)
-   |
-6. Verify total <=7 (realistic goal) or <=28 (hard limit)
-   > 7 tests? -> Auto-trim by Priority, keep 2 baseline E2E + top 5 Priority
+   - User flow? -> E2E (with justification)
+   - E2E doesn't cover interaction? -> Integration (with justification)
+   - Complex OUR algorithm? -> Unit (with justification)
 ```
 
 ### Red Flags (Stop and Reconsider)
@@ -297,19 +307,21 @@ Performance testing belongs in separate DevOps Epic with k6/JMeter/Locust.
 - "This E2E already tests it, but I'll add unit test anyway" -> Duplication
 - "Need to test Express middleware behavior" -> Testing framework
 - "Need to test Prisma query execution" -> Testing database/ORM
-- "Story has 45 tests" -> Exceeds limit, prioritize and trim
+- "Story has tests without justification" -> Verify each passes Usefulness Criteria
 
 ### Green Lights (Good Test)
 
-- "2 E2E tests: positive + negative for main endpoint" -> Baseline (ALWAYS)
-- "Tax calculation with country-specific rules, Priority 25" -> Unit test (OUR complex logic)
-- "Story has 3 tests: 2 E2E + 1 Unit for OUR tax logic" -> Minimum viable!
+- "E2E: positive + negative for main endpoint" -> Baseline (ALWAYS)
+- "Tax calculation with country-specific rules, Priority 25" -> Unit test (OUR complex logic, passes all 6 criteria)
+- "Every test has documented justification and passes Usefulness Criteria" -> Quality over quantity
 
 ## References
 
-- Kent Beck, "Test Desiderata" (2018)
+- Kent Beck, "Test Desiderata" (2018) — 12 properties of valuable tests (https://testdesiderata.com/)
+- Kent C. Dodds, "Write tests. Not too many. Mostly integration." (2019) — Confidence ROI framework
+- Google Testing Blog, "How Much Testing is Enough?" (2021) — No numerical targets, qualitative framework
 - Martin Fowler, "Practical Test Pyramid" (2018)
-- Kent C. Dodds, "The Testing Trophy" (2020)
+- web.dev, "Pyramid or Crab? Find a testing strategy that fits" (2024) — Strategy fits architecture, not textbook
 
 ---
 

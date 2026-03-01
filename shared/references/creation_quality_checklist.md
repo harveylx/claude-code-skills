@@ -15,7 +15,7 @@ For ln-220-story-coordinator and ln-221-story-creator.
 | 4 | AC Quality | 3 | 3-5 Given/When/Then scenarios: happy path + error + edge case. Include HTTP codes, timing, exact messages |
 | 5 | Standards Compliance | 10 | Every technical decision references specific RFC/OWASP/REST standard by number in Technical Notes. Use ln-001 research results |
 | 6 | Library & Version | 5 | Latest stable versions in Technical Notes. Query Context7/MCP Ref to verify |
-| 9 | Story Size | 3 | 1-8 tasks (3-5 optimal), 3-5 AC, 6-20 hours total, 10-28 tests planned. If outside range — split or merge |
+| 9 | Story Size | 3 | 1-8 tasks (3-5 optimal), 3-5 AC, 6-20 hours total, tests justified by Priority ≥15. If outside range — split or merge |
 | 11 | YAGNI | 3 | Each AC = real user need. No speculative features. Every Task maps to >= 1 AC |
 | 12 | KISS | 3 | Simplest approach. No task requires >3 new abstractions. If >3 — split or simplify |
 | 14 | Documentation Complete | 5 | Pattern docs (from ln-002 research) referenced in Technical Notes. No orphan patterns |
