@@ -70,8 +70,8 @@ Runs parallel external agent reviews on arbitrary context, critically verifies s
 ### Shared Workflow Steps
 
 6-8) **Run agents, Critical Verification + Debate, Aggregate + Return:** per shared workflow.
-   - `{review_type}` = review_title or "Context Review" (for challenge template `{review_type}` placeholder)
-   - `{story_ref}` placeholder in challenge template = identifier
+   - `{review_type}` in challenge template = review_title or "Context Review"
+   - `{story_ref}` in challenge template = identifier
 
 ## Output Format
 

@@ -9,6 +9,7 @@ Common workflow for all agent reviewer skills (ln-005, ln-311, ln-513). Each ski
 | `review_type` | File naming suffix | `contextreview`, `storyreview`, `codereview` |
 | `skill_group` | Health check filter | `005`, `311`, `513` |
 | `identifier` | Unique label for file naming | `PROJ-123`, `review_20260227_143000` |
+| `verdict_acceptable` | Verdict for "no issues" | `CONTEXT_ACCEPTABLE`, `STORY_ACCEPTABLE`, `CODE_ACCEPTABLE` |
 | `prompt_file` | Built prompt path | `.agent-review/{identifier}_{review_type}_prompt.md` |
 
 ## Step: Health Check
@@ -82,7 +83,7 @@ d) **Persist:** all challenge and follow-up prompts/results in `.agent-review/{a
 
 - Collect ACCEPTED suggestions only (after verification + debate)
 - Deduplicate by `(area, issue)` -- keep higher confidence
-- **Filter:** `confidence >= 90` AND `impact_percent > 2`
+- **Filter:** `confidence >= 90` AND `impact_percent > 10`
 - **Return** JSON with suggestions + agent_stats + debate_log. **NO cleanup/deletion.**
 
 ## Fallback Rules
@@ -113,7 +114,7 @@ d) **Persist:** all challenge and follow-up prompts/results in `.agent-review/{a
 - Each suggestion critically verified by Claude; challenges executed for disagreements
 - Follow-up rounds executed for suggestions rejected after Round 1 (DEFEND+weak / MODIFY+disagree)
 - Challenge and follow-up prompts/results persisted alongside review artifacts
-- Accepted suggestions filtered by confidence >= 90 AND impact_percent > 2
+- Accepted suggestions filtered by confidence >= 90 AND impact_percent > 10
 - Deduplicated verified suggestions returned with verdict, agent_stats, and debate_log
 - `.agent-review/.gitignore` exists (created only if `.agent-review/` was new)
 - Session files persisted in `.agent-review/{agent}/{identifier}_session.json` for debate resume

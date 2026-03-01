@@ -301,7 +301,7 @@ All prompts/results saved to `.agent-review/{agent}/` for transparency:
 <summary><b>Skills using external AI review</b></summary>
 
 - **ln-311-agent-reviewer** — Story/Tasks validation (called by ln-310-story-validator Phase 5)
-- **ln-513-agent-reviewer** — Code implementation review (called by ln-511-code-quality-checker Step 7)
+- **ln-513-agent-reviewer** — Code implementation review (called by ln-510-quality-coordinator Phase 4)
 
 Both skills support:
 - Session Resume for multi-round debates

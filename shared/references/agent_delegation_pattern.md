@@ -27,7 +27,7 @@ Agent review is encapsulated in dedicated worker skills, not inline in parent sk
 |-------------|--------|---------|-----------------|
 | **ln-005-agent-reviewer** | Any skill / manual | Universal context review | `context_review.md`, `challenge_review.md` |
 | **ln-311-agent-reviewer** | ln-310 Phase 5 | Story/Tasks review | `story_review.md`, `challenge_review.md` |
-| **ln-513-agent-reviewer** | ln-511 Step 7 | Code implementation review | `code_review.md`, `challenge_review.md` |
+| **ln-513-agent-reviewer** | ln-510 Phase 4 | Code implementation review | `code_review.md`, `challenge_review.md` |
 
 **Benefits:**
 - Health check + prompt execution in single invocation (minimal timing gap)
@@ -147,12 +147,7 @@ External agents may have MCP servers (Linear, GitHub, etc.) configured in their 
 
 ## Fallback Rules
 
-| Condition | Action |
-|-----------|--------|
-| `success == false` | Log error, continue with Opus (native) |
-| Response unparseable | Treat as plain text, Claude interprets |
-| Agent crashed (non-zero exit) | Log, use other agent's results |
-| Low-quality response | Skill re-runs task natively |
+Per `shared/references/agent_review_workflow.md` Fallback Rules section. For non-review agent invocations (200/300 groups): on failure, fall back to Opus (native Claude).
 
 ## Integration Points in Orchestrator Lifecycle
 
@@ -161,7 +156,7 @@ Phase 1: DISCOVERY
 Phase 2: PLAN ← external agent for analysis/decomposition
 Phase 3: MODE DETECTION
 Phase 4: AUTO-FIX ← 20 criteria, Penalty Points = 0 (ln-310)
-Phase 5: AGENT REVIEW (MANDATORY) ← delegated to ln-311 (ln-310) or ln-513 (ln-511)
+Phase 5: AGENT REVIEW (MANDATORY) ← delegated to ln-311 (ln-310) or ln-513 (ln-510)
 Phase 6: DELEGATE
 Phase 7: AGGREGATE
 Phase 8: REPORT
@@ -232,14 +227,7 @@ Agent Suggestion --> Claude Evaluation --> AGREE? --> Accept as-is
 
 ### Session Resume for Debate Rounds
 
-Challenge and follow-up rounds resume the agent's original review session to preserve full context (file analysis, reasoning, codebase understanding). Initial review always runs stateless.
-
-1. After initial review: parse `session_id` from result file metadata (`<!-- session_id: ... -->`), write to `.agent-review/{agent}/{identifier}_session.json`
-2. Before challenge/follow-up: read `session_id` from session file
-3. Pass `--resume-session {session_id}` to runner — agent continues in same session
-4. If resume fails: runner falls back to stateless execution automatically (logged as warning)
-
-Session file format: `{"agent": "codex-review", "session_id": "...", "review_type": "storyreview", "created_at": "..."}`
+Per `shared/references/agent_review_workflow.md` Step: Critical Verification + Debate, section (c).
 
 ### Challenge Round 1
 
@@ -347,7 +335,7 @@ Standard steps before launching agents (performed inside ln-005/ln-311/ln-513):
 | Worker | Escalation? | Mechanism |
 |--------|-------------|-----------|
 | ln-311 (Story Review) | No | Suggestions are editorial; ln-310 Gate verdict unchanged |
-| ln-513 (Code Quality) | Yes | Findings with `area=security` or `area=correctness` can escalate PASS -> CONCERNS in ln-511 |
+| ln-513 (Code Quality) | Yes | Findings with `area=security` or `area=correctness` can escalate PASS -> CONCERNS in ln-510 |
 
 ## Anti-Patterns
 
@@ -363,7 +351,7 @@ Standard steps before launching agents (performed inside ln-005/ln-311/ln-513):
 | Hard-depend on agent availability | Always have Opus fallback |
 | Run health check in parent skill | Health check inside agent review worker (ln-005/ln-311/ln-513) |
 | Kill agent tasks with TaskStop | Let agents complete; no artificial timeouts |
-| Skip agent review phase | Agent review is MANDATORY in ln-310 Phase 5 and ln-511 Step 7 |
+| Skip agent review phase | Agent review is MANDATORY in ln-310 Phase 5 and ln-510 Phase 4 |
 
 ---
 **Version:** 3.0.0
