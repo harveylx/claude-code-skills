@@ -79,9 +79,10 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 106 skills
 |   |   |-- ln-523-auto-test-planner/  # Plan E2E/Integration/Unit tests
 |
 |-- ln-6XX-*/                          # AUDIT (29 skills) [WORKS WITHOUT LINEAR]
-|   |-- ln-600-docs-auditor/           # Documentation quality audit
-|   |   |-- ln-601-semantic-content-auditor/ # Scope alignment, fact accuracy
-|   |-- ln-610-code-comments-auditor/  # Code comments audit
+|   |-- ln-610-docs-auditor/           # Documentation audit coordinator (3 workers)
+|   |   |-- ln-611-docs-structure-auditor/  # Hierarchy, SSOT, compression, actuality
+|   |   |-- ln-612-semantic-content-auditor/ # Scope alignment, fact accuracy
+|   |   |-- ln-613-code-comments-auditor/   # WHY-not-WHAT, density, docstrings
 |   |-- ln-620-codebase-auditor/       # 9 parallel auditors:
 |   |   |-- ln-621-security-auditor/      # Secrets, SQL injection, XSS
 |   |   |-- ln-622-build-auditor/         # Compiler/type errors

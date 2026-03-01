@@ -23,51 +23,27 @@ Task(
 
 Two delivery modes depending on coordinator scale:
 
-### File-Based Output (ln-620, ln-640 workers)
+### File-Based Output (All Audit Coordinators)
 
-Workers write full report to `docs/project/.audit/{worker_id}.md` and return minimal summary in-context.
+Workers write full report to `docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/{worker_id}.md` and return minimal summary in-context.
 
 **Template:** `shared/templates/audit_worker_report_template.md`
 
 **Worker return (in-context, ~50 tokens):**
 ```
-Report written: docs/project/.audit/621-security.md
+Report written: docs/project/.audit/ln-620/{YYYY-MM-DD}/621-security.md
 Score: 7.5/10 | Issues: 5 (C:0 H:2 M:2 L:1)
 ```
 
-4-score workers (ln-641, ln-643) include sub-scores:
+Extended workers (ln-641, ln-643) include diagnostic sub-scores:
 ```
-Report written: docs/project/.audit/641-pattern-job-processing.md
-Score: 7.9/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
-```
-
-**Coordinator receives:** path + score + counts (enough for aggregation). Reads files only during report assembly (ln-620) or cross-domain aggregation (ln-640).
-
-**Use when:** Coordinator has 7+ workers OR domain-aware mode with N×workers (e.g., ln-620 with 9 workers, ln-640 with 5 workers × N domains).
-
-### In-Context JSON Output (other coordinators)
-
-Workers return standardized JSON directly to coordinator:
-
-```json
-{
-  "category": "Category Name",
-  "score": 7.5,
-  "total_issues": 5,
-  "critical": 0,
-  "high": 2,
-  "medium": 2,
-  "low": 1,
-  "checks": [
-    {"id": "check_id", "name": "Check Name", "status": "passed|failed|warning", "details": "..."}
-  ],
-  "findings": [
-    {"severity": "HIGH", "location": "path:line", "issue": "...", "recommendation": "..."}
-  ]
-}
+Report written: docs/project/.audit/ln-640/{YYYY-MM-DD}/641-pattern-job-processing.md
+Score: 6.0/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
 ```
 
-**Use when:** Coordinator has <7 workers (e.g., ln-640 with 5, ln-650 with 3).
+**Coordinator receives:** path + score + counts (enough for aggregation). Reads files only during report assembly or cross-domain aggregation.
+
+No deletion of previous date folders — history preserved for comparison.
 
 ## Audit Coordinator → Worker Contract
 

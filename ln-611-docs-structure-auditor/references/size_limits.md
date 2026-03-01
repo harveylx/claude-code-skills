@@ -1,7 +1,7 @@
 # Documentation Size Limits
 
 <!-- SCOPE: Documentation size limits and compression targets ONLY. Contains per-file line limits, MVS philosophy. -->
-<!-- DO NOT add here: Audit checks → audit_checklist.md, audit workflow → ln-600-docs-auditor SKILL.md -->
+<!-- DO NOT add here: Audit checks → audit_checklist.md, audit workflow → ln-611-docs-structure-auditor SKILL.md -->
 
 Token-efficient documentation targets.
 

@@ -4,17 +4,33 @@ Standardized markdown format for L3 audit workers writing file-based reports.
 
 ## Why File-Based
 
-Workers write reports to `docs/project/.audit/` instead of returning full JSON in-context. This prevents coordinator context overflow when aggregating 9+ worker results.
+Workers write reports to `docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/` instead of returning full JSON in-context. This prevents coordinator context overflow when aggregating results.
+
+**Output directory convention:**
+```
+docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/
+# e.g., docs/project/.audit/ln-620/2026-03-01/
+```
+
+No deletion of previous date folders — history preserved for comparison.
 
 ## File Naming
+
+### ln-610 Documentation Workers
+
+| Worker | Slug | Example |
+|--------|------|---------|
+| ln-611 | `structure` | `611-structure.md` |
+| ln-612 | `semantic-{doc}` | `612-semantic-architecture.md` |
+| ln-613 | `code-comments` | `613-code-comments.md` |
+
+### ln-620 Codebase Workers
 
 | Worker Type | Pattern | Example |
 |-------------|---------|---------|
 | Global workers | `62X-{slug}.md` | `621-security.md` |
 | Domain-aware (domain mode) | `62X-{slug}-{domain}.md` | `623-principles-users.md` |
 | Domain-aware (global fallback) | `62X-{slug}.md` | `623-principles.md` |
-
-**Slug mapping:**
 
 | Worker | Slug |
 |--------|------|
@@ -27,6 +43,24 @@ Workers write reports to `docs/project/.audit/` instead of returning full JSON i
 | ln-627 | `observability` |
 | ln-628 | `concurrency` |
 | ln-629 | `lifecycle` |
+
+### ln-630 Test Workers
+
+| Worker | Slug | Example |
+|--------|------|---------|
+| ln-631 | `business-logic` | `631-business-logic.md` |
+| ln-632 | `e2e-priority` | `632-e2e-priority.md` |
+| ln-633 | `test-value` | `633-test-value.md` |
+| ln-634 | `coverage-gaps[-{domain}]` | `634-coverage-gaps-users.md` |
+| ln-635 | `isolation` | `635-isolation.md` |
+
+### ln-650 Persistence Workers
+
+| Worker | Slug | Example |
+|--------|------|---------|
+| ln-651 | `query-efficiency` | `651-query-efficiency.md` |
+| ln-652 | `transaction-correctness` | `652-transaction-correctness.md` |
+| ln-653 | `runtime-performance` | `653-runtime-performance.md` |
 
 ## Report Structure
 
@@ -115,7 +149,7 @@ Other workers do NOT include this block.
 After writing the report file, worker returns minimal summary to coordinator:
 
 ```
-Report written: docs/project/.audit/621-security.md
+Report written: docs/project/.audit/ln-620/{YYYY-MM-DD}/621-security.md
 Score: 7.5/10 | Issues: 5 (C:0 H:2 M:2 L:1)
 ```
 
@@ -157,9 +191,9 @@ ln-640 workers use the same file-based approach with two extensions: **4-score A
 
 **Pattern name slug:** lowercase, hyphens, no spaces: `Job Processing` → `job-processing`.
 
-## AUDIT-META: 4-Score Variant
+## AUDIT-META: Extended Variant (ln-641, ln-643)
 
-Workers using 4-score model (ln-641, ln-643) add sub-score fields:
+Workers ln-641 and ln-643 add **informational sub-scores** alongside the primary penalty-based `score`:
 
 ```
 <!-- AUDIT-META
@@ -168,7 +202,7 @@ category: Pattern Analysis
 pattern: Job Processing
 domain: global
 scan_path: .
-score: 7.9
+score: 6.0
 score_compliance: 72
 score_completeness: 85
 score_quality: 68
@@ -182,17 +216,19 @@ status: complete
 -->
 ```
 
+**Primary `score`** is penalty-based (`max(0, 10 - penalty)`) — same formula as all other workers. Sub-scores are **diagnostic only** (not used for overall scoring).
+
 Additional fields vs standard AUDIT-META:
 
 | Field | Type | Workers | Description |
 |-------|------|---------|-------------|
 | `pattern` | string | ln-641, ln-643 | Pattern name being analyzed |
-| `score_compliance` | integer | ln-641, ln-643 | Compliance score 0-100 |
-| `score_completeness` | integer | ln-641, ln-643 | Completeness score 0-100 |
-| `score_quality` | integer | ln-641, ln-643 | Quality score 0-100 |
-| `score_implementation` | integer | ln-641, ln-643 | Implementation score 0-100 |
+| `score_compliance` | integer | ln-641, ln-643 | Compliance diagnostic 0-100 |
+| `score_completeness` | integer | ln-641, ln-643 | Completeness diagnostic 0-100 |
+| `score_quality` | integer | ln-641, ln-643 | Quality diagnostic 0-100 |
+| `score_implementation` | integer | ln-641, ln-643 | Implementation diagnostic 0-100 |
 
-Workers using penalty-based scoring (ln-642, ln-644) use the standard AUDIT-META format with single `score` field.
+All ln-640 workers (including ln-641, ln-643) use penalty-based primary score.
 
 ## DATA-EXTENDED Block
 
@@ -238,19 +274,19 @@ JSON in HTML comment for coordinator cross-domain aggregation. All ln-640 worker
 
 ## Worker Return Value (ln-640)
 
-### 4-Score Workers (ln-641, ln-643)
+### Extended Workers (ln-641, ln-643)
 
 ```
-Report written: docs/project/.audit/641-pattern-job-processing.md
-Score: 7.9/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
+Report written: docs/project/.audit/ln-640/{YYYY-MM-DD}/641-pattern-job-processing.md
+Score: 6.0/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
 ```
 
-Format: `C`=Compliance, `K`=Completeness, `Q`=Quality, `I`=Implementation.
+Format: `C`=Compliance, `K`=Completeness, `Q`=Quality, `I`=Implementation (diagnostic sub-scores). Primary score is penalty-based.
 
-### Penalty-Based Workers (ln-642, ln-644, ln-646)
+### Standard Workers (ln-642, ln-644, ln-645, ln-646)
 
 ```
-Report written: docs/project/.audit/642-layer-boundary-users.md
+Report written: docs/project/.audit/ln-640/{YYYY-MM-DD}/642-layer-boundary-users.md
 Score: 4.5/10 | Issues: 8 (C:1 H:3 M:4 L:0)
 ```
 

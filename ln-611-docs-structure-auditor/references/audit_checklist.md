@@ -1,7 +1,7 @@
 # Documentation Audit Checklist
 
 <!-- SCOPE: Documentation audit check rules ONLY. Contains per-category checks, fundamental principle (fix content not rules). -->
-<!-- DO NOT add here: Size limits → size_limits.md, audit workflow → ln-600-docs-auditor SKILL.md -->
+<!-- DO NOT add here: Size limits → size_limits.md, audit workflow → ln-611-docs-structure-auditor SKILL.md -->
 
 Detailed checks per category.
 

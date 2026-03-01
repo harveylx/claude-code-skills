@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ln-601-semantic-content-auditor - State Diagram</title>
+    <title>ln-612-semantic-content-auditor - State Diagram</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <link rel="stylesheet" href="../shared/css/diagram.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🔍 ln-601-semantic-content-auditor</h1>
+            <h1>🔍 ln-612-semantic-content-auditor</h1>
             <p class="subtitle">Semantic Content Auditor (L3 Worker) - State Diagram</p>
         </header>
 
@@ -18,7 +18,7 @@
             <h3>📋 Workflow Overview</h3>
             <ul>
                 <li><strong>Purpose:</strong> Verify document content matches SCOPE and reflects actual codebase state</li>
-                <li><strong>Invocation:</strong> Called by ln-600-docs-auditor for each project document</li>
+                <li><strong>Invocation:</strong> Called by ln-610-docs-auditor for each project document</li>
                 <li><strong>Output:</strong> scope_alignment + fact_accuracy scores with findings</li>
                 <li><strong>Target:</strong> 11 project documents (CLAUDE.md, docs/project/*)</li>
                 <li><strong>Excludes:</strong> docs/tasks/, docs/reference/, docs/presentation/</li>
@@ -88,7 +88,7 @@ graph TD
 
     FactScore --> Phase4[Phase 4: SCORING & REPORT<br/>Combine scores, format JSON]
 
-    Phase4 --> Output([Return JSON to ln-600])
+    Phase4 --> Output([Return summary to ln-610])
 
     classDef discovery fill:#e1f5fe,stroke:#01579b
     classDef processing fill:#fff3e0,stroke:#e65100

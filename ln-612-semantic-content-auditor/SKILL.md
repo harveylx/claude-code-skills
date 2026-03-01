@@ -1,6 +1,6 @@
 ---
-name: ln-601-semantic-content-auditor
-description: Semantic content auditor (L3 Worker). Verifies document content matches stated SCOPE, aligns with project goals, and reflects actual codebase state. Called by ln-600 for each project document. Returns scope_alignment and fact_accuracy scores with findings.
+name: ln-612-semantic-content-auditor
+description: Semantic content auditor (L3 Worker). Verifies document content matches stated SCOPE, aligns with project goals, and reflects actual codebase state. Called by ln-610 for each project document. Writes file-based report with scope_alignment and fact_accuracy scores.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -12,7 +12,7 @@ Specialized worker auditing semantic accuracy of project documentation.
 
 ## Purpose & Scope
 
-- **Worker in ln-600 coordinator pipeline** - invoked by ln-600-docs-auditor for each project document
+- **Worker in ln-610 coordinator pipeline** - invoked by ln-610-docs-auditor for each project document
 - Verify document content **matches stated SCOPE** (document purpose)
 - Check content **aligns with project goals** (value contribution)
 - Validate **facts against codebase** (accuracy and freshness)
@@ -40,16 +40,16 @@ Called ONLY for project documents (not reference/tasks):
 
 ## Inputs (from Coordinator)
 
-```json
-{
-  "doc_path": "docs/project/architecture.md",
-  "project_root": "/path/to/project",
-  "tech_stack": {
-    "language": "TypeScript",
-    "frameworks": ["Express", "React"]
-  }
-}
-```
+**MANDATORY READ:** Load `shared/references/task_delegation_pattern.md#audit-coordinator--worker-contract` for contextStore structure.
+
+Receives from coordinator per invocation:
+
+| Field | Description |
+|-------|-------------|
+| `doc_path` | Path to document to audit (e.g., `docs/project/architecture.md`) |
+| `output_dir` | Directory for report output (from contextStore) |
+| `project_root` | Project root path |
+| `tech_stack` | Detected technology stack |
 
 ## Workflow
 
@@ -120,47 +120,22 @@ overall_score = (scope_alignment * 0.4) + (fact_accuracy * 0.6)
 
 Fact accuracy weighted higher because incorrect information is worse than scope drift.
 
+## Scoring Algorithm
+
+**MANDATORY READ:** Load `shared/references/audit_scoring.md` for unified scoring formula.
+
 ## Output Format
 
-Return JSON to coordinator:
+**MANDATORY READ:** Load `shared/templates/audit_worker_report_template.md` for file format.
 
-```json
-{
-  "doc_path": "docs/project/architecture.md",
-  "scope": {
-    "stated": "System architecture with C4 diagrams, component interactions",
-    "coverage_percent": 85
-  },
-  "scores": {
-    "scope_alignment": 8,
-    "fact_accuracy": 6,
-    "overall": 7
-  },
-  "summary": {
-    "total_issues": 4,
-    "high": 1,
-    "medium": 2,
-    "low": 1
-  },
-  "findings": [
-    {
-      "severity": "HIGH",
-      "type": "BEHAVIOR_MISMATCH",
-      "location": "line 45",
-      "issue": "Architecture shows 3-tier (Controller->Service->Repository) but code has Controller->Repository direct calls",
-      "evidence": "src/controllers/UserController.ts:23 imports UserRepository directly",
-      "fix": "Update diagram to show actual pattern OR refactor code to match docs"
-    },
-    {
-      "severity": "MEDIUM",
-      "type": "OUTDATED_PATH",
-      "location": "line 78",
-      "issue": "References src/services/legacy/ which was removed",
-      "evidence": "Folder does not exist: ls src/services/legacy/ returns error",
-      "fix": "Remove reference or update to current path"
-    }
-  ]
-}
+Write report to `{output_dir}/612-semantic-{doc-slug}.md` where `doc-slug` is derived from document filename (e.g., `architecture`, `tech_stack`, `claude_md`).
+
+With `category: "Semantic Content"` and checks: scope_alignment, fact_accuracy.
+
+Return summary to coordinator:
+```
+Report written: docs/project/.audit/ln-610/{YYYY-MM-DD}/612-semantic-architecture.md
+Score: X.X/10 | Issues: N (C:N H:N M:N L:N)
 ```
 
 ## Verification Rules by Document Type
@@ -183,9 +158,17 @@ Return JSON to coordinator:
 - SCOPE extracted or inferred
 - Content-scope alignment analyzed
 - Facts verified against codebase (with evidence)
-- Both scores calculated
-- JSON result returned to coordinator
+- Score calculated using penalty algorithm
+- Report written to `{output_dir}/612-semantic-{doc-slug}.md` (atomic single Write call)
+- Summary returned to coordinator
+
+## Reference Files
+
+- **Worker report template:** `shared/templates/audit_worker_report_template.md`
+- **Audit scoring formula:** `shared/references/audit_scoring.md`
+- **Audit output schema:** `shared/references/audit_output_schema.md`
+- Verification rules: [references/verification_rules.md](references/verification_rules.md)
 
 ---
-**Version:** 1.0.0
-**Last Updated:** 2026-01-28
+**Version:** 2.0.0
+**Last Updated:** 2026-03-01

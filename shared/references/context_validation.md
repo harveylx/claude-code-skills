@@ -83,8 +83,7 @@ Downgraded findings go to "Advisory Findings" section in report. They are **excl
 | ln-640 | 1, 3 | ADR + cohesion for pattern anti-patterns |
 | ln-630 | 1, 5 | ADR + single-consumer for test relevance |
 | ln-650 | 1, 6 | ADR + execution context |
-| ln-600 | 1 + inline | ADR + doc-type/density inline checks |
-| ln-610 | 1 + inline | ADR + file-category/complexity inline checks |
+| ln-610 | 1 + inline | ADR + doc-type/density + file-category/complexity inline checks |
 
 ---
 **Version:** 1.0.0

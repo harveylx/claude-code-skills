@@ -43,6 +43,16 @@ score = max(0, 10 - 5.9) = 4.1
 
 **Result:** 4.1/10 (Significant issues)
 
+## Diagnostic Sub-Scores (ln-641, ln-643)
+
+Workers ln-641 and ln-643 additionally report 4 diagnostic sub-scores (0-100 each):
+- **Compliance** — How well does implementation follow documented pattern?
+- **Completeness** — Are all required components present?
+- **Quality** — Code quality of pattern implementation
+- **Implementation** — Technical correctness of implementation
+
+These sub-scores are **informational only** — reported in AUDIT-META for diagnostic purposes. The primary `score` field uses the same penalty formula as all other workers.
+
 ## Usage in SKILL.md
 
 Reference this file instead of duplicating formula:
@@ -53,5 +63,5 @@ Reference this file instead of duplicating formula:
 ```
 
 ---
-**Version:** 1.0.0
-**Last Updated:** 2026-02-05
+**Version:** 2.0.0
+**Last Updated:** 2026-03-01

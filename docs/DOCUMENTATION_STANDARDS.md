@@ -27,7 +27,7 @@
 | **Conventional Commits** | 4 | 0 | 1 | 1 | 0 | 2 | commitlint |
 | **Security & Compliance** | 4 | 1 | 3 | 0 | 0 | 0 | Manual |
 | **Performance** | 3 | 0 | 1 | 2 | 0 | 0 | Manual |
-| **AI-First Documentation** | 8 | 2 | 4 | 2 | 0 | 0 | ln-600 |
+| **AI-First Documentation** | 8 | 2 | 4 | 2 | 0 | 0 | ln-610 |
 
 **Total:** 90 requirements | 🔴 14 Critical | 🟡 42 Important | 🟢 26 Desired | ⚠️ 1 Conditional | ✅ 5 Implemented
 
@@ -43,8 +43,8 @@
 | All code examples runnable | Prevent documentation drift | Manual + CI |
 | LICENSE file exists | Legal compliance | Manual |
 | Never commit secrets | Security breach prevention | Manual |
-| Stack Adaptation | Documents match project stack (.NET→C# links) | ln-600 Category 7 |
-| NO_CODE in docs | No code blocks; tables/ASCII/links instead | ln-600 Category 4 |
+| Stack Adaptation | Documents match project stack (.NET→C# links) | ln-610 Category 7 |
+| NO_CODE in docs | No code blocks; tables/ASCII/links instead | ln-610 Category 4 |
 
 ### Important (Should Have)
 

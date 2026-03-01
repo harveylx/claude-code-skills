@@ -2,9 +2,9 @@
 
 Standard output format for all L3 audit workers. Two delivery modes: **file-based** (primary) and **in-context JSON** (small coordinators).
 
-## File-Based Output (Primary — ln-620, ln-640 workers)
+## File-Based Output (All Coordinators)
 
-Workers write markdown reports to `docs/project/.audit/` and return minimal summary in-context.
+Workers write markdown reports to `docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/` and return minimal summary in-context.
 
 **Full template:** See `shared/templates/audit_worker_report_template.md` for file format, naming convention, AUDIT-META block, FINDINGS-EXTENDED spec (ln-623), and DATA-EXTENDED spec (ln-640 workers).
 
@@ -13,58 +13,27 @@ Workers write markdown reports to `docs/project/.audit/` and return minimal summ
 Instead of full JSON, worker returns ~50 tokens:
 
 ```
-Report written: docs/project/.audit/621-security.md
+Report written: docs/project/.audit/ln-620/{YYYY-MM-DD}/621-security.md
 Score: 7.5/10 | Issues: 5 (C:0 H:2 M:2 L:1)
 ```
 
-4-score workers (ln-641, ln-643) include sub-scores:
+Extended workers (ln-641, ln-643) include diagnostic sub-scores:
 ```
-Report written: docs/project/.audit/641-pattern-job-processing.md
-Score: 7.9/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
+Report written: docs/project/.audit/ln-640/{YYYY-MM-DD}/641-pattern-job-processing.md
+Score: 6.0/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
 ```
 
-### When to Use File-Based
+### All Coordinators Use File-Based Output
 
-| Coordinator | Workers | Mode |
-|-------------|---------|------|
-| ln-620 (9 workers) | ln-621..ln-629 | **File-based** (prevents context overflow) |
-| ln-640 (5 workers, domain-aware) | ln-641..ln-645 | **File-based** (up to 25+ invocations in domain-aware mode) |
-| ln-650 (3 workers) | ln-651..ln-653 | In-context JSON (3 workers manageable) |
-| ln-630 (5 workers) | ln-631..ln-635 | In-context JSON (5 workers manageable) |
+| Coordinator | Workers | Output Dir |
+|-------------|---------|------------|
+| ln-610 (3 workers) | ln-611..ln-613 | `docs/project/.audit/ln-610/{YYYY-MM-DD}/` |
+| ln-620 (9 workers) | ln-621..ln-629 | `docs/project/.audit/ln-620/{YYYY-MM-DD}/` |
+| ln-630 (5 workers) | ln-631..ln-635 | `docs/project/.audit/ln-630/{YYYY-MM-DD}/` |
+| ln-640 (6 workers) | ln-641..ln-646 | `docs/project/.audit/ln-640/{YYYY-MM-DD}/` |
+| ln-650 (3 workers) | ln-651..ln-653 | `docs/project/.audit/ln-650/{YYYY-MM-DD}/` |
 
-**Rule of thumb:** File-based when coordinator has 7+ workers OR domain-aware mode with 4+ workers × N domains.
-
-## In-Context JSON Output (Legacy/Other Coordinators)
-
-```json
-{
-  "category": "Category Name",
-  "score": 7.5,
-  "total_issues": 12,
-  "critical": 1,
-  "high": 3,
-  "medium": 5,
-  "low": 3,
-  "checks": [
-    {
-      "id": "check_identifier",
-      "name": "Human-Readable Check Name",
-      "status": "passed|failed|warning|skipped",
-      "details": "Brief explanation of result"
-    }
-  ],
-  "findings": [
-    {
-      "severity": "CRITICAL|HIGH|MEDIUM|LOW",
-      "location": "path/to/file.ts:42",
-      "issue": "Concise description of the problem",
-      "principle": "Category / Specific Rule",
-      "recommendation": "Actionable fix suggestion",
-      "effort": "S|M|L"
-    }
-  ]
-}
-```
+No deletion of previous date folders — history preserved for comparison.
 
 ## Field Descriptions
 
