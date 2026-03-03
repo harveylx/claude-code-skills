@@ -61,6 +61,7 @@ No deletion of previous date folders — history preserved for comparison.
 | ln-651 | `query-efficiency` | `651-query-efficiency.md` |
 | ln-652 | `transaction-correctness` | `652-transaction-correctness.md` |
 | ln-653 | `runtime-performance` | `653-runtime-performance.md` |
+| ln-654 | `resource-lifecycle` | `654-resource-lifecycle.md` |
 
 ## Report Structure
 

@@ -1,7 +1,7 @@
 # Claude Code Skills
 
 ![Version](https://img.shields.io/badge/version-3.1.0-blue)
-![Skills](https://img.shields.io/badge/skills-105-green)
+![Skills](https://img.shields.io/badge/skills-107-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![GitHub stars](https://img.shields.io/github/stars/levnikolaevich/claude-code-skills?style=social)](https://github.com/levnikolaevich/claude-code-skills)
 
@@ -20,7 +20,7 @@
 ## What's Inside
 
 ```
-claude-code-skills/                      # MARKETPLACE: 2 plugins, 106 skills
+claude-code-skills/                      # MARKETPLACE: 2 plugins, 107 skills
 |
 |  ┌─ Plugin: full-development-workflow-skills (73 skills) ─┐
 |
@@ -110,6 +110,7 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 106 skills
 |   |   |-- ln-651-query-efficiency-auditor/    # N+1, over-fetching, missing bulk ops
 |   |   |-- ln-652-transaction-correctness-auditor/ # Scope, rollback, long-held txns
 |   |   |-- ln-653-runtime-performance-auditor/ # Blocking IO, allocations, sync sleep
+|   |   |-- ln-654-resource-lifecycle-auditor/  # Session scope mismatch, pool config, cleanup
 |
 |-- ln-10XX-*/                           # ORCHESTRATION (1 skill)
 |   |-- ln-1000-pipeline-orchestrator/   # L0 Meta: kanban → 4-stage pipeline (300→310→400→500) via TeamCreate

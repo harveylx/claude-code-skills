@@ -61,7 +61,7 @@ IF DRY finding OR "shared schema" suggestion:
 ### Rule 6: Execution Context (performance findings only)
 
 ```
-IF finding.check IN (blocking_io, redundant_fetch, transaction_wide, cpu_bound):
+IF finding.check IN (blocking_io, redundant_fetch, transaction_wide, cpu_bound, resource_scope_mismatch, streaming_resource_holding):
   context = 0
   - Function in __init__/setup/bootstrap/migrate  → context += 1
   - File in tasks/jobs/cron/                       → context += 1
