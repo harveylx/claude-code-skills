@@ -9,6 +9,15 @@ description: "Plans automated tests (E2E/Integration/Unit) using Risk-Based Test
 
 Creates Story test task with comprehensive automated test coverage (E2E/Integration/Unit) based on Risk-Based Testing methodology and REAL manual testing results.
 
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `storyId` | Yes | args, git branch, kanban, user | Story to process |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Story Resolution Chain.
+**Status filter:** To Review
+
 ## Purpose & Scope
 - **Create** comprehensive test task for Story automation
 - **Calculate** risk-based priorities (Impact x Probability)
@@ -42,16 +51,19 @@ Do NOT use if:
 
 ### Phase 0: Tools Config
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, and `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 
 ### Phase 1: Discovery (Automated)
 
-Auto-discovers Team ID from `docs/tasks/kanban_board.md` (see CLAUDE.md "Configuration Auto-Discovery").
-
-**Input:** Story ID from orchestrator (ln-520)
+1. **Resolve storyId** (per input_resolution_pattern.md):
+   - IF args provided → use args
+   - ELSE IF git branch matches `feature/{id}-*` → extract id
+   - ELSE IF kanban has exactly 1 Story in [To Review] → suggest
+   - ELSE → AskUserQuestion: show Stories from kanban filtered by [To Review]
+2. Auto-discover Team ID from `docs/tasks/kanban_board.md` (see CLAUDE.md "Configuration Auto-Discovery")
 
 ### Phase 2: Story + Tasks Analysis (NO Dialog)
 
@@ -112,15 +124,15 @@ Priority = Business Impact (1-5) x Probability (1-5)
 ```
 
 **Decision Criteria:**
-- Priority >=15 -> **MUST test**
+- Priority ≥15 -> **MUST test**
 - Priority 9-14 -> **SHOULD test** if not covered
 - Priority <=8 -> **SKIP** (manual testing sufficient)
 
-**Step 2: E2E Test Selection (2-5):** Baseline 2 (positive + negative) ALWAYS + 0-3 additional (Priority >=15 only)
+**Step 2: E2E Test Selection (2-5):** Baseline 2 (positive + negative) ALWAYS + 0-3 additional (Priority ≥15 only)
 
-**Step 3: Unit Test Selection (0-15):** DEFAULT 0. Add ONLY for complex business logic (Priority >=15): financial, security, algorithms
+**Step 3: Unit Test Selection (0-15):** DEFAULT 0. Add ONLY for complex business logic (Priority ≥15): financial, security, algorithms
 
-**Step 4: Integration Test Selection:** DEFAULT 0. Add ONLY if E2E gaps AND Priority >=15: rollback, concurrency, external API errors
+**Step 4: Integration Test Selection:** DEFAULT 0. Add ONLY if E2E gaps AND Priority ≥15: rollback, concurrency, external API errors
 
 **Step 5: Validation:** Each test passes Usefulness Criteria (Priority ≥15, Confidence ROI, Behavioral, Predictive, Specific, Non-Duplicative)
 
@@ -244,7 +256,7 @@ Invoke ln-302-task-replanner worker with taskType: "test"
 
 **Minimum Viable Testing:** Start with baseline E2E (positive + negative). Each additional test must pass all 6 Usefulness Criteria.
 
-**Risk-Based Testing:** Prioritize by Business Impact x Probability. E2E-first from ACTUAL manual testing results. Priority >=15 scenarios covered by tests.
+**Risk-Based Testing:** Prioritize by Business Impact x Probability. E2E-first from ACTUAL manual testing results. Priority ≥15 scenarios covered by tests.
 
 **Expected-Based Testing:** For deterministic tests, compare actual vs expected using `diff`. **MANDATORY READ:** Load `../ln-522-manual-tester/SKILL.md` — section "Test Design Principles".
 

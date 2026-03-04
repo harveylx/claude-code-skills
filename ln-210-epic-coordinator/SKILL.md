@@ -42,12 +42,20 @@ This skill should be used when:
 
 ---
 
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `scopeDoc` | Yes | args, project docs, user | Scope document for Epic decomposition |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Epic Resolution Chain (adapted: scope doc discovery).
+**Fallback:** IF no scope doc found → AskUserQuestion: "What should be decomposed into Epics?"
+
 ## Workflow
 
 ### Phase 0: Tools Config
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
-**MANDATORY READ:** Load `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider
@@ -55,6 +63,12 @@ Extract: `task_provider` = Task Management → Provider
 ### Phase 1: Discovery & Research
 
 **Objective:** Gather all necessary context before Epic decomposition.
+
+**Step 0: Resolve scopeDoc** (per input_resolution_pattern.md, adapted for scope):
+- IF args provided (scope description or doc path) → use args
+- ELSE IF `docs/project/requirements.md` exists → use as scope source
+- ELSE IF `docs/requirements.md` exists → use as scope source
+- ELSE → AskUserQuestion: "What should be decomposed into Epics?"
 
 **Step 1: Load Configuration**
 

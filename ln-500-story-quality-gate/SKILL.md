@@ -9,6 +9,15 @@ description: "Story-level quality orchestrator with 4-level Gate (PASS/CONCERNS/
 
 Thin orchestrator that coordinates quality checks and test planning, then determines final Story verdict.
 
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `storyId` | Yes | args, git branch, kanban, user | Story to process |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Story Resolution Chain.
+**Status filter:** To Review
+
 ## Purpose & Scope
 - Invoke ln-510-quality-coordinator for code quality checks
 - Invoke ln-520-test-planner for test planning (if needed)
@@ -58,18 +67,23 @@ Additional prefixes: `TEST-` (coverage gaps), `ARCH-` (architecture), `DOC-` (do
 
 ### Phase 0: Tools Config
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, and `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 
 ### Phase 1: Discovery
 
-1) Auto-discover team/config from `docs/tasks/kanban_board.md`
-2) Load Story + task metadata:
+1) **Resolve storyId** (per input_resolution_pattern.md):
+   - IF args provided → use args
+   - ELSE IF git branch matches `feature/{id}-*` → extract id
+   - ELSE IF kanban has exactly 1 Story in [To Review] → suggest
+   - ELSE → AskUserQuestion: show Stories from kanban filtered by [To Review]
+2) Auto-discover team/config from `docs/tasks/kanban_board.md`
+3) Load Story + task metadata:
    - IF `task_provider` = `linear`: `get_issue(storyId)` + `list_issues(parentId=storyId)`
    - IF `task_provider` = `file`: `Read story.md` + `Glob("docs/tasks/epics/*/stories/*/tasks/*.md")`
-3) Detect test task status (exists? Done?)
+4) Detect test task status (exists? Done?)
 
 ### Phase 2: Fast-Track Decision
 

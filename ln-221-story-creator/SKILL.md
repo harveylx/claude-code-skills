@@ -71,10 +71,18 @@ Invoked by ln-220-story-coordinator (Phase 5a for CREATE, Phase 5c for ADD).
 - **newStoryDescription**: User's request for new Story(s) to add
 - **NO idealPlan** - creates only what user requested (single Story or few)
 
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `epicId` | Yes | args, kanban, user | Epic to process |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Epic Resolution Chain.
+**Status filter:** Active (planned/started)
+
 ## Tools Config
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
-**MANDATORY READ:** Load `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider
@@ -93,6 +101,15 @@ Extract: `task_provider` = Task Management → Provider
 > - Other phases proceed normally (INVEST, Preview, Create)
 
 ### Phase 1: Generate Story Documents
+
+**Step 0: Resolve epicId** (per input_resolution_pattern.md, standalone invocation only):
+- IF epicData provided by ln-220 orchestrator → use it (skip resolution)
+- IF args provided → use args
+- ELSE IF git branch matches `feature/epic-{N}-*` → extract Epic N
+- ELSE IF kanban has exactly 1 active Epic → suggest
+- ELSE → AskUserQuestion: show active Epics from kanban
+
+**Step 1: Generate Documents**
 
 Load story template (see "Template Loading" section) and use 8 sections.
 

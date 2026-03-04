@@ -18,13 +18,13 @@
 
 ## Config Sections
 
-| Section | Key Fields | Used By |
-|---------|-----------|---------|
-| **Task Management** | Provider (linear/file), Status, Team ID, Fallback | 2XX, 3XX, 4XX, 5XX, 10XX |
-| **Research** | Provider (ref/context7/websearch), Fallback chain | 0XX, 1XX, 2XX, 5XX, 6XX |
-| **File Editing** | Provider (hashline-edit/standard) | ln-1000 workers |
-| **External Agents** | Agent statuses (codex, gemini) | ln-005, 311, 513 |
-| **Git** | Worktree (available/unavailable), Branch strategy | ln-400, ln-1000 |
+| Section | Key Fields |
+|---------|-----------|
+| **Task Management** | Provider (linear/file), Status, Team ID, Fallback |
+| **Research** | Provider (ref/context7/websearch), Fallback chain |
+| **File Editing** | Provider (hashline-edit/standard) |
+| **External Agents** | Agent statuses (codex, gemini) |
+| **Git** | Worktree (available/unavailable), Branch strategy |
 
 ## Runtime Error Handling
 

@@ -1,7 +1,6 @@
 # CVSS Severity Mapping Reference
 
 <!-- SCOPE: CVSS severity level mapping ONLY. Contains score ranges, action requirements, blocking rules. -->
-<!-- USED BY: ln-625-dependencies-auditor (vulnerability_scan check), ln-621-security-auditor (insecure_dependencies) -->
 
 CVSS score to severity level mapping for dependency vulnerabilities.
 

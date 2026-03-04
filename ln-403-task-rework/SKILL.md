@@ -14,9 +14,18 @@ Executes rework for a single task marked To Rework and hands it back for review.
 - Apply fixes per feedback, keep KISS/YAGNI, and align with guides/Technical Approach.
 - Update only this task: To Rework -> In Progress -> To Review; no other tasks touched.
 
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `taskId` | Yes | args, parent Story, kanban, user | Task to rework |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Task Resolution Chain.
+**Status filter:** To Rework
+
 ## Task Storage Mode
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, and `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
@@ -30,13 +39,18 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 **File Mode transitions:** To Rework → In Progress → To Review
 
 ## Workflow (concise)
-1) **Receive task:** Get task ID from orchestrator (ln-400); read task (Linear: get_issue; File: Read task file), review notes, parent Story.
-1b) **Goal gate:** **MANDATORY READ:** `shared/references/goal_articulation_gate.md` — State REAL GOAL of this rework (what was actually broken, not "apply feedback"). Combine with 5 Whys (`shared/references/problem_solving.md`) to ensure root cause is articulated alongside the rework goal. NOT THE GOAL: a superficial patch that addresses the symptom, not the cause.
-2) **Plan fixes:** Map each comment to an action; confirm no new scope added.
-3) **Implement:** Follow task plan/checkboxes; address config/hardcoded issues; update docs/tests noted in Affected Components and Existing Code Impact.
-4) **Quality:** Run typecheck/lint (or project equivalents); ensure fixes reflect guides/manuals/ADRs/research.
-5) **Root Cause Analysis:** Ask "Why did the agent produce incorrect code?" Classify: missing context | wrong pattern | unclear AC | gap in docs/templates. If doc/template gap found → update the relevant file (guide, template, CLAUDE.md) to prevent recurrence.
-6) **Handoff:** Set task to To Review (Linear: update_issue; File: Edit status line); move it in kanban; add summary comment referencing resolved feedback + root cause classification.
+1) **Resolve taskId** (per input_resolution_pattern.md):
+   - IF args provided → use args
+   - ELSE IF Story context available → list To Rework tasks under Story, suggest if 1
+   - ELSE IF kanban has exactly 1 Task in [To Rework] → suggest
+   - ELSE → AskUserQuestion: show To Rework Tasks from kanban
+2) **Load task:** Read task (Linear: get_issue; File: Read task file), review notes, parent Story.
+2b) **Goal gate:** **MANDATORY READ:** `shared/references/goal_articulation_gate.md` — State REAL GOAL of this rework (what was actually broken, not "apply feedback"). Combine with 5 Whys (`shared/references/problem_solving.md`) to ensure root cause is articulated alongside the rework goal. NOT THE GOAL: a superficial patch that addresses the symptom, not the cause.
+3) **Plan fixes:** Map each comment to an action; confirm no new scope added.
+4) **Implement:** Follow task plan/checkboxes; address config/hardcoded issues; update docs/tests noted in Affected Components and Existing Code Impact.
+5) **Quality:** Run typecheck/lint (or project equivalents); ensure fixes reflect guides/manuals/ADRs/research.
+6) **Root Cause Analysis:** Ask "Why did the agent produce incorrect code?" Classify: missing context | wrong pattern | unclear AC | gap in docs/templates. If doc/template gap found → update the relevant file (guide, template, CLAUDE.md) to prevent recurrence.
+7) **Handoff:** Set task to To Review (Linear: update_issue; File: Edit status line); move it in kanban; add summary comment referencing resolved feedback + root cause classification.
 
 ## Critical Rules
 - Single-task only; never bulk update.

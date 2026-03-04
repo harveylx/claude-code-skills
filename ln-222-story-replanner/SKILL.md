@@ -36,10 +36,18 @@ Universal replanner worker for updating Stories in Epic when requirements change
 }
 ```
 
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `epicId` | Yes | args, kanban, user | Epic to process |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Epic Resolution Chain.
+**Status filter:** Active (planned/started)
+
 ## Tools Config
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
-**MANDATORY READ:** Load `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider
@@ -47,6 +55,13 @@ Extract: `task_provider` = Task Management → Provider
 ## Workflow
 
 ### Phase 1: Load Existing Stories
+
+**Step 0: Resolve epicId** (per input_resolution_pattern.md, standalone invocation only):
+- IF epicData provided by ln-220 orchestrator → use it (skip resolution)
+- IF args provided → use args
+- ELSE IF git branch matches `feature/epic-{N}-*` → extract Epic N
+- ELSE IF kanban has exactly 1 active Epic → suggest
+- ELSE → AskUserQuestion: show active Epics from kanban
 
 **Progressive Loading for token efficiency:**
 

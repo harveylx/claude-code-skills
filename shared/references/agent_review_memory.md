@@ -1,6 +1,6 @@
 # Agent Review Memory (Shared)
 
-Standard algorithm for review memory used by Claude during Critical Verification in agent reviewer skills (ln-005, ln-311, ln-513). Memory is NEVER passed to agents — they operate on clean context for independent perspective.
+Standard algorithm for review memory during Critical Verification. Memory is NEVER passed to agents — they operate on clean context for independent perspective.
 
 ## Review History Format
 

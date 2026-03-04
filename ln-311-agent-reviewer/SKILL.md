@@ -31,17 +31,29 @@ Runs parallel external agent reviews on validated Story and Tasks, critically ve
 | `prompt_template` | `shared/agents/prompt_templates/story_review.md` |
 | `verdict_acceptable` | `STORY_ACCEPTABLE` |
 
-## Inputs (from parent skill)
-- `storyId`: Linear Story identifier (e.g., "PROJ-123")
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `storyId` | Yes | args, git branch, kanban, user | Story to process |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Story Resolution Chain.
+**Status filter:** Backlog
 
 ## Workflow
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, `shared/references/agent_review_workflow.md`, and `shared/references/agent_delegation_pattern.md`.
+**MANDATORY READ:** Load `shared/references/input_resolution_pattern.md`, `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, `shared/references/agent_review_workflow.md`, and `shared/references/agent_delegation_pattern.md`.
 
-### Phase 0: Tools Config
+### Phase 0: Resolve Inputs & Tools Config
 
-Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
-Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
+1. **Resolve storyId** (per input_resolution_pattern.md):
+   - IF args provided → use args
+   - ELSE IF git branch matches `feature/{id}-*` → extract id
+   - ELSE IF kanban has exactly 1 Story in [Backlog] → suggest
+   - ELSE → AskUserQuestion: show Stories from kanban filtered by [Backlog]
+
+2. Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+   Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 
 ### Unique Steps (before shared workflow)
 

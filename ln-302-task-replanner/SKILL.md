@@ -18,7 +18,7 @@ Worker that re-syncs existing tasks to the latest requirements for any task type
 
 ## Task Storage Mode
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, and `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
@@ -26,9 +26,18 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 ## Invocation (who/when)
 - **ln-300-task-coordinator:** REPLAN mode when implementation tasks already exist.
 - **Orchestrators (other groups):** Replan refactoring or test tasks as needed.
-- Not user-invoked directly.
+- **Standalone:** User invokes directly with storyId (resolved via Input Resolution Chain).
 
 ## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `storyId` | Yes | args, git branch, kanban, user | Story whose tasks to replan |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Story Resolution Chain.
+**Status filter:** In Progress, To Review
+
+**Additional inputs (from orchestrator or Story context):**
 - Common: `taskType`, teamId, Story data (id/title/description with AC, Technical Notes, Context), existingTaskIds.
 - Implementation: idealPlan (1-8 tasks), guideLinks.
 - Refactoring: codeQualityIssues, refactoringPlan, affectedComponents.
@@ -46,12 +55,17 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 **Local copies:** `docs/templates/*.md` (in target project)
 
 ## Workflow (concise)
-1) Load templates per taskType (see Template Loading) and fetch full existing task descriptions.
-2) Normalize both sides (IDEAL vs existing sections) and run replan algorithm to classify KEEP/UPDATE/OBSOLETE/CREATE.
-3) Present summary (counts, titles, key diffs). Confirmation required if running interactively.
-4) Execute operations in Linear: update descriptions, cancel obsolete, **create missing with state="Backlog"**, preserve parentId for updates.
-5) Update kanban_board.md: remove canceled, add new tasks under Story in Backlog.
-6) Return operations summary with URLs and warnings.
+1) **Resolve storyId** (per input_resolution_pattern.md):
+   - IF args provided → use args
+   - ELSE IF git branch matches Story pattern → use detected Story
+   - ELSE IF kanban has exactly 1 Story in [In Progress, To Review] → suggest
+   - ELSE → AskUserQuestion: show In Progress/To Review Stories from kanban
+2) Load templates per taskType (see Template Loading) and fetch full existing task descriptions.
+3) Normalize both sides (IDEAL vs existing sections) and run replan algorithm to classify KEEP/UPDATE/OBSOLETE/CREATE.
+4) Present summary (counts, titles, key diffs). Confirmation required if running interactively.
+5) Execute operations in Linear: update descriptions, cancel obsolete, **create missing with state="Backlog"**, preserve parentId for updates.
+6) Update kanban_board.md: remove canceled, add new tasks under Story in Backlog.
+7) Return operations summary with URLs and warnings.
 
 ## Type Rules (must hold after update)
 | taskType | Hard rule | What to enforce |

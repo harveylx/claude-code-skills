@@ -1,7 +1,5 @@
 # Codebase Audit Report Template
 
-Used by ln-620-codebase-auditor to write `docs/project/codebase_audit.md`.
-
 ---
 
 ## Codebase Audit Report - [DATE]

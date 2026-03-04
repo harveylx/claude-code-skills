@@ -9,6 +9,15 @@ description: Validates Stories/Tasks with GO/NO-GO verdict, Readiness Score (1-1
 
 Validate Stories/Tasks with explicit GO/NO-GO verdict, Readiness Score, and Anti-Hallucination verification.
 
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `storyId` | Yes | args, git branch, kanban, user | Story to process |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Story Resolution Chain.
+**Status filter:** Backlog
+
 ## Purpose & Scope
 
 - Validate Story plus child Tasks against industry standards and project patterns
@@ -106,7 +115,7 @@ Phase 6: Approve & Notify
 
 ### Phase 0: Tools Config
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, and `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
@@ -115,7 +124,13 @@ All subsequent phases use `task_provider` to select operations per storage_mode_
 
 ### Phase 1: Discovery & Loading
 
-**Step 1: Configuration & Metadata Loading**
+**Step 1: Resolve storyId** (per input_resolution_pattern.md):
+- IF args provided → use args
+- ELSE IF git branch matches `feature/{id}-*` → extract id
+- ELSE IF kanban has exactly 1 Story in [Backlog] → suggest
+- ELSE → AskUserQuestion: show Stories from kanban filtered by [Backlog]
+
+**Step 2: Configuration & Metadata Loading**
 - Auto-discover configuration: Team ID (`docs/tasks/kanban_board.md`), project docs (`CLAUDE.md`), epic from Story.project
 - Load metadata only: Story ID/title/status/labels, child Task IDs/titles/status/labels
   - IF `task_provider` = `linear`: `get_issue(storyId)` + `list_issues(parentId=storyId)`

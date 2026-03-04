@@ -66,10 +66,18 @@ docs/market/[epic-slug]/
 
 ---
 
+## Inputs
+
+| Input | Required | Source | Description |
+|-------|----------|--------|-------------|
+| `epicId` | Yes | args, kanban, user | Epic to process |
+
+**Resolution:** Per `shared/references/input_resolution_pattern.md` — Epic Resolution Chain.
+**Status filter:** Active (planned/started)
+
 ## Tools Config
 
-**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
-**MANDATORY READ:** Load `shared/references/storage_mode_detection.md`
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`, `shared/references/storage_mode_detection.md`, `shared/references/input_resolution_pattern.md`
 
 Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
 Extract: `task_provider` = Task Management → Provider
@@ -93,24 +101,29 @@ Extract: `task_provider` = Task Management → Provider
 
 **Process:**
 
-1. **Parse Epic input:**
-   - Accept: Epic ID, "Epic N", or Linear Project URL
-   - **IF task_provider == "linear":** `get_project(query=epic)`
+1. **Resolve epicId** (per input_resolution_pattern.md):
+   - IF args provided → use args
+   - ELSE IF git branch matches `feature/epic-{N}-*` → extract Epic N
+   - ELSE IF kanban has exactly 1 active Epic → suggest
+   - ELSE → AskUserQuestion: show active Epics from kanban
+
+2. **Load Epic details:**
+   - **IF task_provider == "linear":** `get_project(query=epicId)`
    - **ELSE:** `Read("docs/tasks/epics/epic-{N}-*/epic.md")`
    - Extract: Epic ID, title, description
 
-2. **Auto-discover configuration:**
+3. **Auto-discover configuration:**
    - Read `docs/tasks/kanban_board.md` for Team ID
    - Slugify Epic title for output path
 
-3. **Check existing prioritization:**
+4. **Check existing prioritization:**
    ```
    Glob: docs/market/[epic-slug]/prioritization.md
    ```
    - If exists: Ask "Update existing or create new?"
    - If new: Continue
 
-4. **Create output directory:**
+5. **Create output directory:**
    ```bash
    mkdir -p docs/market/[epic-slug]/
    ```
