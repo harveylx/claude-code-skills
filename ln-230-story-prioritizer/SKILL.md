@@ -66,13 +66,21 @@ docs/market/[epic-slug]/
 
 ---
 
+## Tools Config
+
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
+**MANDATORY READ:** Load `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider
+
 ## Research Tools
 
 | Tool | Purpose | Example Query |
 |------|---------|---------------|
 | **WebSearch** | Market size, competitors | "[domain] market size {current_year}" |
 | **mcp__Ref** | Industry reports | "[domain] market analysis report" |
-| **Linear** | Load Stories | list_issues(project=Epic.id) |
+| **Task provider** | Load Stories | IF linear: list_issues / ELSE: Glob story.md |
 | **Glob** | Check existing | "docs/market/[epic]/*" |
 
 ---
@@ -87,7 +95,8 @@ docs/market/[epic-slug]/
 
 1. **Parse Epic input:**
    - Accept: Epic ID, "Epic N", or Linear Project URL
-   - Query: `get_project(query=epic)`
+   - **IF task_provider == "linear":** `get_project(query=epic)`
+   - **ELSE:** `Read("docs/tasks/epics/epic-{N}-*/epic.md")`
    - Extract: Epic ID, title, description
 
 2. **Auto-discover configuration:**
@@ -117,8 +126,13 @@ docs/market/[epic-slug]/
 **Process:**
 
 1. **Query Stories from Epic:**
+   **IF task_provider == "linear":**
    ```
    list_issues(project=Epic.id, label="user-story")
+   ```
+   **ELSE (file mode):**
+   ```
+   Glob("docs/tasks/epics/epic-{N}-*/stories/*/story.md")
    ```
 
 2. **Extract metadata only:**
@@ -147,8 +161,14 @@ docs/market/[epic-slug]/
 
 ##### Step 3.1: Load Story Description
 
+**IF task_provider == "linear":**
 ```
 get_issue(id=storyId, includeRelations=false)
+```
+
+**ELSE (file mode):**
+```
+Read("docs/tasks/epics/epic-{N}-*/stories/us{NNN}-*/story.md")
 ```
 
 **Extract from Story:**
@@ -363,7 +383,7 @@ ln-300 (Story → Tasks)
 
 **Dependencies:**
 - WebSearch, mcp__Ref (market research)
-- Linear MCP (load Epic, Stories)
+- Task provider: Linear MCP or file mode (load Epic, Stories)
 - Glob, Write, Bash (file operations)
 
 **Downstream usage:**
@@ -388,7 +408,7 @@ ln-300 (Story → Tasks)
 
 ## Definition of Done
 
-- [ ] Epic validated in Linear
+- [ ] Epic validated (Linear or file mode)
 - [ ] All Stories loaded (metadata, then descriptions per-Story)
 - [ ] Market research completed (2+ sources per Story)
 - [ ] RICE score calculated for each Story
@@ -429,6 +449,10 @@ ln-230-story-prioritizer epic="Epic 7" stories="US001,US002,US003"
 ---
 
 ## Reference Files
+
+- **MANDATORY READ:** `shared/references/tools_config_guide.md`
+- **MANDATORY READ:** `shared/references/storage_mode_detection.md`
+- **MANDATORY READ:** `shared/references/research_tool_fallback.md`
 
 | File | Purpose |
 |------|---------|

@@ -437,6 +437,7 @@ See individual worker SKILL.md files for detailed audit rules:
 - Principles: `docs/principles.md`
 - Tech stack: `docs/project/tech_stack.md`
 - Kanban board: `docs/tasks/kanban_board.md`
+- **MANDATORY READ:** `shared/references/research_tool_fallback.md`
 
 ---
 **Version:** 5.0.0

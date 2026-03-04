@@ -1,62 +1,85 @@
-# Linear Issue Creation Workflow
+# Issue Creation Workflow
 
-Standard workflow for creating Linear issues (Epic, Story, Task) with kanban updates.
+<!-- SCOPE: Standard workflow for creating Epics, Stories, and Tasks with kanban updates. Supports both Linear Mode and File Mode per docs/tools_config.md. -->
 
-## Issue Type Fields
+## Pre-requisite
 
-### Epic (Linear Project)
+Read `docs/tools_config.md` → Task Management → Provider. All operations below branch on provider value.
 
-```javascript
-create_project({
-  title: "Epic {N}: {Title}",         // N = Next Epic Number
-  description: epicDocument,           // Full markdown
-  team: teamId,
-  state: "planned"
-})
+## Epic Creation
+
+```
+IF provider == "linear":
+  save_project({
+    name: "Epic {N}: {Title}",
+    description: epicDocument,
+    team: teamId,
+    state: "planned"
+  })
+  → Capture returned project ID/URL
+
+ELSE (file):
+  dir = "docs/tasks/epics/epic-{N}-{slug}/"
+  mkdir -p {dir}/stories
+  Write("{dir}/epic.md", epicDocument)
+  → epicDocument includes: **Status:** Backlog, **Created:** {date}
 ```
 
-### Story (Linear Issue, parent = Epic)
+## Story Creation
 
-```javascript
-create_issue({
-  title: "US{NNN}: {Title}",          // NNN = Next Story Number (padded)
-  description: storyDocument,          // Full markdown (8 sections)
-  project: epicId,                     // Parent Epic
-  team: teamId,
-  labels: ["user-story"],
-  state: "Backlog"
-})
+```
+IF provider == "linear":
+  save_issue({
+    title: "US{NNN}: {Title}",
+    description: storyDocument,
+    project: epicId,
+    team: teamId,
+    labels: ["user-story"],
+    state: "Backlog"
+  })
+  → Capture returned issue ID/URL
+
+ELSE (file):
+  dir = "docs/tasks/epics/epic-{epicN}-{epicSlug}/stories/us{NNN}-{slug}/"
+  mkdir -p {dir}/tasks
+  Write("{dir}/story.md", storyDocument)
+  → storyDocument includes: **Status:** Backlog, **Epic:** Epic {N}, **Labels:** user-story
 ```
 
-### Task (Linear Issue, parent = Story)
+## Task Creation
 
-```javascript
-create_issue({
-  title: "T{NNN}: {Title}",           // NNN = Next Task Number (padded)
-  description: taskDocument,           // Full markdown
-  parentId: storyId,                   // Parent Story
-  team: teamId,
-  labels: ["implementation"|"tests"|"refactoring"],
-  state: "Backlog"                     // MANDATORY - Linear defaults differ!
-})
+```
+IF provider == "linear":
+  save_issue({
+    title: "T{NNN}: {Title}",
+    description: taskDocument,
+    parentId: storyId,
+    team: teamId,
+    labels: ["implementation"|"tests"|"refactoring"],
+    state: "Backlog"
+  })
+
+ELSE (file):
+  Write("docs/tasks/.../tasks/T{NNN}-{slug}.md", taskDocument)
+  → taskDocument includes: **Status:** Backlog, **Story:** US{NNN}, **Labels:** {type}
 ```
 
 ## Critical Rules
 
 | Rule | Why |
 |------|-----|
-| **Always pass `state: "Backlog"`** | Linear defaults to team's default status (often "Postponed") |
+| **Always set initial status** | Linear: `state: "Backlog"` (defaults differ!). File: `**Status:** Backlog` |
 | **Sequential creation** | Create one, verify success, then next (no bulk) |
-| **Capture URLs** | Store returned issue URL for summary |
+| **Capture references** | Linear: store URL. File: store file path |
 | **Update kanban after each** | Keep docs/tasks/kanban_board.md in sync |
+| **Runtime error → fallback** | If Linear fails mid-creation, switch to file mode (per tools_config_guide.md) |
 
 ## Kanban Update Trigger
 
 After each successful creation:
-
 ```
 1. Update Next Number counter in kanban_board.md
-2. Add issue to appropriate section
+2. Add item to appropriate section (Linear URL or file path as link)
 3. Use correct indentation (see kanban_update_algorithm.md)
 ```
 
@@ -78,39 +101,17 @@ After each successful creation:
 | `refactoring` | Refactoring tasks |
 | `bug` | Bug fix tasks |
 
-## State Values
-
-| State | When Used |
-|-------|-----------|
-| `Backlog` | New items (default for creation) |
-| `Todo` | Validated, ready to start |
-| `In Progress` | Currently being worked on |
-| `To Review` | Work complete, pending review |
-| `To Rework` | Review failed, needs fixes |
-| `Done` | Completed and verified |
-| `Canceled` | Removed from scope |
-
 ## Error Handling
 
 ```
 IF creation fails:
   1. Log error with item details
-  2. DO NOT proceed with dependent items
-  3. Report partial completion to user
-  4. Allow retry
-```
-
-## Usage in SKILL.md
-
-```markdown
-## Linear Integration
-
-See `shared/references/linear_creation_workflow.md` for:
-- Issue creation fields
-- State handling
-- Kanban update trigger
+  2. IF Linear error → update tools_config.md, switch to file mode
+  3. Retry failed item in file mode
+  4. Continue with remaining items in file mode
+  5. Report partial completion: "{N} in Linear, {M} in files"
 ```
 
 ---
-**Version:** 1.0.0
-**Last Updated:** 2026-02-05
+**Version:** 2.0.0
+**Last Updated:** 2026-03-04

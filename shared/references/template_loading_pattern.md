@@ -29,7 +29,7 @@ Standard workflow for loading templates from shared repository to target project
 
 | Placeholder | Source | Example |
 |-------------|--------|---------|
-| `{{TEAM_ID}}` | `docs/tasks/kanban_board.md` Linear Configuration | `abc123-team-id` |
+| `{{TEAM_ID}}` | `docs/tasks/kanban_board.md` Task Provider Configuration (Linear only) | `abc123-team-id` |
 | `{{DOCS_PATH}}` | Standard | `docs` |
 | `{{PROJECT_NAME}}` | `package.json` name or directory name | `my-project` |
 | `{{DATE}}` | Current date | `2026-02-05` |

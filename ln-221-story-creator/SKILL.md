@@ -71,6 +71,14 @@ Invoked by ln-220-story-coordinator (Phase 5a for CREATE, Phase 5c for ADD).
 - **newStoryDescription**: User's request for new Story(s) to add
 - **NO idealPlan** - creates only what user requested (single Story or few)
 
+## Tools Config
+
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
+**MANDATORY READ:** Load `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider
+
 ## Quality Criteria
 
 **MANDATORY READ:** Load `shared/references/creation_quality_checklist.md` §Story Creation Checklist for validation criteria that ln-310 will enforce.
@@ -149,12 +157,14 @@ Type "confirm" to create.
 **If autoApprove=true:** Skip confirmation → Phase 5
 **Otherwise:** Wait for "confirm"
 
-### Phase 5: Create in Linear + Update Kanban
+### Phase 5: Create Stories + Update Kanban
 
-**Create Linear Issues:**
+**Create Stories (provider-dependent):**
+
+**IF task_provider == "linear":**
 ```javascript
 for each Story:
-  create_issue({
+  save_issue({
     title: Story.number + ": " + Story.title,
     description: Story.generated_document,
     project: epicData.id,
@@ -162,6 +172,14 @@ for each Story:
     labels: ["user-story"],
     state: "Backlog"
   })
+```
+
+**ELSE (file mode):**
+```javascript
+for each Story:
+  mkdir -p docs/tasks/epics/epic-{N}-{slug}/stories/us{NNN}-{story-slug}/tasks/
+  Write("docs/tasks/epics/epic-{N}-{slug}/stories/us{NNN}-{story-slug}/story.md")
+  // Include file headers: **Status:** Backlog, **Epic:** Epic {N}, **Labels:** user-story, **Created:** {date}
 ```
 
 **Update kanban_board.md:**
@@ -235,7 +253,7 @@ NEXT STEPS:
 - [ ] autoApprove=true OR user confirmed
 
 **✅ Phase 5:**
-- [ ] All N Stories created in Linear (project=Epic, labels=user-story, state=Backlog)
+- [ ] All N Stories created (Linear or file mode) (project=Epic, labels=user-story, state=Backlog)
 - [ ] kanban_board.md updated (Backlog + Epic Story Counters)
 - [ ] Summary returned (URLs + next steps)
 
@@ -248,6 +266,8 @@ NEXT STEPS:
 
 ## Reference Files
 
+- **MANDATORY READ:** `shared/references/tools_config_guide.md`
+- **MANDATORY READ:** `shared/references/storage_mode_detection.md`
 - **Kanban update algorithm:** `shared/references/kanban_update_algorithm.md`
 - **Template loading:** `shared/references/template_loading_pattern.md`
 - **Linear creation workflow:** `shared/references/linear_creation_workflow.md`

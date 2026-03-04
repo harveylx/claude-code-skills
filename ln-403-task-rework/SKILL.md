@@ -16,11 +16,16 @@ Executes rework for a single task marked To Rework and hands it back for review.
 
 ## Task Storage Mode
 
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
+
 | Aspect | Linear Mode | File Mode |
 |--------|-------------|-----------|
 | **Load task** | `get_issue(task_id)` | `Read("docs/tasks/epics/.../tasks/T{NNN}-*.md")` |
 | **Load review notes** | Linear comments | Review section in task file or kanban |
-| **Update status** | `update_issue(id, state)` | `Edit` the `**Status:**` line in file |
+| **Update status** | `save_issue(id, state)` | `Edit` the `**Status:**` line in file |
 
 **File Mode transitions:** To Rework → In Progress → To Review
 
@@ -48,6 +53,8 @@ Executes rework for a single task marked To Rework and hands it back for review.
 - Status set to To Review; kanban updated; summary comment with fixed items + root cause.
 
 ## Reference Files
+- **Tools config:** `shared/references/tools_config_guide.md`
+- **Storage mode operations:** `shared/references/storage_mode_detection.md`
 - **[MANDATORY] Problem-solving approach:** `shared/references/problem_solving.md`
 - Kanban format: `docs/tasks/kanban_board.md`
 

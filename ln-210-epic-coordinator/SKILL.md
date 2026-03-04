@@ -44,6 +44,14 @@ This skill should be used when:
 
 ## Workflow
 
+### Phase 0: Tools Config
+
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
+**MANDATORY READ:** Load `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider
+
 ### Phase 1: Discovery & Research
 
 **Objective:** Gather all necessary context before Epic decomposition.
@@ -211,10 +219,12 @@ For each proposed Epic, validate 5 criteria:
 
 **Objective:** Determine CREATE vs REPLAN mode.
 
-Query kanban_board.md and Linear for existing Epics:
+Query kanban_board.md and task provider for existing Epics:
 
 1. **Read Epic Story Counters** table in kanban_board.md
-2. **Count existing Epic rows** (excludes header row)
+2. **IF task_provider == "linear":** `list_projects(team=teamId)` to cross-check
+   **ELSE:** `Glob("docs/tasks/epics/*/epic.md")` to list file-based Epics
+3. **Count existing Epic rows** (excludes header row)
 
 **Decision Point:**
 - **Count = 0** → No existing Epics → **Proceed to Phase 4+5a (CREATE MODE)**
@@ -352,7 +362,7 @@ Type "confirm" to create all Epics in Linear
 - User types "confirm" → Proceed to Step 3
 - User provides feedback → Adjust documents in Phase 4, regenerate preview, repeat
 
-**Step 3: Create All Epics in Linear**
+**Step 3: Create All Epics**
 
 For EACH Epic (in sequential order for numbering consistency):
 
@@ -360,20 +370,22 @@ For EACH Epic (in sequential order for numbering consistency):
    - Read current Next Epic Number from kanban_board.md
    - Example: 11
 
-2. **Create Linear Project:**
-   - Title: "Epic {Next Epic Number}: {Domain Title}"
-     - Example: "Epic 11: Infrastructure & Operations" (for Epic 0)
-     - Example: "Epic 12: User Management" (for Epic 1)
-   - Description: Complete Epic markdown (from Phase 4 Step 2)
-   - Team: Team ID from Phase 1
-   - State: "planned"
+2. **Create Epic (provider-dependent):**
+
+   **IF task_provider == "linear":**
+   - `save_project({name: "Epic {N}: {Title}", description: epic_markdown, team: teamId, state: "planned"})`
+   - Collect returned URL
+
+   **ELSE (file mode):**
+   - `mkdir -p docs/tasks/epics/epic-{N}-{slug}/stories/`
+   - `Write("docs/tasks/epics/epic-{N}-{slug}/epic.md")` with Epic markdown + file headers (`**Status:** Backlog`, `**Created:** {date}`)
 
 3. **Update kanban_board.md:**
    - Increment Next Epic Number by 1 in Linear Configuration table
    - Add new row to Epic Story Counters: `Epic {N} | - | US001 | - | EPN_01`
    - Add to "Epics Overview" → Active: `- [Epic {N}: Title](link) - Backlog`
 
-4. **Collect URL**
+4. **Collect URL** (Linear mode) or file path (file mode)
 
 **Step 4: Display Summary**
 
@@ -408,11 +420,11 @@ Next Steps:
 **Full workflow:** **MANDATORY READ:** Load `references/replan_workflow.md` for complete REPLAN process.
 
 **Summary:**
-1. Load existing Epics from Linear (full descriptions)
+1. Load existing Epics (IF task_provider == "linear": from Linear API | ELSE: from `docs/tasks/epics/*/epic.md`)
 2. Compare IDEAL plan vs existing → Categorize: KEEP/UPDATE/OBSOLETE/CREATE
 3. Show replan summary with diffs and warnings
 4. User confirmation required
-5. Execute operations in Linear + update kanban_board.md
+5. Execute operations (IF task_provider == "linear": Linear API | ELSE: Edit/Write epic.md files) + update kanban_board.md
 
 **Constraints:** Never auto-update/archive Epics with Stories In Progress. Never delete (use archived). Always require confirmation.
 
@@ -457,7 +469,7 @@ Before completing work, verify ALL checkpoints:
 **✅ Epic Creation Complete (Phase 5a - CREATE only):**
 - [ ] Batch preview shown with Epic 0-N indexes
 - [ ] User confirmed preview (CONTROL POINT 2)
-- [ ] ALL Epics created in Linear with "Epic {N}: {Title}" format (N = Next Epic Number)
+- [ ] ALL Epics created (Linear or file mode) with "Epic {N}: {Title}" format (N = Next Epic Number)
 - [ ] kanban_board.md updated after EACH Epic:
   - Next Epic Number incremented by 1
   - Epic Story Counters row added
@@ -483,6 +495,8 @@ Before completing work, verify ALL checkpoints:
 
 ## Reference Files
 
+- **MANDATORY READ:** `shared/references/tools_config_guide.md`
+- **MANDATORY READ:** `shared/references/storage_mode_detection.md`
 - **[MANDATORY] Problem-solving approach:** `shared/references/problem_solving.md`
 - **Orchestrator lifecycle:** `shared/references/orchestrator_pattern.md`
 - **Auto-discovery patterns:** `shared/references/auto_discovery_pattern.md`

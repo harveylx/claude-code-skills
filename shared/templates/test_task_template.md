@@ -1,6 +1,6 @@
 # Tests for Story: [Story Title]
 
-**User Story:** [{{TEAM_ID}}XXX Story Name](link) *(parent task - this is the FINAL task of Story)*
+**User Story:** [USXXX Story Name](link-or-path) *(parent story - this is the FINAL task of Story)*
 **Epic:** [Epic N - Epic Name](link)
 
 <!-- SCOPE: Test task structure ONLY. Contains Story context, test plan (E2E/Integration/Unit), coverage requirements. -->
@@ -15,8 +15,8 @@
 
 ### Implemented Features
 List of completed implementation tasks in this Story:
-- [{{TEAM_ID}}-XX: Task Name](link) - What was implemented
-- [{{TEAM_ID}}-YY: Task Name](link) - What was implemented
+- [T001: Task Name](link-or-path) - What was implemented
+- [T002: Task Name](link-or-path) - What was implemented
 
 ### What to Test
 All business logic implemented across Story Tasks:
@@ -529,16 +529,6 @@ Before adding new tests, update existing tests that might have broken due to log
 - [ ] No references remain (grep verification)
 - [ ] Removals documented in commit message
 - [ ] High-risk removals discussed with team before execution
-
----
-
-## Template Placeholders
-
-When copying this template to a project, replace these placeholders:
-
-| Placeholder | Source | Example |
-|-------------|--------|---------|
-| `{{TEAM_ID}}` | docs/tasks/kanban_board.md | "API" |
 
 ---
 

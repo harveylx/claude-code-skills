@@ -17,7 +17,10 @@ Executes a Story end-to-end by looping through its tasks in priority order. Sets
 
 ## Task Storage Mode
 
-**MANDATORY READ:** Load `shared/references/storage_mode_detection.md` for Linear vs File mode detection and operations.
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 
 ## When to Use
 - Story is Todo or In Progress and has implementation/refactor/test tasks to finish
@@ -162,11 +165,13 @@ When invoked in Plan Mode (agent cannot execute), generate execution plan instea
 - Final report with task counts and recommended next step: quality gate
 
 ## Reference Files
+- **Tools config:** `shared/references/tools_config_guide.md`
+- **Storage mode operations:** `shared/references/storage_mode_detection.md`
 - **Orchestrator lifecycle:** `shared/references/orchestrator_pattern.md`
 - **Task delegation pattern:** `shared/references/task_delegation_pattern.md`
 - **Auto-discovery patterns:** `shared/references/auto_discovery_pattern.md`
 - **Plan mode behavior:** `shared/references/plan_mode_pattern.md`
-- **Storage mode detection:** `shared/references/storage_mode_detection.md`
+- **MANDATORY READ:** `shared/references/git_worktree_fallback.md`
 - Executors: `../ln-401-task-executor/SKILL.md`, `../ln-403-task-rework/SKILL.md`, `../ln-404-test-executor/SKILL.md`
 - Reviewer: `../ln-402-task-reviewer/SKILL.md`
 - Auto-discovery: `CLAUDE.md`, `docs/tasks/kanban_board.md`

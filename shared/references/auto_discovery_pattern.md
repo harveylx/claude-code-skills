@@ -1,13 +1,21 @@
 # Auto-Discovery Fallback Chains
 
-Standard pattern for loading context with fallback sources.
+<!-- SCOPE: Standard pattern for loading context with fallback sources. Phase 0 reads tools config, subsequent phases use provider-aware discovery. -->
+
+## Phase 0: Tools Config
+
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
+
+Before any discovery chain, read `docs/tools_config.md` (bootstrap if missing). This determines:
+- `task_provider` → linear or file (affects source priority)
+- `research_provider` → ref, context7, or websearch (affects research chains)
 
 ## General Algorithm
 
 ```
 FOR each required data item:
-  1. Try PRIMARY source (kanban_board.md, Epic, Linear)
-  2. If missing → Try FALLBACK sources in order
+  1. Try PRIMARY source (kanban_board.md, tools_config.md)
+  2. If missing → Try FALLBACK sources in order (provider-aware)
   3. If all fail → Ask user OR raise ERROR
 ```
 
@@ -16,14 +24,17 @@ FOR each required data item:
 ### Team ID
 ```
 1. kanban_board.md → Linear Configuration table → Team ID
-2. FALLBACK: Ask user "Which Linear team?"
+2. tools_config.md → Task Management → Team ID
+3. IF provider == "linear": list_teams() → ask user to select
+4. FALLBACK: Ask user "Which team?"
 ```
 
 ### Next Number (Epic/Story/Task)
 ```
 1. kanban_board.md → Epic Story Counters table
-2. VERIFY: list_projects/list_issues to confirm
-3. FALLBACK: Ask user
+2. IF provider == "linear": VERIFY via list_projects/list_issues
+3. IF provider == "file": count existing folders/files + 1
+4. FALLBACK: Ask user
 ```
 
 ### Feature Scope
@@ -50,14 +61,15 @@ FOR each required data item:
 
 ## Source Priority Rules
 
-| Priority | Source | Trust Level |
-|----------|--------|-------------|
-| 1 | kanban_board.md | Highest (user-maintained) |
-| 2 | Linear API | High (system of record) |
-| 3 | docs/*.md | Medium (may be outdated) |
-| 4 | Code analysis | Medium (inference) |
-| 5 | HTML/templates | Low (presentation layer) |
-| 6 | User input | Fallback (always trusted) |
+| Priority | Source | Trust Level | Availability |
+|----------|--------|-------------|-------------|
+| 1 | tools_config.md | Highest | Always (bootstrapped if missing) |
+| 2 | kanban_board.md | High | User-maintained |
+| 3 | Linear API | High | IF provider == "linear" |
+| 4 | File system (Glob) | High | IF provider == "file" |
+| 5 | docs/*.md | Medium | May be outdated |
+| 6 | Code analysis | Medium | Inference |
+| 7 | User input | Fallback | Always trusted |
 
 ## Error Handling
 
@@ -65,28 +77,16 @@ FOR each required data item:
 |----------|--------|
 | Primary source missing | Try fallback |
 | All fallbacks fail | Ask user |
-| User input required but unavailable | ERROR with clear message |
+| Linear API fails at runtime | Update tools_config, switch to file fallbacks |
 | Conflicting sources | Prefer higher priority |
 
 ## Best Practices
 
-1. **Show extracted data** — "From Epic: [info]. From HTML: [info]"
+1. **Show extracted data** — "From kanban: [info]. From config: [info]"
 2. **Skip redundant questions** — If all data found, don't ask user
-3. **Validate after discovery** — Confirm IDs exist in Linear
+3. **Validate after discovery** — Confirm IDs exist (Linear or file system)
 4. **Cache results** — Store in contextStore for phase reuse
 
-## Usage
-
-```markdown
-## Phase 1: Auto-Discovery
-
-Follows `shared/references/auto_discovery_pattern.md`:
-
-1. Read kanban_board.md → [primary data]
-2. Fallback: [secondary source]
-3. Ask user if needed
-```
-
 ---
-**Version:** 1.0.0
-**Last Updated:** 2026-02-05
+**Version:** 2.0.0
+**Last Updated:** 2026-03-04

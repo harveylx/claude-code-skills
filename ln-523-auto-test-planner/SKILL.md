@@ -40,6 +40,13 @@ Do NOT use if:
 
 ## Workflow
 
+### Phase 0: Tools Config
+
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
+
 ### Phase 1: Discovery (Automated)
 
 Auto-discovers Team ID from `docs/tasks/kanban_board.md` (see CLAUDE.md "Configuration Auto-Discovery").
@@ -58,17 +65,23 @@ Auto-discovers Team ID from `docs/tasks/kanban_board.md` (see CLAUDE.md "Configu
 3. Ensures test planning aligns with project practices
 
 **Step 1: Load Research and Manual Test Results**
-1. Fetch Story from Linear (must have label "user-story")
-2. Extract Story.id (UUID) - Use UUID, NOT short ID (required for Linear API)
-3. Load research comment (from ln-521): "## Test Research: {Feature}"
-4. Load manual test results comment (from ln-522): "## Manual Testing Results"
+1. Fetch Story (must have label "user-story"):
+   - IF `task_provider` = `linear`: `get_issue(storyId)` — extract Story.id (UUID, NOT short ID)
+   - IF `task_provider` = `file`: `Read story.md` — extract Story metadata
+2. Load research comment (from ln-521): "## Test Research: {Feature}"
+   - IF `task_provider` = `linear`: `list_comments(issueId=storyId)` → find matching comment
+   - IF `task_provider` = `file`: `Glob("docs/tasks/epics/*/stories/*/comments/*.md")` → find matching comment
+3. Load manual test results comment (from ln-522): "## Manual Testing Results"
+   - Same approach as research comment above
    - If not found -> ERROR: Run ln-520-test-planner pipeline first
-5. Parse sections: AC results (PASS/FAIL), Edge Cases, Error Handling, Integration flows
-6. Map to test design: PASSED AC -> E2E, Edge cases -> Unit, Errors -> Error handling, Flows -> Integration
+4. Parse sections: AC results (PASS/FAIL), Edge Cases, Error Handling, Integration flows
+5. Map to test design: PASSED AC -> E2E, Edge cases -> Unit, Errors -> Error handling, Flows -> Integration
 
 **Step 2: Analyze Story + Tasks**
 1. Parse Story: Goal, Test Strategy, Technical Notes
-2. Fetch **all child Tasks** (parentId = Story.id, status = Done) from Linear
+2. Fetch all child Tasks (status = Done):
+   - IF `task_provider` = `linear`: `list_issues(parentId=Story.id, state="Done")`
+   - IF `task_provider` = `file`: `Glob("docs/tasks/epics/*/stories/*/tasks/*.md")` → filter by `**Status:** Done`
 3. Analyze each Task:
    - Components implemented
    - Business logic added
@@ -137,7 +150,8 @@ Shows preview for review.
 
 **Step 3:** Check for existing test task
 
-Query Linear: `list_issues(parentId=Story.id, labels=["tests"])`
+- IF `task_provider` = `linear`: `list_issues(parentId=Story.id, label="tests")`
+- IF `task_provider` = `file`: `Glob("docs/tasks/epics/*/stories/*/tasks/*.md")` → filter by `**Labels:**` containing `tests`
 
 **Decision:**
 - **Count = 0** -> **CREATE MODE** (Step 4a)
@@ -200,8 +214,11 @@ Invoke ln-302-task-replanner worker with taskType: "test"
 
 ## Reference Files
 
+- **Tools config:** `shared/references/tools_config_guide.md`
+- **Storage mode operations:** `shared/references/storage_mode_detection.md`
 - **Risk-based testing methodology:** `shared/references/risk_based_testing_guide.md`
 - **Auto-discovery patterns:** `shared/references/auto_discovery_pattern.md`
+- **MANDATORY READ:** `shared/references/research_tool_fallback.md`
 
 ### risk_based_testing_guide.md
 

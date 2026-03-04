@@ -1,11 +1,11 @@
 ---
-description: "Review changed skills for coherence (flow, refs, duplication, contradictions, context economy, stale artifacts, structure, architecture, patterns). Fix issues in-place."
+description: "Review changed skills: 9 structural dimensions (D1-D9) + 5 intent checks (M1-M5: goal clarity, approach optimality, ecosystem consistency, rewrite delta, necessity). Fix in-place."
 allowed-tools: Read, Grep, Glob, Bash, Edit
 ---
 
 # Skill Coherence Review
 
-You review changed skills for structural and logical integrity across 9 dimensions, then fix issues in-place.
+You review changed skills across 9 structural dimensions (D1-D9) and 5 intent checks (M1-M5), then fix issues in-place.
 
 ## Phase 1: Scope Detection
 
@@ -95,13 +95,56 @@ Read every SKILL.md in scope. Check ALL dimensions across ALL skills in scope.
 - Scoring formula consistent: `penalty = (C×2.0) + (H×1.0) + (M×0.5) + (L×0.2)`
 - Report structure follows `shared/templates/audit_worker_report_template.md`
 
-## Phase 3: Fix
+## Phase 3: Intent Review
+
+Evaluate DESIGN INTENT of changes. Applies to primary skills only (affected/dependency skills have no changed intent to review).
+
+**MANDATORY READ:** Load `docs/SKILL_ARCHITECTURE_GUIDE.md` (Red Flags, SRP Decision Tree, Best Practices Checklists).
+
+For each primary skill, read the git diff (`git diff HEAD -- {skill_dir}/`).
+
+### M1: Goal Clarity
+- REAL GOAL evident from diff + commit message alone (apply `shared/references/goal_articulation_gate.md`)
+- NOT THE GOAL identified — surface-level reading would NOT produce the same answer as REAL GOAL
+- Goal unclear from diff alone → `UNCLEAR_GOAL` (RETHINK); warn that Phase 4 fixes may address wrong intent
+
+### M2: Approach Optimality (scope: NEW changes only)
+- New abstractions count ≤3 (phases, reference files, shared patterns)
+- No Red Flags triggered from SKILL_ARCHITECTURE_GUIDE table
+- KISS/YAGNI criteria pass per `shared/references/creation_quality_checklist.md` (#11, #12)
+- No simpler approach achieves the same goal with fewer lines/phases/files
+- Simpler alternative exists → finding with specific description (SIMPLIFY or RETHINK)
+
+### M3: Ecosystem Consistency
+- 2-3 peer skills in same category (same NXX prefix) use consistent delegation pattern, hierarchy level, workflow pattern
+- No existing `shared/references/` file that changed skill should reuse but doesn't
+- Divergence from peers has documented rationale
+- Missed shared/ reuse → finding with specific file path (SIMPLIFY)
+
+### M4: Rewrite Delta (scope: WHOLE skill-as-changed)
+- SRP Decision Tree applied to skill-as-changed (not just the diff)
+- Tree does NOT suggest different structure (split/combine/re-level)
+- If delta HIGH (>30% different from clean-slate design) → 1-3 sentence structural recommendation (RETHINK)
+
+### M5: Necessity
+- Every changed hunk maps to M1's REAL GOAL
+- No speculative features, "future use" code, premature abstraction (YAGNI)
+- No new backward-compat shims or unused artifacts per `shared/references/clean_code_checklist.md`
+- Unnecessary hunks → specific what-to-remove (SIMPLIFY)
+
+**Finding categories:**
+- **SIMPLIFY** — concrete reduction possible, may be auto-fixed
+- **RETHINK** — design decision needed, NOT auto-fixable, advisory only
+
+## Phase 4: Fix
 
 For each finding:
 - **Fixable** (wrong path, stale ref, missing bidirectional ref, duplicated content) — fix immediately via Edit
 - **Ambiguous** (conflicting thresholds where correct value unclear) — list in report, do NOT guess
+- **SIMPLIFY** (from Phase 3) with unambiguous action — fix immediately
+- **RETHINK** (from Phase 3) — do NOT fix, pass to Phase 5 report
 
-## Phase 4: Report
+## Phase 5: Report
 
 ```
 ## Skill Coherence Review
@@ -112,6 +155,12 @@ For each finding:
 | # | Skill | Dim | Issue | Fix Applied |
 |---|-------|-----|-------|-------------|
 
+### Intent Findings ({count})
+| # | Skill | Dim | Finding | Category |
+|---|-------|-----|---------|----------|
+
+Categories: RETHINK (design decision needed), SIMPLIFY (concrete reduction — auto-fixed above or listed here)
+
 ### Remaining Concerns ({count})
 | # | Skill | Dim | Issue | Why Not Auto-Fixed |
 |---|-------|-----|-------|--------------------|
@@ -120,10 +169,12 @@ For each finding:
 Dimensions with no findings: {list}
 ```
 
-If zero findings: `All 9 dimensions clean. No issues found.`
+If zero findings: `All 9 structural dimensions + 5 intent checks clean. No issues found.`
 
 ## Rules
 - Read ALL skills in scope before reporting — do not stop at first finding
 - Fix errors immediately, do not defer
 - Do NOT update versions or dates unless user explicitly requests it
 - `shared/` changes affect every skill that references them — always check reverse dependencies
+- Intent review (M1-M5) evaluates DESIGN, not correctness — findings are judgment-based, not binary
+- RETHINK findings are advisory — explain WHY, author decides WHETHER to act

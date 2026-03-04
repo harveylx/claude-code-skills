@@ -36,6 +36,14 @@ Universal replanner worker for updating Stories in Epic when requirements change
 }
 ```
 
+## Tools Config
+
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md`
+**MANDATORY READ:** Load `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider
+
 ## Workflow
 
 ### Phase 1: Load Existing Stories
@@ -45,9 +53,17 @@ Universal replanner worker for updating Stories in Epic when requirements change
 **Step 1:** Orchestrator provides Story metadata (ID, title, status)
 
 **Step 2:** Load FULL descriptions ONE BY ONE
+
+**IF task_provider == "linear":**
 ```javascript
 for each story_id:
   get_issue(id=story_id)  // ~5,000 tokens per Story
+```
+
+**ELSE (file mode):**
+```javascript
+for each story_id:
+  Read("docs/tasks/epics/epic-{N}-*/stories/us{NNN}-*/story.md")  // ~5,000 tokens per Story
 ```
 
 **Token Rationale:** 10 Stories × 5,000 = 50,000 tokens. Load sequentially to manage context.
@@ -160,17 +176,22 @@ Type "confirm" to execute.
 **UPDATE operations:**
 1. Generate new Story document (load via Template Loading logic)
 2. Validate INVEST (same as ln-221-story-creator Phase 2)
-3. `update_issue(id, description=new_description)`
-4. Add comment: "Story updated: AC changed (AC5 added), Standards Research updated (RFC 7636)"
+3. **IF task_provider == "linear":** `save_issue({id, description: new_description})`
+   **ELSE:** `Edit("docs/tasks/epics/.../stories/us{NNN}-*/story.md")` with new content
+4. **IF task_provider == "linear":** `create_comment({issueId, body: "Story updated: ..."})`
+   **ELSE:** `Write(".../stories/us{NNN}-*/comments/{ISO-timestamp}.md")` with update note
 
 **OBSOLETE operations:**
-1. `update_issue(id, state="Canceled")`
-2. Add comment: "Story canceled: Feature removed from Epic Scope In. Reason: [details]"
+1. **IF task_provider == "linear":** `save_issue({id, state: "Canceled"})`
+   **ELSE:** `Edit` `**Status:**` line to `**Status:** Canceled` in story.md
+2. **IF task_provider == "linear":** `create_comment({issueId, body: "Story canceled: ..."})`
+   **ELSE:** `Write(".../comments/{ISO-timestamp}.md")` with cancellation note
 
 **CREATE operations:**
 1. Generate Story document (same as ln-221-story-creator Phase 1)
 2. Validate INVEST
-3. `create_issue({title, description, project=Epic, team, labels=["user-story"], state="Backlog"})`
+3. **IF task_provider == "linear":** `save_issue({title, description, project: Epic.id, team: teamId, labels: ["user-story"], state: "Backlog"})`
+   **ELSE:** `mkdir -p .../stories/us{NNN}-{slug}/tasks/` + `Write story.md` with file headers
 
 **Update kanban_board.md:**
 
@@ -220,7 +241,7 @@ NEXT STEPS:
 ## Definition of Done
 
 **✅ Phase 1:**
-- [ ] Existing Story IDs queried
+- [ ] Existing Story IDs queried (Linear or file mode)
 - [ ] FULL descriptions fetched ONE BY ONE
 - [ ] 8 sections parsed
 - [ ] Metadata extracted (persona, capability, AC, Standards Research)
@@ -252,6 +273,8 @@ NEXT STEPS:
 
 ## Reference Files
 
+- **MANDATORY READ:** `shared/references/tools_config_guide.md`
+- **MANDATORY READ:** `shared/references/storage_mode_detection.md`
 - **Template loading:** `shared/references/template_loading_pattern.md`
 - **Linear creation workflow:** `shared/references/linear_creation_workflow.md`
 - **Replan algorithm:** `shared/references/replan_algorithm.md`

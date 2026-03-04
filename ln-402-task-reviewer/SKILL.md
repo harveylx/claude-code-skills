@@ -17,14 +17,22 @@ description: "L3 Worker. Reviews task implementation for quality, code standards
 - For test tasks, verify risk-based limits and priority (≤15) per planner template.
 - Update only this task: accept (Done) or send back (To Rework) with explicit reasons and fix suggestions tied to best practices.
 
+## Phase 0: Tools Config
+
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
+
 ## Task Storage Mode
 
 | Aspect | Linear Mode | File Mode |
 |--------|-------------|-----------|
 | **Load task** | `get_issue(task_id)` | `Read("docs/tasks/epics/.../tasks/T{NNN}-*.md")` |
 | **Load Story** | `get_issue(parent_id)` | `Read("docs/tasks/epics/.../story.md")` |
-| **Update status** | `update_issue(id, state: "Done"/"To Rework")` | `Edit` the `**Status:**` line in file |
-| **Add comment** | Linear comment API | Append to task file or kanban |
+| **Update status** | `save_issue(id, state: "Done"/"To Rework")` | `Edit` the `**Status:**` line in file |
+| **Add comment** | `create_comment({issueId, body})` | `Write` comment to `.../comments/{ISO-timestamp}.md` |
+| **Create [BUG] task** | `save_issue({title, parentId, team, labels, state})` | `Write("docs/tasks/.../T{NNN}-bug-{slug}.md")` |
 
 **File Mode status values:** Done, To Rework (only these two outcomes from review)
 
@@ -164,7 +172,9 @@ Step 8: Update & Commit
    - Missing error handling in caller/callee functions
 
    **For each side-effect bug found:**
-   - Create new task in same Story (Linear: create_issue with parentId=Story.id; File: create task file)
+   - Create new task in same Story:
+     - IF `task_provider` = `linear`: `save_issue({title: "[BUG] {desc}", description, parentId: Story.id, team: teamId, labels: ["bug", "discovered-in-review"], state: "Backlog", priority})`
+     - IF `task_provider` = `file`: `Write("docs/tasks/epics/.../tasks/T{NNN}-bug-{slug}.md")` with `**Status:** Backlog`, `**Labels:** bug, discovered-in-review`, `**Story:** US{NNN}`, `**Created:** {date}`
    - Title: `[BUG] {Short description}`
    - Description: Location, issue, suggested fix
    - Label: `bug`, `discovered-in-review`
@@ -222,6 +232,8 @@ Step 8: Update & Commit
 - Review comment posted (findings + [BUG] list if any).
 
 ## Reference Files
+- **Tools config:** `shared/references/tools_config_guide.md`
+- **Storage mode operations:** `shared/references/storage_mode_detection.md`
 - **[MANDATORY] Problem-solving approach:** `shared/references/problem_solving.md`
 - **AC validation rules:** `shared/references/ac_validation_rules.md`
 - AC Validation Checklist: `references/ac_validation_checklist.md` (4 criteria: Completeness, Specificity, Dependencies, DB Creation)

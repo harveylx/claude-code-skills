@@ -16,10 +16,15 @@ Executes a single implementation (or refactor) task from Todo to To Review using
 
 ## Task Storage Mode
 
+**MANDATORY READ:** Load `shared/references/tools_config_guide.md` and `shared/references/storage_mode_detection.md`
+
+Read `docs/tools_config.md` (bootstrap if missing per tools_config_guide.md).
+Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
+
 | Aspect | Linear Mode | File Mode |
 |--------|-------------|-----------|
 | **Load task** | `get_issue(task_id)` | `Read("docs/tasks/epics/.../tasks/T{NNN}-*.md")` |
-| **Update status** | `update_issue(id, state)` | `Edit` the `**Status:**` line in file |
+| **Update status** | `save_issue(id, state)` | `Edit` the `**Status:**` line in file |
 | **Kanban** | Updated by Linear sync | Must update `kanban_board.md` manually |
 
 **File Mode status format:**
@@ -128,6 +133,8 @@ Before setting To Review, verify all 6 items:
 - Task set to To Review; kanban moved to To Review; summary comment added.
 
 ## Reference Files
+- **Tools config:** `shared/references/tools_config_guide.md`
+- **Storage mode operations:** `shared/references/storage_mode_detection.md`
 - Guides/manuals/ADRs/research: `docs/guides/`, `docs/manuals/`, `docs/adrs/`, `docs/research/`
 - Kanban format: `docs/tasks/kanban_board.md`
 

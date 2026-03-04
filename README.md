@@ -39,7 +39,7 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 107 skills
 |   |   |-- ln-114-frontend-docs-creator/ # design_guidelines.md
 |   |   |-- ln-115-devops-docs-creator/   # runbook.md
 |   |-- ln-120-reference-docs-creator/    # ADRs, guides, manuals structure
-|   |-- ln-130-tasks-docs-creator/        # kanban_board.md (Linear config)
+|   |-- ln-130-tasks-docs-creator/        # kanban_board.md, task provider setup
 |   |-- ln-140-test-docs-creator/         # testing-strategy.md
 |   |-- ln-150-presentation-creator/      # Interactive HTML presentation
 |
@@ -78,7 +78,7 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 107 skills
 |   |   |-- ln-522-manual-tester/      # Manual functional testing
 |   |   |-- ln-523-auto-test-planner/  # Plan E2E/Integration/Unit tests
 |
-|-- ln-6XX-*/                          # AUDIT (29 skills) [WORKS WITHOUT LINEAR]
+|-- ln-6XX-*/                          # AUDIT (29 skills)
 |   |-- ln-610-docs-auditor/           # Documentation audit coordinator (3 workers)
 |   |   |-- ln-611-docs-structure-auditor/  # Hierarchy, SSOT, compression, actuality
 |   |   |-- ln-612-semantic-content-auditor/ # Scope alignment, fact accuracy
@@ -118,7 +118,7 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 107 skills
 |  └──────────────────────────────────────────────┘
 |  ┌─ Plugin: claude-code-bootstrap (32 skills) ────┐
 |
-|-- ln-7XX-*/                          # BOOTSTRAP (32 skills) [WORKS WITHOUT LINEAR]
+|-- ln-7XX-*/                          # BOOTSTRAP (32 skills)
 |   |-- ln-700-project-bootstrap/      # L1: CREATE or TRANSFORM project
 |   |-- ln-710-dependency-upgrader/    # Upgrade npm/nuget/pip
 |   |-- ln-720-structure-migrator/     # SCAFFOLD or RESTRUCTURE to Clean Architecture
@@ -170,14 +170,14 @@ This marketplace contains **2 plugins** — install together or separately:
 
 ## Quick Start
 
-**Without Linear** (works immediately):
+**Standalone** (works immediately, no setup):
 ```bash
 ln-620-codebase-auditor    # Audit your code for issues
 ln-700-project-bootstrap   # CREATE or TRANSFORM project
 ln-100-documents-pipeline  # Generate documentation
 ```
 
-**With Linear** (full Agile workflow):
+**Full Agile workflow** (Linear or File Mode — auto-detected):
 ```bash
 ln-200-scope-decomposer    # Scope -> Epics -> Stories
 ln-400-story-executor      # Execute Story to Done (fully automated)
@@ -201,7 +201,7 @@ Automated validation hooks that run during development:
 
 ## MCP Servers (Optional)
 
-Skills use MCP servers for research, documentation lookup, and Linear integration. All skills work without MCP — they gracefully skip MCP-dependent steps when servers are unavailable.
+Skills use MCP servers for research, documentation lookup, and task tracking. All skills work without MCP — they automatically fallback to File Mode (local markdown) when Linear is unavailable, and to WebSearch when research MCPs are missing.
 
 | Server | Purpose | API Key | Used by |
 |--------|---------|---------|---------|

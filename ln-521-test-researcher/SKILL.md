@@ -150,6 +150,7 @@ _This research informs both manual tests (ln-522) and automated tests (ln-523)._
 - Research methodology: Web Search, MCP Ref, Context7 tools
 - Comment format: Structured markdown with sources
 - Downstream consumers: ln-522-manual-tester, ln-523-auto-test-planner
+- **MANDATORY READ:** `shared/references/research_tool_fallback.md`
 
 ---
 

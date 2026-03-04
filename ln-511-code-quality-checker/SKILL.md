@@ -296,6 +296,7 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
 - Guides: `docs/guides/`
 - Templates for context: `shared/templates/task_template_implementation.md`
 - **Clean code checklist:** `shared/references/clean_code_checklist.md`
+- **MANDATORY READ:** `shared/references/research_tool_fallback.md`
 
 ---
 **Version:** 5.0.0

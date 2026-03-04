@@ -66,9 +66,9 @@ Use **Given-When-Then** format:
 
 ## Implementation Tasks
 
-Tasks created separately (parentId -> this Story):
-- [{{TEAM_ID}}-XX: Task Name](link) - Brief description
-- [{{TEAM_ID}}-YY: Task Name](link) - Brief description
+Tasks created separately (child tasks of this Story):
+- [T001: Task Name](link-or-path) - Brief description
+- [T002: Task Name](link-or-path) - Brief description
 
 > [!NOTE]
 > Order tasks Consumer -> Service -> Provider (API endpoint -> Service -> Repository -> Database). Consumer Tasks may mock provider layers until implemented.

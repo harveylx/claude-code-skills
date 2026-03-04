@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository
 
-This is a collection of skills for Claude Code, integrated with Linear for Agile-style task management.
+This is a collection of skills for Claude Code with config-driven Agile task management (Linear or File Mode per `docs/tools_config.md`).
 
 > [!WARNING]
 
@@ -39,8 +39,8 @@ All skills have `diagram.html` (embedded Mermaid) + `shared/css/diagram.css`. Se
 
 ## Key Concepts
 
-### Configuration Auto-Discovery
-All skills automatically find settings from `docs/tasks/kanban_board.md`: Team ID, Next Epic Number, Next Story Number. Create via ln-130-tasks-docs-creator or ln-100-documents-pipeline. If missing, skills request data from user.
+### Tool Configuration (Phase 0)
+All skills read `docs/tools_config.md` at startup (auto-bootstrapped if missing). This config determines: task provider (Linear/File Mode), research chain, git strategy. See `shared/references/tools_config_guide.md`. Task numbering and Team ID come from `docs/tasks/kanban_board.md`. Both created by ln-130/ln-111 or auto-bootstrapped by any skill.
 
 ### Task Hierarchy, Kanban Board, Development Principles, Task Templates, DAG Support
 See [README.md](README.md#-key-concepts) for detailed structure, principles, and template references.
@@ -61,7 +61,7 @@ All 107 skills documented in [README.md](README.md#-features) with workflows in 
 
 **Code Comments:** 15-20% ratio. Explain WHY, not WHAT. NO Epic/Task IDs, NO historical notes, NO code examples.
 
-**Documentation Language:** All docs in English except Stories/Tasks in Linear (can be English/Russian).
+**Documentation Language:** All docs in English except Stories/Tasks (can be English/Russian regardless of provider).
 
 **Sequential Numbering:** Phases/Sections/Steps: 1, 2, 3, 4 (NOT 1, 1.5, 2). Exceptions: Phase 4a (CREATE), 4b (REPLAN).
 

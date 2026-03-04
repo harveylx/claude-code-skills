@@ -5,8 +5,8 @@
      This task may update existing tests if implementation changes break them. -->
 
 **Epic:** [Epic N - Epic Name](link) *(optional)*
-**User Story:** [{{TEAM_ID}}XXX Story Name](link) *(parent task - this task will have parentId={{TEAM_ID}}XXX)*
-**Related:** {{TEAM_ID}}-XX, {{TEAM_ID}}-YY
+**User Story:** [USXXX Story Name](link-or-path) *(parent story)*
+**Related:** T001, T002
 **Parallel Group:** {N}
 
 ---
