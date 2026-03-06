@@ -29,8 +29,6 @@ Read `docs/tools_config.md` → Git → Branch strategy:
 **MANDATORY READ:** Load `shared/references/git_worktree_fallback.md`
 ```
 
-Skills using this: ln-400, ln-1000.
-
 ---
 **Version:** 1.0.0
 **Last Updated:** 2026-03-04

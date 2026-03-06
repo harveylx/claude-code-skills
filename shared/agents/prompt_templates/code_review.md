@@ -39,6 +39,7 @@ Before reviewing, state in one sentence: What specific quality question must thi
 - Is any functionality duplicated elsewhere in the codebase?
 - If duplicated: suggest extracting to shared utils, base classes, or common modules
 - Old code that was replaced MUST be deleted — no backward compatibility shims, re-exports, or renamed `_unused` variables
+- Full cleanup checklist: `shared/references/clean_code_checklist.md`
 
 **Pattern Compliance:**
 - Does the implementation follow existing project patterns and conventions?

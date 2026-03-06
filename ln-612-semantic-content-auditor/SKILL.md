@@ -1,7 +1,8 @@
 ---
 name: ln-612-semantic-content-auditor
-description: Semantic content auditor (L3 Worker). Verifies document content matches stated SCOPE, aligns with project goals, and reflects actual codebase state. Called by ln-610 for each project document. Writes file-based report with scope_alignment and fact_accuracy scores.
+description: Semantic content auditor . Verifies document content matches stated SCOPE, aligns with project goals, and reflects actual codebase state. For each project document. Writes file-based report with scope_alignment and fact_accuracy scores.
 allowed-tools: Read, Grep, Glob, Bash
+license: MIT
 ---
 
 > **Paths:** File paths (`shared/`, `references/`, `../ln-*`) are relative to skills repo root. If not found at CWD, locate this SKILL.md directory and go up one level for repo root.

@@ -1,16 +1,28 @@
 # Agent Review Workflow (Shared)
 
-Common workflow for all agent reviewer skills (ln-005, ln-311, ln-513). Each skill provides parameters and unique logic; this reference defines the shared execution mechanics.
+Common workflow for all agent review workers. Each skill provides parameters and unique logic; this reference defines the shared execution mechanics.
 
 ## Parameters (provided by each skill)
 
 | Parameter | Description | Examples |
 |-----------|-------------|---------|
 | `review_type` | File naming suffix | `contextreview`, `storyreview`, `codereview` |
-| `skill_group` | Health check filter | `005`, `311`, `513` |
+| `skill_group` | Health check filter | `005` (universal), `311` (story), `513` (code) |
 | `identifier` | Unique label for file naming | `PROJ-123`, `review_20260227_143000` |
 | `verdict_acceptable` | Verdict for "no issues" | `CONTEXT_ACCEPTABLE`, `STORY_ACCEPTABLE`, `CODE_ACCEPTABLE` |
 | `prompt_file` | Built prompt path | `.agent-review/{identifier}_{review_type}_prompt.md` |
+
+## Plan Mode Behavior
+
+When running in Plan Mode (per `shared/references/plan_mode_pattern.md`, Workflow B):
+
+`.agent-review/` is git-ignored (`*`) — writing there is NOT a project modification. All persistence steps work normally.
+
+| Step | Plan Mode Change |
+|------|-----------------|
+| Health Check through Save Review Summary | **No change** — all steps use `.agent-review/` which is outside project |
+| Skill-specific project edits (e.g., Compare & Correct) | **Skip until approval** — output findings to chat, apply on user confirmation |
+| Aggregate + Return | **Output to chat** in addition to normal persistence |
 
 ## Step: Health Check
 

@@ -129,7 +129,7 @@ IF ALL criteria PASS → Story ready for Task decomposition
 
 ## 5. Verification Methods (Goal-Driven Execution)
 
-Each task AC must include a verification method — defines HOW executor (ln-401) checks that AC is satisfied after implementation.
+Each task AC must include a verification method — defines HOW executor checks that AC is satisfied after implementation.
 
 | Method | When to Use | Format |
 |--------|-------------|--------|

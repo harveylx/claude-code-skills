@@ -2,6 +2,7 @@
 name: ln-610-docs-auditor
 description: "Coordinates 3 specialized documentation audit workers (structure, semantic, code comments). Detects project type, delegates parallel audits, aggregates results into docs/project/docs_audit.md."
 allowed-tools: Read, Grep, Glob, Bash, Skill
+license: MIT
 ---
 
 > **Paths:** File paths (`shared/`, `references/`, `../ln-*`) are relative to skills repo root. If not found at CWD, locate this SKILL.md directory and go up one level for repo root.

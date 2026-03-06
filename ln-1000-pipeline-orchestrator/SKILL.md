@@ -1,6 +1,7 @@
 ---
 name: ln-1000-pipeline-orchestrator
-description: "Meta-orchestrator (L0): reads kanban board, lets user pick ONE Story, drives it through pipeline 300->310->400->500 via TeamCreate. User-confirmed merge to develop after quality gate PASS."
+description: "Meta-orchestrator: reads kanban board, lets user pick ONE Story, drives it through pipeline 300->310->400->500 via TeamCreate. User-confirmed merge to develop after quality gate PASS."
+license: MIT
 ---
 
 > **Paths:** File paths (`shared/`, `references/`, `../ln-*`) are relative to skills repo root. If not found at CWD, locate this SKILL.md directory and go up one level for repo root.

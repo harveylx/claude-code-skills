@@ -35,7 +35,7 @@ Default areas (when no focus filter applied):
 - **feasibility** — Is this achievable given constraints (time, tech, team)?
 - **completeness** — Are there missing considerations, edge cases, steps?
 - **consistency** — Alignment with existing decisions/patterns? Side-effects contained? Interfaces honest (no hidden writes in read-named functions)?
-- **best_practices** — Industry best practices (2025-2026)? Flat orchestration (no deep service chains)? Modules as sinks (self-contained) not pipes (cascading side-effects)?
+- **best_practices** — Industry best practices (2025-2026)? Flat orchestration (no deep service chains)? Modules as sinks (self-contained) not pipes (cascading side-effects)? No backward-compat shims — replaced code must be deleted, not wrapped.
 - **risk** — What could go wrong? Failure modes, dependencies, unknowns?
 
 ## Alternative Approaches

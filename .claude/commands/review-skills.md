@@ -93,7 +93,7 @@ Read every SKILL.md in scope. Check ALL dimensions across ALL skills in scope.
 - Orchestrators (L1/L2) delegate work, not execute directly — no detailed implementation logic in their SKILL.md
 - Workers (L3) execute, not decide workflow — no routing/priority logic in their SKILL.md
 - L2→L2 cross-category delegation follows forward-flow (0XX→1XX→…→6XX), except 0XX shared services
-- No "Used by" consumer lists in `shared/` files — reverse coupling; consumers are discoverable via grep
+- Coupling reduction in `shared/` files — shared references describe patterns, NOT consumers. Forbidden in any form: `Used by`, `Skills using this:`, `For ln-NNN`, `via ln-NNN` suffixes, skill names in role descriptions, skill IDs in code examples. Use generic role names (`task executor`, `review worker`). Consumers reference shared via MANDATORY READ; reverse direction is never needed
 
 ### D9: Pattern Compliance (conditional — `ln-6*` audit skills only)
 - References `shared/references/two_layer_detection.md` via MANDATORY READ (Layer 1: grep, Layer 2: context)

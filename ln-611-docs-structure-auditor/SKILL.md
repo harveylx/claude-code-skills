@@ -1,7 +1,8 @@
 ---
 name: ln-611-docs-structure-auditor
-description: Documentation structure audit worker (L3). Checks hierarchy & links, SSOT, proactive compression, requirements compliance, actuality (code vs docs), legacy cleanup, stack adaptation. Returns findings with severity, location, and recommendations.
+description: Checks hierarchy & links, SSOT, proactive compression, requirements compliance, actuality (code vs docs), legacy cleanup, stack adaptation. Returns findings with severity, location, and recommendations.
 allowed-tools: Read, Grep, Glob, Bash
+license: MIT
 ---
 
 > **Paths:** File paths (`shared/`, `references/`, `../ln-*`) are relative to skills repo root. If not found at CWD, locate this SKILL.md directory and go up one level for repo root.

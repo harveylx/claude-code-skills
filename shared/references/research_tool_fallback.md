@@ -38,8 +38,6 @@ Same pattern as tools_config_guide.md:
 **MANDATORY READ:** Load `shared/references/research_tool_fallback.md`
 ```
 
-Skills using this: ln-001, ln-002, ln-120, ln-201, ln-230, ln-310, ln-404, ln-511, ln-521, ln-523, ln-620, ln-630, ln-640, ln-641, ln-645, ln-650, ln-1000.
-
 ---
 **Version:** 1.0.0
 **Last Updated:** 2026-03-04

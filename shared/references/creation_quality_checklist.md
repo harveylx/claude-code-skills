@@ -1,24 +1,24 @@
 # Creation Quality Checklist
 
-Prevention checklist for content creators (ln-220/221, ln-300/301). Maps to ln-310 validation criteria — following these rules prevents penalty points at validation stage.
+Prevention checklist for content creators. Maps to story validation criteria — following these rules prevents penalty points at validation stage.
 
-For full validation rules and auto-fix logic, see `ln-310-story-validator/references/` (7 validation files).
+For full validation rules and auto-fix logic, see story validator `references/` (7 validation files).
 
 ## Story Creation Checklist
 
-For ln-220-story-coordinator and ln-221-story-creator.
+For Story creation workflow.
 
 | # | Criterion | Penalty | Rule |
 |---|-----------|---------|------|
 | 1 | Story Structure | 1 | 8 sections per template (in order): Story, Context, Acceptance Criteria, Implementation Tasks, Test Strategy, Technical Notes, Definition of Done, Dependencies |
 | 3 | Story Statement | 1 | Format: "As a {persona}, I want {capability}, so that {value}" — all 3 parts required |
 | 4 | AC Quality | 3 | 3-5 Given/When/Then scenarios: happy path + error + edge case. Include HTTP codes, timing, exact messages |
-| 5 | Standards Compliance | 10 | Every technical decision references specific RFC/OWASP/REST standard by number in Technical Notes. Use ln-001 research results |
+| 5 | Standards Compliance | 10 | Every technical decision references specific RFC/OWASP/REST standard by number in Technical Notes. Use standards research results |
 | 6 | Library & Version | 5 | Latest stable versions in Technical Notes. Query Context7/MCP Ref to verify |
 | 9 | Story Size | 3 | 1-8 tasks (3-5 optimal), 3-5 AC, 6-20 hours total, tests justified by Priority ≥15. If outside range — split or merge |
 | 11 | YAGNI | 3 | Each AC = real user need. No speculative features. Every Task maps to >= 1 AC |
 | 12 | KISS | 3 | Simplest approach. No task requires >3 new abstractions. If >3 — split or simplify |
-| 14 | Documentation Complete | 5 | Pattern docs (from ln-002 research) referenced in Technical Notes. No orphan patterns |
+| 14 | Documentation Complete | 5 | Pattern docs (from best practices research) referenced in Technical Notes. No orphan patterns |
 | 16 | Story-Task Alignment | 3 | Each Task title contains keyword from Story AC (grep-verifiable) |
 | 17 | AC-Task Coverage | 3 | Coverage matrix: every AC covered by >= 1 Task. No empty rows |
 | 18 | Story Dependencies | 10 | No forward dependencies on Stories not yet created. Only reference earlier Stories |
@@ -27,7 +27,7 @@ For ln-220-story-coordinator and ln-221-story-creator.
 
 ## Task Creation Checklist
 
-For ln-300-task-coordinator and ln-301-task-creator.
+For Task creation workflow.
 
 | # | Criterion | Penalty | Rule |
 |---|-----------|---------|------|
@@ -43,7 +43,7 @@ For ln-300-task-coordinator and ln-301-task-creator.
 
 ## Validation-Only Criteria
 
-These 4 criteria are handled by ln-310 during validation, NOT by creators:
+These 4 criteria are handled during story validation, NOT by creators:
 
 | # | Criterion | Why validation-only |
 |---|-----------|---------------------|

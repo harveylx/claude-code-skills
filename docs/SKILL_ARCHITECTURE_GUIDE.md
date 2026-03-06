@@ -782,6 +782,7 @@ Every User Story should be:
 | Constant behavior modification | Using conversation context as workaround | Use proper skill scoping |
 | Orchestrator loads full descriptions | Token inefficiency | Lazy loading, delegate to workers |
 | Worker makes workflow decisions | Responsibility leak | Move decision logic to orchestrator |
+| Shared file names its consumers | Reverse coupling — any skill rename forces N file edits | Shared files describe patterns, not consumers. Any form: `Used by`, `Skills using this`, `For ln-NNN`, `via ln-NNN`, skill names in examples. Use generic roles (`task executor`, `review worker`) |
 
 ### Task Design Red Flags
 

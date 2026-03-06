@@ -42,7 +42,7 @@ IF finding.check IN (god_classes, long_methods, large_file):
 
 ```
 IF finding.check IN (outdated_dependency, vulnerable_dependency):
-  Cross-check: version audit tool output from ln-622 (pip-audit, npm audit)
+  Cross-check: version audit tool output (pip-audit, npm audit)
   IF version matches latest stable AND 0 CVEs:
     → Remove finding
 ```

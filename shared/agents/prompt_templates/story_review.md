@@ -36,6 +36,7 @@ Before reviewing, state in one sentence: What specific risk must this review cat
 - Do Tasks reference correct files/modules/patterns from the code?
 - Are alternative approaches considered? (see Alternative Solutions section below)
 - Missing considerations (security, performance, edge cases)?
+- **Clean code:** Do Tasks include cleanup of replaced code? No backward-compat shims, no legacy wrappers left behind. See `shared/references/clean_code_checklist.md` Replacement Rule.
 
 ## Risk Analysis
 Evaluate implementation risks that could cause production incidents:

@@ -31,13 +31,13 @@ Workers write full report to `docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/
 
 **Worker return (in-context, ~50 tokens):**
 ```
-Report written: docs/project/.audit/ln-620/{YYYY-MM-DD}/621-security.md
+Report written: docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/{worker-id}-security.md
 Score: 7.5/10 | Issues: 5 (C:0 H:2 M:2 L:1)
 ```
 
-Extended workers (ln-641, ln-643) include diagnostic sub-scores:
+Extended workers (pattern analyzer, API contract auditor) include diagnostic sub-scores:
 ```
-Report written: docs/project/.audit/ln-640/{YYYY-MM-DD}/641-pattern-job-processing.md
+Report written: docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/{worker-id}-pattern-job-processing.md
 Score: 6.0/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
 ```
 
@@ -80,11 +80,11 @@ See `audit_output_schema.md` for full schema. Workers MUST return:
 
 ### Data Flow Diagrams
 
-**File-based (ln-620, ln-640):**
+**File-based (codebase auditor, pattern evolution auditor):**
 ```
 ┌─────────────────────┐
 │ L2 Coordinator      │
-│ (ln-620 / ln-640)   │
+│ (file-based output) │
 └─────────┬───────────┘
           │ contextStore + output_dir
           ▼
@@ -104,11 +104,11 @@ See `audit_output_schema.md` for full schema. Workers MUST return:
               └─────────────────────┘
 ```
 
-**In-context JSON (ln-650, ln-630):**
+**In-context JSON (persistence auditor, test auditor):**
 ```
 ┌─────────────────────┐
 │ L2 Coordinator      │
-│ (ln-650/ln-630)     │
+│ (JSON output)       │
 └─────────┬───────────┘
           │ contextStore
           ▼
@@ -173,14 +173,14 @@ Workers for this skill:
 
 ## Execution Workers (Non-Audit)
 
-For ln-401, ln-403, ln-404 execution workers:
+For execution workers (task executor, task rework, test executor):
 
 **Input:** Task ID only (worker loads full context independently)
 
 ```javascript
 Task(
-  description: "Execute task via ln-401",
-  prompt: "Execute ln-401-task-executor for task PROJ-123. Read skill from ln-401-task-executor/SKILL.md.",
+  description: "Execute task via task executor",
+  prompt: "Execute task executor for task PROJ-123. Read skill from task executor SKILL.md.",
   subagent_type: "general-purpose"
 )
 ```
@@ -192,7 +192,7 @@ Task(
   "status": "To Review",
   "summary": "Implemented UserService with 3 methods",
   "files_changed": ["src/services/UserService.ts"],
-  "next_action": "Review via ln-402"
+  "next_action": "Review via task reviewer"
 }
 ```
 

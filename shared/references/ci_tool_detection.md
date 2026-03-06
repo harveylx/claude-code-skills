@@ -81,14 +81,14 @@ Resolve commands in this order (stop at first match per category):
 
 Each skill adds its own logic ON TOP of this guide:
 
-| Skill | Additional Behavior |
-|-------|--------------------|
-| ln-003-push-all | Auto-fix enabled; 2 retry attempts; continue on persistent errors |
-| ln-402-task-reviewer | Run only when verdict=Done; FAIL overrides to To Rework |
-| ln-510-quality-coordinator | Delegates tests to ln-514; aggregates results |
-| ln-512-tech-debt-cleaner | Revert ALL changes on any FAIL (`git checkout .`) |
-| ln-514-regression-checker | Tests only; prefer runbook.md commands over auto-detect |
-| ln-622-build-auditor | Full audit with severity scoring (CRITICAL/HIGH/MEDIUM/LOW) |
+| Role | Additional Behavior |
+|------|--------------------|
+| Push workflow | Auto-fix enabled; 2 retry attempts; continue on persistent errors |
+| Task reviewer | Run only when verdict=Done; FAIL overrides to To Rework |
+| Quality coordinator | Delegates tests to regression checker; aggregates results |
+| Tech debt cleaner | Revert ALL changes on any FAIL (`git checkout .`) |
+| Regression checker | Tests only; prefer runbook.md commands over auto-detect |
+| Build auditor | Full audit with severity scoring (CRITICAL/HIGH/MEDIUM/LOW) |
 
 ---
 **Version:** 1.0.0

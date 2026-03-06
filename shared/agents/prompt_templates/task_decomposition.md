@@ -19,7 +19,8 @@ Before decomposing, state in one sentence: What is the REAL deliverable this Sto
 2. Each task must be independently completable using only preceding tasks
 3. NO test tasks (created later by test planner)
 4. NO documentation-only tasks (fold into implementation DoD)
-5. Validate: Task N must NOT depend on Task N+1 or later
+5. If task REPLACES existing code → include deletion of old implementation in task scope (no backward-compat shims, no aliases). See `shared/references/clean_code_checklist.md`.
+6. Validate: Task N must NOT depend on Task N+1 or later
 
 ## Output Format (JSON)
 ```json

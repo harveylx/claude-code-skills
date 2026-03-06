@@ -15,19 +15,19 @@ Standard pattern for skills delegating work to external CLI AI agents (Codex, Ge
 | 200 (Decomposition) | Gemini | gemini-3-flash-preview | Opus | Scope analysis, epic planning |
 | 300 (Task Mgmt) | Codex | gpt-5.3-codex | Opus | Task decomposition, plan review |
 | 400 (Execution) | Opus (native) | claude-opus-4-6 | -- | Direct code writing |
-| 005 (Universal Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Universal context review via ln-005 |
-| 311 (Story Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Story/Tasks review via ln-311 |
-| 513 (Code Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Code review via ln-513 |
+| 005 (Universal Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Universal context review |
+| 311 (Story Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Story/Tasks review |
+| 513 (Code Agent Review) | codex-review + gemini-review | parallel | Self-review (if both fail) | Code review |
 
 ## Dedicated Agent Review Skills
 
 Agent review is encapsulated in dedicated worker skills, not inline in parent skills:
 
-| Worker Skill | Parent | Purpose | Prompt Templates |
-|-------------|--------|---------|-----------------|
-| **ln-005-agent-reviewer** | Any skill / manual | Universal context review | `context_review.md`, `challenge_review.md` |
-| **ln-311-agent-reviewer** | ln-310 Phase 5 | Story/Tasks review | `story_review.md`, `challenge_review.md` |
-| **ln-513-agent-reviewer** | ln-510 Phase 4 | Code implementation review | `code_review.md`, `challenge_review.md` |
+| Role | Invocation | Purpose | Prompt Templates |
+|------|------------|---------|-----------------|
+| Universal review worker | Any skill / manual | Universal context review | `context_review.md`, `challenge_review.md` |
+| Story review worker | Story validation phase | Story/Tasks review | `story_review.md`, `challenge_review.md` |
+| Code review worker | Code quality phase | Code implementation review | `code_review.md`, `challenge_review.md` |
 
 **Benefits:**
 - Health check + prompt execution in single invocation (minimal timing gap)
@@ -155,8 +155,8 @@ Per `shared/references/agent_review_workflow.md` Fallback Rules section. For non
 Phase 1: DISCOVERY
 Phase 2: PLAN ← external agent for analysis/decomposition
 Phase 3: MODE DETECTION
-Phase 4: AUTO-FIX ← 20 criteria, Penalty Points = 0 (ln-310)
-Phase 5: AGENT REVIEW (MANDATORY) ← delegated to ln-311 (ln-310) or ln-513 (ln-510)
+Phase 4: AUTO-FIX ← 20 criteria, Penalty Points = 0 (story validation)
+Phase 5: AGENT REVIEW (MANDATORY) ← delegated to agent review worker
 Phase 6: DELEGATE
 Phase 7: AGGREGATE
 Phase 8: REPORT
@@ -164,7 +164,7 @@ Phase 8: REPORT
 
 ## Startup: Agent Availability Check
 
-**Health check is performed inside the agent review skills (ln-005, ln-311, ln-513), NOT in parent skills.**
+**Health check is performed inside the agent review workers, NOT in parent skills.**
 
 ```bash
 python shared/agents/agent_runner.py --health-check
@@ -176,7 +176,7 @@ python shared/agents/agent_runner.py --health-check
 3. **Only command output determines availability.** Do NOT reason about file existence, environment, or installation — run the command and read its output.
 4. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → return SKIPPED verdict.
 
-Filter output by `skill_groups` matching current skill (e.g., "005" for ln-005, "311" for ln-311, "513" for ln-513).
+Filter output by `skill_groups` matching current skill (e.g., "005" for universal review, "311" for story review, "513" for code review).
 
 | Command Output | Impact |
 |----------------|--------|
@@ -280,7 +280,7 @@ Per `shared/references/agent_review_workflow.md` Step: Critical Verification + D
 
 ## Reference Passing Pattern
 
-Standard steps before launching agents (performed inside ln-005/ln-311/ln-513):
+Standard steps before launching agents (performed inside agent review workers):
 
 1. **Get references:** Call Linear MCP `get_issue(storyId)` for Story URL + `list_issues(parent)` for Task URLs. If project stores tasks locally → use file paths.
 2. **Ensure .agent-review/:** If `.agent-review/` exists, reuse as-is. If not, create it with `.gitignore` (content: `*` + `!.gitignore`). Create `.agent-review/{agent}/` subdirs only if they don't exist. Do NOT add `.agent-review/` to project root `.gitignore`.
@@ -301,10 +301,10 @@ Standard steps before launching agents (performed inside ln-005/ln-311/ln-513):
 .agent-review/
 ├── .gitignore                                      # * + !.gitignore
 ├── review_history.md                               # Append-only review log (all reviews)
-├── arch-proposal_contextreview_prompt.md            # ln-005: shared prompt (both agents)
-├── PROJ-123_storyreview_prompt.md                   # ln-311: shared prompt (both agents)
-├── PROJ-123_codereview_prompt.md                    # ln-513: shared prompt (both agents)
-├── context/                                         # Materialized context files (ln-005)
+├── arch-proposal_contextreview_prompt.md            # universal review: shared prompt (both agents)
+├── PROJ-123_storyreview_prompt.md                   # story review: shared prompt (both agents)
+├── PROJ-123_codereview_prompt.md                    # code review: shared prompt (both agents)
+├── context/                                         # Materialized context files (universal review)
 │   └── arch-proposal_context.md
 ├── codex/
 │   ├── arch-proposal_session.json                   # Session tracking for debate resume
@@ -335,8 +335,8 @@ Standard steps before launching agents (performed inside ln-005/ln-311/ln-513):
 
 | Worker | Escalation? | Mechanism |
 |--------|-------------|-----------|
-| ln-311 (Story Review) | No | Suggestions are editorial; ln-310 Gate verdict unchanged |
-| ln-513 (Code Quality) | Yes | Findings with `area=security` or `area=correctness` can escalate PASS -> CONCERNS in ln-510 |
+| Story review worker | No | Suggestions are editorial; Story validation Gate verdict unchanged |
+| Code review worker | Yes | Findings with `area=security` or `area=correctness` can escalate PASS -> CONCERNS in code quality coordinator |
 
 ## Anti-Patterns
 
@@ -350,9 +350,9 @@ Standard steps before launching agents (performed inside ln-005/ln-311/ln-513):
 | Use agents for project file writes | Agents write only to `-o` output file; analysis-only |
 | Chain multiple agent calls | One call per task; challenge/follow-up use `--resume-session` for context continuity |
 | Hard-depend on agent availability | Always have Opus fallback |
-| Run health check in parent skill | Health check inside agent review worker (ln-005/ln-311/ln-513) |
+| Run health check in parent skill | Health check inside agent review workers |
 | Kill agent tasks with TaskStop | Let agents complete; no artificial timeouts |
-| Skip agent review phase | Agent review is MANDATORY in ln-310 Phase 5 and ln-510 Phase 4 |
+| Skip agent review phase | Agent review is MANDATORY in story validation Phase 5 and code quality Phase 4 |
 | Start each review verification from scratch | Load review history for dedup + calibration |
 | Re-summarize agent findings in review log | Reference agent result files (self-documented reports) |
 | Inject project memory into agent prompts | Keep agent context clean; memory on Claude's side only |

@@ -13,7 +13,7 @@ Plan Mode active when:
 
 ### Workflow A: Preview-Only (Coordinators)
 
-For skills that delegate to workers (ln-300, ln-400, etc.):
+For skills that delegate to workers (coordinators, executors):
 
 ```
 Phases 1-N: Execute normally (discovery, analysis, planning)
@@ -29,16 +29,16 @@ Phase N+2: Write plan summary, call ExitPlanMode
 IDEAL Plan for Story US001:
 | # | Task | Type | Estimate | Worker |
 |---|------|------|----------|--------|
-| 1 | DB schema | impl | 5h | ln-401 |
-| 2 | Service | impl | 8h | ln-401 |
+| 1 | DB schema | impl | 5h | task executor |
+| 2 | Service | impl | 8h | task executor |
 
 Mode: CREATE (0 existing)
-Would invoke: ln-301-task-creator
+Would invoke: task creator
 ```
 
 ### Workflow B: Interactive (Validators)
 
-For skills that modify and need approval (ln-310):
+For skills that modify and need approval (validators):
 
 ```
 Phases 1-N: Full analysis (audit, scoring)
@@ -79,12 +79,12 @@ Before starting, add phases showing Plan Mode awareness:
 
 | Workflow | Skills |
 |----------|--------|
-| **A (Preview)** | ln-200, ln-210, ln-220, ln-300, ln-400, ln-401, ln-402 |
-| **B (Interactive)** | ln-310-story-validator |
+| **A (Preview)** | Coordinators (scope, epic, story, task), executors, reviewers |
+| **B (Interactive)** | Validators, universal context reviewer |
 
 ## Preview Format Standards
 
-### Story Preview (ln-221)
+### Story Preview (Story Creator)
 ```
 STORY CREATION PREVIEW for Epic 7: OAuth Authentication
 
@@ -101,7 +101,7 @@ Standards Research: OAuth 2.0 (RFC 6749), PKCE (RFC 7636)
 Type "confirm" to create.
 ```
 
-### Task Preview (ln-301)
+### Task Preview (Task Creator)
 ```
 TASK CREATION PREVIEW for Story US001
 
@@ -120,7 +120,7 @@ Order: Foundation-First (DB → Service → API → Validation)
 Type "confirm" to create.
 ```
 
-### Epic Preview (ln-210)
+### Epic Preview (Epic Coordinator)
 ```
 EPIC BATCH PREVIEW (6 Epics)
 
@@ -134,7 +134,7 @@ Total: 6 Epics (1 Infrastructure + 5 Business)
 Type "confirm" to create.
 ```
 
-### Review Preview (ln-402)
+### Review Preview (Task Reviewer)
 ```
 REVIEW PLAN for Task T003: Create API endpoints
 
@@ -158,7 +158,7 @@ Files to review:
 Expected output: Done/To Rework + Issues list
 ```
 
-### Replan Preview (ln-222, ln-302)
+### Replan Preview (Replanners)
 ```
 REPLAN PREVIEW for [Entity]
 

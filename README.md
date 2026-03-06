@@ -1,7 +1,7 @@
 # Claude Code Skills
 
 ![Version](https://img.shields.io/badge/version-3.1.0-blue)
-![Skills](https://img.shields.io/badge/skills-107-green)
+![Skills](https://img.shields.io/badge/skills-108-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![GitHub stars](https://img.shields.io/github/stars/levnikolaevich/claude-code-skills?style=social)](https://github.com/levnikolaevich/claude-code-skills)
 
@@ -20,17 +20,17 @@
 ## What's Inside
 
 ```
-claude-code-skills/                      # MARKETPLACE: 2 plugins, 107 skills
+claude-code-skills/                      # MARKETPLACE: 2 plugins, 108 skills
 |
-|  ┌─ Plugin: full-development-workflow-skills (73 skills) ─┐
+|  ┌─ Plugin: full-development-workflow-skills (76 skills) ─┐
 |
 |-- ln-001-standards-researcher/       # Research standards via MCP Context7/Ref
 |-- ln-002-best-practices-researcher/  # Create ADRs, guides, manuals
 |-- ln-003-push-all/                   # Commit and push all changes in one command
 |-- ln-004-agent-sync/                 # Sync skills & MCP settings to Gemini/Codex
-|-- ln-005-agent-reviewer/             # Universal context review (Codex + Gemini, debate protocol)
+|-- ln-005-multi-agent-context-review/  # Multi-agent context review (Codex + Gemini, debate protocol)
 |
-|-- ln-1XX-*/                          # DOCUMENTATION (13 skills)
+|-- ln-1XX-*/                          # DOCUMENTATION (11 skills)
 |   |-- ln-100-documents-pipeline/     # L1 Orchestrator: complete docs in one command
 |   |-- ln-110-project-docs-coordinator/  # Detects project type, delegates to workers
 |   |   |-- ln-111-root-docs-creator/     # CLAUDE.md, principles.md
@@ -78,7 +78,7 @@ claude-code-skills/                      # MARKETPLACE: 2 plugins, 107 skills
 |   |   |-- ln-522-manual-tester/      # Manual functional testing
 |   |   |-- ln-523-auto-test-planner/  # Plan E2E/Integration/Unit tests
 |
-|-- ln-6XX-*/                          # AUDIT (29 skills)
+|-- ln-6XX-*/                          # AUDIT (32 skills)
 |   |-- ln-610-docs-auditor/           # Documentation audit coordinator (3 workers)
 |   |   |-- ln-611-docs-structure-auditor/  # Hierarchy, SSOT, compression, actuality
 |   |   |-- ln-612-semantic-content-auditor/ # Scope alignment, fact accuracy
@@ -163,8 +163,12 @@ This marketplace contains **2 plugins** — install together or separately:
 
 | Plugin | Skills | Description |
 |--------|--------|-------------|
-| **full-development-workflow-skills** | 71 | Agile workflow: Documentation, Planning, Execution, Quality, Audit |
+| **full-development-workflow-skills** | 76 | Agile workflow: Documentation, Planning, Execution, Quality, Audit |
 | **claude-code-bootstrap** | 32 | Project bootstrap: CREATE or TRANSFORM to Clean Architecture |
+
+### Other AI Agents
+
+Browse and discover individual skills at [skills.sh](https://skills.sh/LevNikolaevich/claude-code-skills).
 
 ---
 
@@ -359,7 +363,7 @@ ln-400-story-executor      # 3. Tasks -> Review -> Quality -> Done
 <details>
 <summary><b>What is Claude Code Skills?</b></summary>
 
-A plugin for [Claude Code](https://claude.ai/code) that provides 102 production-ready skills automating the full Agile development lifecycle — from project bootstrap and documentation through scope decomposition, task execution, quality gates, and comprehensive code audits.
+A plugin for [Claude Code](https://claude.ai/code) that provides 108 production-ready skills automating the full Agile development lifecycle — from project bootstrap and documentation through scope decomposition, task execution, quality gates, and comprehensive code audits.
 
 </details>
 
@@ -436,7 +440,7 @@ Through the Orchestrator-Worker pattern. Instead of feeding the entire codebase 
 <details>
 <summary><b>How is it different from custom prompts or slash commands?</b></summary>
 
-Custom prompts are ad-hoc and context-free. Claude Code Skills provides 102 coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
+Custom prompts are ad-hoc and context-free. Claude Code Skills provides 108 coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
 
 </details>
 
