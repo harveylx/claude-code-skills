@@ -55,7 +55,7 @@ Workers (ln-301, ln-302) handle the actual Linear/File operations based on `task
 
 **Context:** Validates plan quality before delegation to workers, preventing rework.
 
-After building IDEAL plan (Phase 2), score 5 criteria:
+After building IDEAL plan (Phase 2), score 7 criteria:
 
 | # | Criterion | Check |
 |---|-----------|-------|
@@ -65,11 +65,12 @@ After building IDEAL plan (Phase 2), score 5 criteria:
 | 4 | **Scope isolation** | Tasks don't overlap with other Stories' scope |
 | 5 | **Architecture compliance** | Tasks reference correct layers (DB→Repo→Service→API), no planned cross-layer violations (e.g., API task doing direct DB calls) |
 | 6 | **Parallel groups valid** | Tasks in same group have no mutual dependencies; all deps point to earlier groups; numbers sequential |
+| 7 | **Destructive op safety** | Tasks with data deletion/migration/schema changes include safety plan (backup, rollback, blast radius) |
 
-**Score = count of PASS criteria (0-6)**
-- 5-6/6: Delegate to worker
-- 3-4/6: Show warnings to user, fix or proceed
-- <3/6: Rework plan before delegation
+**Score = count of PASS criteria (0-7)**
+- 6-7/7: Delegate to worker
+- 4-5/7: Show warnings to user, fix or proceed
+- <4/7: Rework plan before delegation
 
 ## Verification Methods for Task AC
 

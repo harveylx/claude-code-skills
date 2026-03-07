@@ -29,6 +29,8 @@ Receives `contextStore` with: `tech_stack`, `best_practices`, `db_config` (datab
 
 ## Workflow
 
+**MANDATORY READ:** Load `shared/references/two_layer_detection.md` for detection methodology.
+
 1) **Parse context from contextStore**
    - Extract tech_stack, best_practices, db_config, output_dir
    - Determine scan_path
@@ -69,6 +71,8 @@ Receives `contextStore` with: `tech_stack`, `best_practices`, `db_config` (datab
 **Severity:**
 - **CRITICAL:** Missing commit for NOTIFY/LISTEN-based real-time features (SSE, WebSocket)
 - **HIGH:** Missing commit for triggers that update materialized data
+
+**Exception:** Single atomic operation with no intermediate observable state → downgrade CRITICAL to MEDIUM. Transaction scope documented as intentional (ADR, architecture comment) → downgrade one level
 
 **Recommendation:**
 - Add `session.commit()` at progress milestones (throttled: every N%, every T seconds)

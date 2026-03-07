@@ -86,8 +86,8 @@ Step 4: Implement
   - 4a Pattern Reuse: IF creating new file/utility, Grep src/ for existing similar patterns
     (error handlers, validators, HTTP wrappers, config loaders). Reuse if found.
   - 4b Follow task plan/AC, apply KISS/YAGNI
-  - 4c Architecture Guard: IF creating service function: (1) 3+ side-effect categories → split;
-    (2) get_*/find_*/check_* naming → verify no hidden writes; (3) 3+ service imports → flatten
+  - 4c Architecture Guard: IF creating service function: (1) 3+ side-effect categories in **leaf** function → split (EXCEPT orchestrator functions that delegate sequentially — these are expected to have 3+ categories);
+    (2) get_*/find_*/check_* naming → verify no hidden writes; (3) 3+ service imports in **leaf** function → flatten (orchestrator imports are expected)
   - Update docs and existing tests if impacted
   - Execute verify: methods from task AC (test/command/inspect)
 
@@ -116,7 +116,7 @@ Step 6: Finish
 
 **Context:** Self-assessment before To Review reduces review round-trips and catches obvious issues early.
 
-Before setting To Review, verify all 6 items:
+Before setting To Review, verify all items:
 
 | # | Check | Verify |
 |---|-------|--------|
@@ -127,7 +127,12 @@ Before setting To Review, verify all 6 items:
 | 4 | **Docs updated** | Affected Components docs reflect changes |
 | 5 | **Tests pass** | Existing tests still pass after changes |
 | 6 | **Pattern reuse** | New utilities checked against existing codebase; no duplicate patterns introduced |
-| 7 | **Architecture guard** | Cascade depth <= 2; no hidden writes in read-named functions; no service chains >= 3 |
+| 7 | **Architecture guard** | Cascade depth <= 2 (leaf functions); no hidden writes in read-named functions; no service chains >= 3 in leaf functions (orchestrator imports exempt) |
+| 8 | **Destructive op safety** | If task has "Destructive Operation Safety" section: (1) backup step executed/planned before destructive code, (2) rollback mechanism exists in code, (3) environment guard present, (4) preview/dry-run evidence attached or referenced |
+
+**MANDATORY READ:** Load `shared/references/destructive_operation_safety.md` for severity classification and safety requirements.
+
+**HITL Gate:** IF task severity = CRITICAL (per destructive_operation_safety.md loaded above): Use `AskUserQuestion` to confirm before marking To Review: "Task contains CRITICAL destructive operation: {operation}. Backup plan: {plan}. Proceed?" Do NOT mark To Review until user confirms.
 
 **If any check fails:** Fix before setting To Review. Do not rely on reviewer to catch preventable issues.
 

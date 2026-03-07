@@ -23,6 +23,8 @@ Coordinates 4 specialized audit workers to perform database efficiency, transact
 
 ## Workflow
 
+**MANDATORY READ:** Load `shared/references/two_layer_detection.md` for detection methodology.
+
 1) **Discovery:** Load tech_stack.md, package manifests, detect DB/ORM/async framework, auto-discover Team ID
 2) **Research:** Query MCP tools for DB/ORM/async best practices ONCE
 3) **Build Context:** Create contextStore with best practices + DB-specific metadata

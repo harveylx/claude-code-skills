@@ -41,6 +41,8 @@ L2 Coordinator that analyzes implemented architectural patterns against current 
 | **Layer violations (critical)** | 0 | Any new critical violation | Create [BUG] Story |
 | **Cross-domain cycles** | 0 | Any new cycle | Create [REFACTOR] Story |
 
+**Exception:** Score drop ≤2 points → advisory only, not auto-Story (noise margin). Deliberate architecture decision documented in ADR → skip auto-remediation. **Layer 2:** Before creating auto-Story, verify drift is not from intentional architectural tradeoff.
+
 **SLA breach = config-driven auto-remediation:**
 - IF `task_provider == "linear"` (Linear MCP available): create_issue() in Linear
 - ELSE: Write task file to `docs/tasks/` with `ACTION_REQUIRED` marker
@@ -70,6 +72,8 @@ Task(description: "[Audit/Create] via ln-6XX",
 - ❌ Any execution bypassing subagent context isolation
 
 ## Workflow
+
+**MANDATORY READ:** Load `shared/references/two_layer_detection.md` for detection methodology.
 
 ### Phase 1a: Baseline Detection
 

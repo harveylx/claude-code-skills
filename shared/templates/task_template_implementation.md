@@ -115,6 +115,18 @@
 **Performance logging:**
 - Threshold: [Log WARN if operation > 500ms]
 
+<!-- Include when task has destructive ops per shared/references/destructive_operation_safety.md. Remove if N/A. -->
+### Destructive Operation Safety
+> **MANDATORY READ:** `shared/references/destructive_operation_safety.md`
+
+**Operations:** [list each destructive operation]
+**Severity:** [CRITICAL / HIGH / MEDIUM per shared reference classification]
+**Backup plan:** [what + how to verify]
+**Rollback plan:** [undo procedure + tested where]
+**Blast radius:** [resources + scope + downtime]
+**Environment guard:** [env check or admin confirmation]
+**Preview / dry-run:** [what-if output, SQL diff, terraform plan — attach or reference]
+
 ### Alternatives Considered
 - **Alternative 1:** [name] - [why rejected: outdated/over-engineered/non-standard/lacking feature]
 - **Alternative 2:** [name] - [why rejected: performance/complexity/compatibility]

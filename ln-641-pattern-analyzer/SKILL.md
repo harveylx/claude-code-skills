@@ -36,6 +36,8 @@ L3 Worker that analyzes a single architectural pattern against best practices an
 
 ## Workflow
 
+**MANDATORY READ:** Load `shared/references/two_layer_detection.md` for detection methodology.
+
 ### Phase 1: Find Implementations
 
 **MANDATORY READ:** Load `../ln-640-pattern-evolution-auditor/references/pattern_library.md` — use "Pattern Detection (Grep)" table for detection keywords per pattern.
@@ -88,6 +90,11 @@ FOR EACH bestPractice NOT implemented:
     suggestion: how to fix,
     effort: "S" | "M" | "L"
   })
+
+# Layer 2 context check (MANDATORY):
+# Deviation documented in code comment or ADR? → downgrade to LOW
+# Pattern intentionally simplified for project scale? → skip
+
 
 gaps = {
   missingComponents: required components not found in code,

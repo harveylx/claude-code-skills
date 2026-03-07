@@ -43,6 +43,8 @@ L3 Worker that audits architectural layer boundaries and detects violations.
 
 ## Workflow
 
+**MANDATORY READ:** Load `shared/references/two_layer_detection.md` for detection methodology.
+
 ### Phase 1: Discover Architecture
 
 **MANDATORY READ:** Load `../ln-640-pattern-evolution-auditor/references/layer_rules.md` — use Architecture Presets (fallback), I/O Pattern Boundary Rules (Phase 2), Coverage Checks (Phase 4), Cross-Layer Consistency rules (Phase 3).
@@ -120,6 +122,8 @@ layers_with_commits = count([repo_commits, service_commits, api_commits].filter(
 | repo + api commits | HIGH | Transaction control bypasses service layer |
 | repo + service commits | HIGH | Ambiguous UoW owner (repo vs service) |
 | service + api commits | MEDIUM | Transaction control spans service + API |
+
+**Exception:** Saga pattern / distributed transactions with explicit compensating actions → downgrade CRITICAL to MEDIUM. UoW boundary documented with `// architecture decision` or ADR → skip.
 
 **Recommendation:** Choose single UoW owner (service layer recommended), remove commit() from other layers
 

@@ -146,28 +146,45 @@ Target: 400-600 lines for core principles, 600-800 lines with advanced documenta
 
 ---
 
+## AI-Friendly Development Principles
+
+**Context:** AI agents follow instructions literally. Human-oriented standards (SOLID, DRY, TDD) cause sycophantic behavior — agents optimize metrics instead of outcomes (see: SQLite→Rust rewrite, 20,000x perf degradation from blind standard compliance).
+
+| # | Principle | Description | Anti-pattern |
+|---|-----------|-------------|-------------|
+| 1 | **Outcome over Process** | Define WHAT code must achieve (latency, throughput, correctness), not HOW to structure it | "Use DI container" → agent adds DI to 50-line script |
+| 2 | **Context-Aware Rules** | Every threshold has exceptions; document them explicitly | Complexity ≤10 flags valid enum dispatch with 12 branches |
+| 3 | **Metric Skepticism** | Improving a metric ≠ improving code. Ask: "did the actual goal get closer?" | Refactor switch→lookup-table to reduce complexity score, lose error handling |
+| 4 | **Conflict Resolution** | When two principles conflict, choose the one that serves the OUTCOME, document why | SEB says "split 3+ side-effects" but orchestrator NEEDS multiple side-effects |
+| 5 | **Two-Layer Detection** | Layer 1: find violation. Layer 2 (MANDATORY): verify it's not intentional/justified. No valid finding without both layers | Flag N+1 as CRITICAL in admin-only endpoint called 1x/day |
+
+**Application in skills:** Auditor skills (ln-511, ln-623, ln-624) must implement Two-Layer Detection. Threshold-based rules must include Exception column. Process-oriented recommendations must be rewritten as outcome-oriented goals.
+
+---
+
 ## Table of Contents
 
 1. [Advanced Documentation Principles (2024-2026)](#advanced-documentation-principles-2024-2026)
-2. [Core Principles](#core-principles)
-3. [Orchestrator-Worker Pattern](#orchestrator-worker-pattern)
+2. [AI-Friendly Development Principles](#ai-friendly-development-principles)
+3. [Core Principles](#core-principles)
+4. [Orchestrator-Worker Pattern](#orchestrator-worker-pattern)
     - [Delegation Pattern Selection](#delegation-pattern-selection)
-4. [Single Responsibility Principle](#single-responsibility-principle)
-5. [When to Split Skills](#when-to-split-skills)
-6. [When to Combine Skills](#when-to-combine-skills)
-7. [Skill Architecture Patterns](#skill-architecture-patterns)
-8. [Token Efficiency](#token-efficiency)
-9. [Execution Patterns: Subagents vs Agent Teams (2026)](#execution-patterns-subagents-vs-agent-teams-2026)
-10. [Task Decomposition (Agile)](#task-decomposition-agile)
-11. [Red Flags](#red-flags)
-12. [Best Practices Checklist](#best-practices-checklist)
+5. [Single Responsibility Principle](#single-responsibility-principle)
+6. [When to Split Skills](#when-to-split-skills)
+7. [When to Combine Skills](#when-to-combine-skills)
+8. [Skill Architecture Patterns](#skill-architecture-patterns)
+9. [Token Efficiency](#token-efficiency)
+10. [Execution Patterns: Subagents vs Agent Teams (2026)](#execution-patterns-subagents-vs-agent-teams-2026)
+11. [Task Decomposition (Agile)](#task-decomposition-agile)
+12. [Red Flags](#red-flags)
+13. [Best Practices Checklist](#best-practices-checklist)
     - [Skill Creation Checklist](#skill-creation-checklist)
     - [Task Creation Checklist](#task-creation-checklist)
     - [Orchestrator Design Checklist](#orchestrator-design-checklist)
     - [Worker Design Checklist](#worker-design-checklist)
     - [Idempotent Operations Checklist](#idempotent-operations-checklist)
-13. [References](#references)
-14. [Appendix A: Concise Terms Dictionary](#appendix-a-concise-terms-dictionary)
+14. [References](#references)
+15. [Appendix A: Concise Terms Dictionary](#appendix-a-concise-terms-dictionary)
 
 ---
 

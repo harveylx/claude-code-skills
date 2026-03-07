@@ -45,7 +45,7 @@ def process_payment(order):
     metrics_service.track("payment", order.id)   # sink: track only
 ```
 
-> **Note:** "Flat Orchestration" = sequential step orchestration at single level (all steps visible). This is NOT the "cascading pipe" anti-pattern where side-effects trigger hidden chains. The term "Pipeline" in skill architecture (e.g., ln-620 audit pipeline) refers to orchestrator-worker sequential processing, which IS flat.
+> **Note:** "Flat Orchestration" = sequential step orchestration at single level (all steps visible). This is NOT the "cascading pipe" anti-pattern where side-effects trigger hidden chains. The term "Pipeline" in skill architecture (e.g., audit coordinator pipeline) refers to orchestrator-worker sequential processing, which IS flat.
 
 ### Architectural Honesty
 
@@ -114,7 +114,7 @@ These functions are expected to have side-effects — focus cascade depth analys
 Grep: (from\s+.*services.*import|import\s+.*Service|@Inject.*Service|private.*Service)
 ```
 
-Count service imports per file. 3+ imports = flat orchestration concern.
+Count service imports per file. 3+ imports in a **leaf function** = cascade risk (investigate depth). 3+ imports in an **orchestrator function** (process_, handle_, execute_) = expected flat orchestration pattern — NOT a concern.
 
 ---
 

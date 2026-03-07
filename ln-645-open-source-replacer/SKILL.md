@@ -42,6 +42,8 @@ L3 Worker that discovers custom modules, analyzes their purpose, and finds battl
 
 ## Workflow
 
+**MANDATORY READ:** Load `shared/references/two_layer_detection.md` for detection methodology.
+
 ### Phase 1: Discovery + Classification
 
 ```
@@ -289,6 +291,7 @@ Severity mapping:
 - **HIGH:** HIGH confidence replacement for module >200 LOC
 - **MEDIUM:** MEDIUM confidence, or HIGH confidence for 100-200 LOC
 - **LOW:** LOW confidence (partial coverage only)
+- **Exception:** Custom module with domain-specific logic not covered by OSS package → skip. Feature parity <80% → skip recommendation. **Layer 2:** Verify replacement has full feature parity before recommending
 
 ## Critical Rules
 
