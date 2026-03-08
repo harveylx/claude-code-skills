@@ -38,8 +38,13 @@ Upgrades .NET NuGet packages with automatic breaking change detection and migrat
 |-------|----------|-------------------|
 | .csproj file(s) | Yes | Block upgrade |
 | .sln file | No | Use csproj discovery instead |
+| Git clean state | Yes | Block (need clean baseline for revert) |
 
 > Workers assume coordinator (ln-820) already verified git state and created backup.
+
+### Worktree & Branch Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use ln-822 row.
 
 ---
 

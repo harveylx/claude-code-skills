@@ -1,27 +1,46 @@
-# Git Worktree Fallback
+# Git Worktree Isolation
 
-<!-- SCOPE: Branch isolation strategy with worktree/branch fallback. Read strategy from docs/tools_config.md Git section. -->
+<!-- SCOPE: Universal worktree isolation for code-writing skills. Self-detection + branch naming + fallback. -->
 
-## Strategy Selection
+## Lifecycle
+
+Any skill that modifies code checks its git context and creates isolation if needed:
+
+| Step | Action |
+|------|--------|
+| 1 | `git branch --show-current` — if already on `feature/*` / `optimize/*` / `upgrade/*` / `modernize/*` → skip to step 4 |
+| 2 | Sync base branch: `git fetch origin && git merge origin/master` (ensure develop has all master changes) |
+| 3 | `git worktree add {worktree_dir} -b {branch}` |
+| 4 | All edits, benchmarks, commits in worktree |
+| 5 | `git push -u origin {branch}` + report branch name to caller |
+| 6 | `git worktree remove {worktree_dir}` (branch preserved on remote) |
+
+## Branch Naming
+
+| Category | Branch Pattern | Worktree Dir |
+|----------|---------------|--------------|
+| Story execution | `feature/{id}-{slug}` | `.worktrees/story-{id}` |
+| Algorithm optimization | `optimize/{skill}-{function}-{ts}` | `../optimize-{skill}-{function}-{ts}` |
+| Query optimization | `optimize/{skill}-{ts}` | `../optimize-{skill}-{ts}` |
+| Runtime optimization | `optimize/{skill}-{ts}` | `../optimize-{skill}-{ts}` |
+| Dependency upgrade (npm) | `upgrade/{skill}-npm-{ts}` | `../upgrade-{skill}-{ts}` |
+| Dependency upgrade (NuGet) | `upgrade/{skill}-nuget-{ts}` | `../upgrade-{skill}-{ts}` |
+| Dependency upgrade (pip) | `upgrade/{skill}-pip-{ts}` | `../upgrade-{skill}-{ts}` |
+| OSS replacement | `modernize/{skill}-{module}-{ts}` | `../modernize-{skill}-{module}-{ts}` |
+| Bundle optimization | `modernize/{skill}-bundle-{ts}` | `../modernize-{skill}-{ts}` |
+
+`{ts}` = `YYYYMMDD-HHMMSS`. Both branch and directory include timestamp to prevent collision on reruns.
+
+## Fallback (no worktree support)
 
 Read `docs/tools_config.md` → Git → Branch strategy:
 
-| Strategy | When | Isolation | Cleanup |
-|----------|------|-----------|---------|
-| `worktree` | Worktree available (default) | Separate directory per story | `git worktree remove` |
-| `branch` | Worktree unavailable | Same directory, branch switch | `git branch -d` |
-
-## Operations by Strategy
-
-| Operation | worktree | branch |
+| Operation | worktree (default) | branch (fallback) |
 |-----------|----------|--------|
-| **Create isolation** | `git worktree add -b feature/{id}-{slug} .worktrees/story-{id} develop` | `git checkout -b feature/{id}-{slug}` |
-| **Work directory** | `.worktrees/story-{id}/` | Current directory |
-| **Git commands** | `git -C {worktree_dir} ...` | `git ...` (no -C needed) |
-| **Sync with develop** | `git -C {dir} fetch origin develop && git -C {dir} rebase origin/develop` | `git fetch origin develop && git rebase origin/develop` |
-| **Collect metrics** | `git -C {dir} diff --stat develop...HEAD` | `git diff --stat develop...HEAD` |
-| **Merge to develop** | `git merge --squash feature/{id}-{slug} && git commit` | `git checkout develop && git merge --squash feature/{id}-{slug} && git commit` |
-| **Cleanup** | `git worktree remove .worktrees/story-{id} --force` | `git branch -d feature/{id}-{slug}` |
+| **Create** | `git worktree add -b {branch} {dir} develop` | `git checkout -b {branch}` |
+| **Work dir** | `{worktree_dir}/` | Current directory |
+| **Git commands** | `git -C {dir} ...` | `git ...` (no -C needed) |
+| **Cleanup** | `git worktree remove {dir}` | `git branch -d {branch}` |
 
 ## Usage in SKILL.md
 
@@ -30,5 +49,5 @@ Read `docs/tools_config.md` → Git → Branch strategy:
 ```
 
 ---
-**Version:** 1.0.0
-**Last Updated:** 2026-03-04
+**Version:** 2.0.0
+**Last Updated:** 2026-03-08

@@ -39,8 +39,13 @@ Reduces JavaScript/TypeScript bundle size. Metric: bundle size in bytes. Each op
 | package.json exists | Yes | Block (not a JS/TS project) |
 | Build command available | Yes | Block (need build for size measurement) |
 | dist/ or build/ output | Yes | Run build first to establish baseline |
+| Git clean state | Yes | Block (need clean baseline for revert) |
 
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` — use Build section for build command detection.
+
+### Worktree & Branch Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use ln-832 row.
 
 ---
 

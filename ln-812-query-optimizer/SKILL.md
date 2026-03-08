@@ -38,8 +38,13 @@ Fixes query efficiency issues found by ln-651-query-efficiency-auditor. Each fix
 |-------|----------|-------------------|
 | Audit findings OR target file | Yes | Block optimization |
 | Test infrastructure | Yes | Block (need tests for verification) |
+| Git clean state | Yes | Block (need clean baseline for revert) |
 
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` — use Test Frameworks section for test detection.
+
+### Worktree & Branch Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use ln-812 row.
 
 ---
 

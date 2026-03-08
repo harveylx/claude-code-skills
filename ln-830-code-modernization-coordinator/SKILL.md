@@ -67,7 +67,7 @@ Coordinates code modernization by delegating to L3 workers: ln-831 (OSS replacer
 
 ## Phase 2: Delegate to Workers
 
-> **CRITICAL:** All delegations use Task tool with `subagent_type: "general-purpose"` for context isolation.
+> **CRITICAL:** All delegations use Task tool with `subagent_type: "general-purpose"` and `isolation: "worktree"` — each worker creates its own branch per `shared/references/git_worktree_fallback.md`.
 
 ### Delegation Protocol
 
@@ -75,7 +75,8 @@ Coordinates code modernization by delegating to L3 workers: ln-831 (OSS replacer
 FOR each selected worker:
   Task(description: "Modernize via ln-83X",
        prompt: "Execute ln-83X-{worker}. Read skill from ln-83X-{worker}/SKILL.md. Context: {delegationContext}",
-       subagent_type: "general-purpose")
+       subagent_type: "general-purpose",
+       isolation: "worktree")
 ```
 
 ### Delegation Context
@@ -94,11 +95,22 @@ FOR each selected worker:
 | 1 | ln-831 (OSS replacer) | May add/remove packages, affecting bundle |
 | 2 | ln-832 (bundle optimizer) | Runs AFTER package changes are settled |
 
-**Rule:** Workers run sequentially — ln-831 package changes affect ln-832 baseline.
+**Rules:**
+- Workers run sequentially — ln-831 package changes affect ln-832 baseline.
+- **Dependent workers share branch:** ln-832 launches in ln-831's branch so it sees OSS replacement changes.
 
 ---
 
 ## Phase 3: Collect Results
+
+Each worker produces an isolated branch. Coordinator aggregates branch reports.
+
+### Worker Branches
+
+| Worker | Branch Pattern | Contents |
+|--------|---------------|----------|
+| ln-831 | `modernize/ln-831-{module}-{ts}` | OSS replacements |
+| ln-832 | `modernize/ln-832-bundle-{ts}` | Bundle optimizations |
 
 ### Result Schema
 
@@ -106,27 +118,21 @@ FOR each selected worker:
 |-------|------|-------------|
 | worker | string | ln-831 or ln-832 |
 | status | enum | success, partial, failed |
+| branch | string | Worker's result branch name |
 | changes_applied | int | Number of kept changes |
 | changes_discarded | int | Number of discarded attempts |
 | details | object | Worker-specific report |
 
 ---
 
-## Phase 4: Verify Build
+## Phase 4: Aggregate Reports
 
-After all workers complete, run full verification:
-
-| Step | Command Source |
-|------|---------------|
-| Tests | ci_tool_detection.md → Test Frameworks |
-| Build | ci_tool_detection.md → Build |
+Each worker verified independently in its branch (tests, build run by worker itself). Coordinator does NOT rerun verification or revert worker changes.
 
 ### On Failure
 
-1. Identify which worker's changes broke the build
-2. Revert that worker's changes
-3. Re-run verification
-4. Log reverted worker as "failed"
+1. Branch with failing tests logged as "failed" in report
+2. User reviews failed branch independently
 
 ---
 
@@ -201,10 +207,9 @@ Options:
 
 - Input analyzed (audit report or target module)
 - Appropriate workers selected based on input and stack
-- Workers delegated sequentially via Task tool (ln-831 before ln-832)
-- Worker results collected with change counts
-- Full build verification after all workers complete
-- Summary report with modules replaced, LOC removed, bundle reduction
+- Workers delegated with worktree isolation (`isolation: "worktree"`, ln-831 before ln-832)
+- Each worker produces isolated branch, pushed to remote
+- Coordinator report aggregates per-worker results (branch, changes, status)
 
 ---
 

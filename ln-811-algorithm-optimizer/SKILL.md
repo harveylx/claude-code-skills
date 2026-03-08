@@ -40,6 +40,7 @@ Optimizes target function performance via autoresearch loop: establish baseline 
 | Target function identifiable | Yes | Block optimization |
 | Test infrastructure | Yes | Block optimization (see ci_tool_detection.md) |
 | Test coverage for target function | Yes | Block — no coverage = no safety net |
+| Git clean state | Yes | Block (need clean baseline for revert) |
 | Benchmark infrastructure | No | Generate benchmark (see references) |
 
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` — use Benchmarks + Test Frameworks sections.
@@ -55,6 +56,12 @@ Before starting optimization, verify target function has test coverage:
 | 3 | If 0 tests reference target → BLOCK with "no test coverage for {function}" |
 
 > Without test coverage, benchmark improvements are meaningless — the optimized function may produce wrong results faster.
+
+### Worktree & Branch Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use ln-811 row.
+
+All work (edits, benchmarks, KEEP commits) in worktree. Never modify main worktree.
 
 ---
 
@@ -162,6 +169,7 @@ FOR each hypothesis (H1..H7):
 | Time budget | 30 minutes total for all hypotheses |
 | Compound | Each KEEP becomes new baseline for next hypothesis |
 | Traceability | Each KEEP = separate git commit with hypothesis ID in message |
+| Isolation | All work in isolated worktree; never modify main worktree |
 
 ### Keep/Discard Decision
 
@@ -282,6 +290,7 @@ Options:
 - Experiment log written to `.optimization/ln-811-log.tsv`
 - Report returned with baseline, final, improvement%, per-hypothesis results
 - Generated benchmark cleaned up if no optimizations kept
+- All changes on isolated branch, pushed to remote
 
 ---
 

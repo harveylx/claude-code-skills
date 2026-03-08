@@ -54,11 +54,11 @@ IF exists(done_flag_path):
   current_stage = extract_stage_number(story_state[story_id])  # STAGE_0 → 0, etc.
 
   # Determine expected state after completion
-  next_expected_state = "STAGE_{current_stage + 1}" if current_stage < 3 else "PENDING_MERGE"
+  next_expected_state = "STAGE_{current_stage + 1}" if current_stage < 3 else "DONE"
 
   # Check if state has advanced (message received and processed)
   state_advanced = (story_state[story_id] == next_expected_state) OR
-                   (story_state[story_id] IN ("DONE", "PENDING_MERGE"))
+                   (story_state[story_id] == "DONE")
 
   IF NOT state_advanced:
     # Lost message detected: flag exists but handler never ran
@@ -147,10 +147,10 @@ ON HEARTBEAT (Stop hook stderr: "HEARTBEAT: ..."):
     last_check=now,
     story_state, worker_map, quality_cycles, previous_quality_score, validation_retries,
     crash_count, story_results, infra_issues,
-    worktree_map, stage_timestamps, git_stats,
+    stage_timestamps, git_stats,
     pipeline_start_time, readiness_scores, team_name,
     business_answers, storage_mode, status_cache, skill_repo_path,
-    project_brief, story_briefs, merge_status
+    project_brief, story_briefs
   # Full state write enables Phase 0 recovery if lead crashes between heartbeats
 ```
 
@@ -244,7 +244,6 @@ ELSE:
 ## Related Files
 
 - **Message Handlers:** `phase4_handlers.md`
-- **Git Flow:** `phase4a_git_merge.md`
 - **Health Contract:** `worker_health_contract.md`
 - **Checkpoint Format:** `checkpoint_format.md`
 

@@ -69,7 +69,7 @@ Task(
 )
 ```
 
-**Note:** Every worker operates in its own worktree (`WORKING DIRECTORY`). `PIPELINE_DIR` is always set to the absolute project root path to ensure `.pipeline/` files (checkpoint, done.flag) land in the project root, not the worktree.
+**Note:** Workers self-detect their git context on startup (per `shared/references/git_worktree_fallback.md`). ln-400 creates worktree isolation; other stages operate in the current directory. `PIPELINE_DIR` = project root for `.pipeline/` files.
 
 **Worker name:** The `{workerName}` variable in templates = the `name` parameter from Task() spawn. Workers derive it from prompt context: `story-{storyId}-s{stage}` (or `-retry` suffix for retries).
 
@@ -81,10 +81,10 @@ THINKING: Always enabled (adaptive). Reasoning effort: low.
 - Think efficiently. Template-based task creation — apply Foundation-First pattern, fill template fields. Don't overanalyze.
 Your assignment: Story {storyId} "{storyTitle}"
 
-WORKING DIRECTORY: {worktree_dir}
-ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
-PIPELINE_DIR: {project_root}/.pipeline
-ALL .pipeline/ file operations (checkpoint, done.flag) MUST use PIPELINE_DIR absolute path.
+GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
+If on feature/* branch — work here. Otherwise ln-400 creates worktree isolation.
+PIPELINE_DIR: .pipeline (relative to project root)
+ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR.
 
 TASK: Execute Stage 0 — Task Planning (create implementation tasks).
 
@@ -132,10 +132,10 @@ THINKING: Always enabled (adaptive). Reasoning effort: medium.
 - Think adequately. Balance speed and thoroughness. Focus on core path.
 Your assignment: Story {storyId} "{storyTitle}"
 
-WORKING DIRECTORY: {worktree_dir}
-ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
-PIPELINE_DIR: {project_root}/.pipeline
-ALL .pipeline/ file operations (checkpoint, done.flag) MUST use PIPELINE_DIR absolute path.
+GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
+If on feature/* branch — work here. Otherwise ln-400 creates worktree isolation.
+PIPELINE_DIR: .pipeline (relative to project root)
+ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR.
 
 TASK: Execute Stage 1 — Story Validation.
 
@@ -185,10 +185,10 @@ THINKING: Always enabled (adaptive). Reasoning effort: medium.
 - Think adequately. Balance speed and thoroughness. Focus on core path.
 Your assignment: Story {storyId} "{storyTitle}"
 
-WORKING DIRECTORY: {worktree_dir}
-ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
-PIPELINE_DIR: {project_root}/.pipeline
-ALL .pipeline/ file operations (checkpoint, done.flag) MUST use PIPELINE_DIR absolute path.
+GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
+If on feature/* branch — work here. Otherwise ln-400 creates worktree isolation.
+PIPELINE_DIR: .pipeline (relative to project root)
+ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR.
 
 MCP TOOL PREFERENCES (code editing only):
 When mcp__hashline-edit__* tools are available (check via ToolSearch "+hashline-edit"),
@@ -248,10 +248,10 @@ THINKING: Always enabled (adaptive). Reasoning effort: medium.
 - Think adequately. Checklist-based quality checks — systematic verification, not creative analysis.
 Your assignment: Story {storyId} "{storyTitle}"
 
-WORKING DIRECTORY: {worktree_dir}
-ALL commands must execute in this directory. cd to {worktree_dir} before any operation.
-PIPELINE_DIR: {project_root}/.pipeline
-ALL .pipeline/ file operations (checkpoint, done.flag) MUST use PIPELINE_DIR absolute path.
+GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
+If on feature/* branch — work here. Otherwise ln-400 creates worktree isolation.
+PIPELINE_DIR: .pipeline (relative to project root)
+ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR.
 
 TASK: Execute Stage 3 — Quality Gate.
 

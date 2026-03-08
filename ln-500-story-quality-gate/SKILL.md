@@ -160,6 +160,20 @@ ELSE:
    - IF `task_provider` = `linear`: `save_issue({id: storyId, state: "Done"})` for PASS/CONCERNS/WAIVED; create fix tasks for FAIL
    - IF `task_provider` = `file`: `Edit` `**Status:**` line to `Done` in story.md for PASS/CONCERNS/WAIVED; create fix task files for FAIL
 
+### Phase 7: Branch Finalization
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md`
+
+Runs only when verdict is PASS, CONCERNS, or WAIVED. Consumes verified results from ln-510/ln-514 — does NOT rerun checks.
+
+1. IF uncommitted changes exist → `git add -A && git commit -m "{storyId}: {Story Title}"`
+2. Push branch: `git push -u origin {branch}`
+3. Move Story + Tasks → Done (Linear or kanban)
+4. Report to chat + file: branch name, git stats (files changed, insertions, deletions), quality verdict
+5. Cleanup: `git worktree remove {worktree_dir}` (branch preserved on remote)
+
+**On FAIL verdict:** Skip Phase 7. Create fix tasks, return to ln-400.
+
 **TodoWrite format (mandatory):**
 ```
 - Invoke ln-510-quality-coordinator (in_progress)
@@ -168,6 +182,7 @@ ELSE:
 - Verify test coverage (pending)
 - Calculate Quality Score + NFR (pending)
 - Determine verdict + update Story (pending)
+- Branch finalization (pending)
 ```
 
 ## Worker Invocation (MANDATORY)
@@ -213,6 +228,7 @@ Skill(skill: "ln-520-test-planner", args: "{storyId}")
   issues: [{id: "SEC-001", severity: high|medium|low, finding: "...", action: "..."}]
   ```
 - Story set to Done (PASS/CONCERNS/WAIVED) or fix tasks created (FAIL)
+- Branch finalized: committed, pushed to remote, worktree cleaned up (PASS/CONCERNS/WAIVED)
 - Root cause analysis recorded in architecture_health.md for every FAIL verdict
 - Comment with gate verdict posted
 
@@ -223,6 +239,7 @@ Skill(skill: "ln-520-test-planner", args: "{storyId}")
 - **Quality coordinator:** `../ln-510-quality-coordinator/SKILL.md`
 - **Test planner:** `../ln-520-test-planner/SKILL.md`
 - **Risk-based testing:** `shared/references/risk_based_testing_guide.md`
+- **MANDATORY READ:** `shared/references/git_worktree_fallback.md`
 
 ---
 **Version:** 7.0.0

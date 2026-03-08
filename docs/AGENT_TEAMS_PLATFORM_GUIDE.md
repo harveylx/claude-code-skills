@@ -181,10 +181,10 @@ Pipeline runs can exceed Windows idle timeout, causing the system to sleep mid-e
 | Rule | Details |
 |------|---------|
 | Max 3 concurrent workers | Anthropic recommends right-sizing: "Too many subagents for simple queries" is anti-pattern |
-| Every worker gets own worktree | `git worktree add -b feature/{id}-{slug} {dir} develop` at spawn time |
-| Each worker = own worktree | Anthropic: "Each agent works in independent Git Worktree, preventing overwrites" |
+| Worker owns worktree isolation | Each code-writing skill creates its own worktree + branch (per `shared/references/git_worktree_fallback.md`) |
+| Self-detection pattern | Worker checks `git branch --show-current` at startup. If already on feature/optimize/upgrade/modernize branch → use it. If on develop/main → create worktree |
+| Orchestrator does NOT manage worktrees | ln-1000 coordinates + reports. ln-400 creates worktree, ln-500 finalizes (commit, push, cleanup) |
 | Dependency guard before spawn | All prerequisites must be DONE before spawning dependent story's worker |
-| Deadlock detection | If all remaining stories blocked + no active workers = ESCALATE |
 
 ## 8. State Persistence
 
@@ -192,7 +192,7 @@ Pipeline state persisted on **every heartbeat** to `.pipeline/state.json`. Recov
 
 | What is persisted | What is NOT persisted |
 |-------------------|----------------------|
-| story_state, worker_map, quality_cycles, validation_retries, crash_count, priority_queue_ids, story_results, infra_issues, worktree_map, depends_on | suspicious_idle (ephemeral, reset to false on recovery) |
+| story_state, worker_map, quality_cycles, validation_retries, crash_count, story_results, infra_issues, stage_timestamps, git_stats | suspicious_idle (ephemeral, reset to false on recovery) |
 
 **Recovery sequence:** Read state -> read checkpoints -> re-read kanban -> verify team config -> resume/respawn workers -> resume event loop.
 

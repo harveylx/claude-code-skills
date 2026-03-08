@@ -39,8 +39,13 @@ Fixes runtime performance issues found by ln-653-runtime-performance-auditor. Ea
 | Audit findings OR target file | Yes | Block optimization |
 | Test infrastructure | Yes | Block (need tests for verification) |
 | Linter available | No | Skip lint step in verification |
+| Git clean state | Yes | Block (need clean baseline for revert) |
 
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` — use Test Frameworks + Linters sections.
+
+### Worktree & Branch Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use ln-813 row.
 
 ---
 

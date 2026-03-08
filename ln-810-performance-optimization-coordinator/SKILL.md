@@ -68,7 +68,7 @@ Coordinates performance optimization by delegating to L3 workers: ln-811 (algori
 
 ## Phase 2: Delegate to Workers
 
-> **CRITICAL:** All delegations use Task tool with `subagent_type: "general-purpose"` for context isolation.
+> **CRITICAL:** All delegations use Task tool with `subagent_type: "general-purpose"` and `isolation: "worktree"` — each worker creates its own branch per `shared/references/git_worktree_fallback.md`.
 
 ### Delegation Protocol
 
@@ -76,7 +76,8 @@ Coordinates performance optimization by delegating to L3 workers: ln-811 (algori
 FOR each selected worker:
   Task(description: "Optimize via ln-81X",
        prompt: "Execute ln-81X-{worker}. Read skill from ln-81X-{worker}/SKILL.md. Context: {delegationContext}",
-       subagent_type: "general-purpose")
+       subagent_type: "general-purpose",
+       isolation: "worktree")
 ```
 
 ### Delegation Context
@@ -98,11 +99,23 @@ FOR each selected worker:
 | ln-811 + ln-812 | Depends | Only if targeting different files |
 | ln-811 + ln-813 | Depends | Only if targeting different files |
 
-**Rule:** If workers target the SAME file, run sequentially (ln-811 first, then ln-812/813).
+**Rules:**
+- If workers target the SAME file, run sequentially (ln-811 first, then ln-812/813).
+- **Dependent workers share branch:** If worker B depends on worker A's output (e.g., ln-813 needs ln-812's query changes), launch worker B in worker A's branch — so B sees A's changes.
 
 ---
 
 ## Phase 3: Collect Results
+
+Each worker produces an isolated branch. Coordinator aggregates branch reports.
+
+### Worker Branches
+
+| Worker | Branch Pattern | Contents |
+|--------|---------------|----------|
+| ln-811 | `optimize/ln-811-{function}-{ts}` | Algorithm optimizations with benchmarks |
+| ln-812 | `optimize/ln-812-{ts}` | Query optimizations |
+| ln-813 | `optimize/ln-813-{ts}` | Runtime optimizations |
 
 ### Result Schema
 
@@ -110,28 +123,21 @@ FOR each selected worker:
 |-------|------|-------------|
 | worker | string | ln-811, ln-812, or ln-813 |
 | status | enum | success, partial, failed |
+| branch | string | Worker's result branch name |
 | fixes_applied | int | Number of kept optimizations |
 | fixes_discarded | int | Number of discarded attempts |
 | details | object | Worker-specific report |
 
 ---
 
-## Phase 4: Verify Build
+## Phase 4: Aggregate Reports
 
-After all workers complete, run full verification:
-
-| Step | Command Source |
-|------|---------------|
-| Tests | ci_tool_detection.md → Test Frameworks |
-| Build | ci_tool_detection.md → Build |
-| Lint | ci_tool_detection.md → Linters |
+Each worker verified independently in its branch (tests, build, lint run by worker itself). Coordinator does NOT rerun verification or revert worker changes.
 
 ### On Failure
 
-1. Identify which worker's changes broke the build
-2. Revert that worker's changes: `git checkout -- {affected_files}`
-3. Re-run verification
-4. Log reverted worker as "failed" in report
+1. Branch with failing tests logged as "failed" in report
+2. User reviews failed branch independently
 
 ---
 
@@ -209,10 +215,9 @@ Options:
 
 - Input analyzed (audit report or target file/function)
 - Appropriate workers selected based on input type
-- Workers delegated via Task tool with context isolation
-- Worker results collected with fix counts
-- Full build verification after all workers complete
-- Summary report with per-worker details and total fix counts
+- Workers delegated with worktree isolation (`isolation: "worktree"`)
+- Each worker produces isolated branch, pushed to remote
+- Coordinator report aggregates per-worker results (branch, fixes, status)
 
 ---
 

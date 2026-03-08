@@ -38,8 +38,13 @@ Upgrades Python dependencies with automatic breaking change detection.
 |-------|----------|-------------------|
 | requirements.txt OR pyproject.toml OR Pipfile | Yes | Block upgrade |
 | Virtual environment active | No | Warn user (risk of system pollution) |
+| Git clean state | Yes | Block (need clean baseline for revert) |
 
 > Workers assume coordinator (ln-820) already verified git state and created backup.
+
+### Worktree & Branch Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use ln-823 row.
 
 ---
 

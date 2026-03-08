@@ -85,13 +85,14 @@ Verify project state before starting upgrade.
 
 ## Phase 3: Delegate to Workers
 
-> **CRITICAL:** All delegations use Task tool with `subagent_type: "general-purpose"` for context isolation.
+> **CRITICAL:** All delegations use Task tool with `subagent_type: "general-purpose"` and `isolation: "worktree"` — each worker creates its own branch per `shared/references/git_worktree_fallback.md`.
 
 **Prompt template:**
 ```
-Task(description: "Upgrade deps via ln-71X",
-     prompt: "Execute ln-71X-{worker}. Read skill from ln-71X-{worker}/SKILL.md. Context: {delegationContext}",
-     subagent_type: "general-purpose")
+Task(description: "Upgrade deps via ln-82X",
+     prompt: "Execute ln-82X-{worker}. Read skill from ln-82X-{worker}/SKILL.md. Context: {delegationContext}",
+     subagent_type: "general-purpose",
+     isolation: "worktree")
 ```
 
 **Anti-Patterns:**
@@ -122,11 +123,23 @@ Each worker receives standardized context:
 
 ## Phase 4: Collect Results
 
+Each worker produces an isolated branch. Coordinator aggregates branch reports.
+
+### Worker Branches
+
+| Worker | Branch Pattern | Contents |
+|--------|---------------|----------|
+| ln-821 | `upgrade/ln-821-npm-{ts}` | npm/yarn/pnpm dependency upgrades |
+| ln-822 | `upgrade/ln-822-nuget-{ts}` | NuGet dependency upgrades |
+| ln-823 | `upgrade/ln-823-pip-{ts}` | pip/poetry/pipenv dependency upgrades |
+
 ### Result Schema
 
 | Field | Type | Description |
 |-------|------|-------------|
+| worker | string | ln-821, ln-822, or ln-823 |
 | status | enum | success, partial, failed |
+| branch | string | Worker's result branch name |
 | upgrades[] | array | List of upgraded packages |
 | upgrades[].package | string | Package name |
 | upgrades[].from | string | Previous version |
@@ -137,22 +150,14 @@ Each worker receives standardized context:
 
 ---
 
-## Phase 5: Verify Build
+## Phase 5: Aggregate Reports
 
-### Build Commands by Stack
+Each worker verified independently in its branch (build, tests run by worker itself). Coordinator does NOT rerun verification or rollback packages.
 
-| Stack | Command |
-|-------|---------|
-| Node.js | `npm run build` or `yarn build` |
-| .NET | `dotnet build --configuration Release` |
-| Python | `pytest` or `python -m pytest` |
+### On Failure
 
-### On Build Failure
-
-1. Identify failing package from error
-2. Search Context7/Ref for migration guide
-3. Apply known fixes
-4. If still fails: rollback package, log warning
+1. Branch with failing build/tests logged as "failed" in report
+2. User reviews failed branch independently
 
 ---
 
@@ -230,13 +235,12 @@ Options:
 
 ## Definition of Done
 
-- Pre-flight checks passed (clean git state, backup branch created)
+- Pre-flight checks passed (clean git state)
 - All package managers detected from indicator files
 - Security audit completed per manager (critical vulns block upgrade)
-- Workers delegated via Task tool with context isolation
-- Worker results collected with upgrade/skip/fail counts
-- Build verified after all upgrades applied
-- Summary report generated with totalPackages, upgraded, skipped, failed, buildVerified
+- Workers delegated with worktree isolation (`isolation: "worktree"`)
+- Each worker produces isolated branch, pushed to remote
+- Coordinator report aggregates per-worker results (branch, upgrades, status)
 
 ---
 

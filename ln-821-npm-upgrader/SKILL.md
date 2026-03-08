@@ -38,8 +38,13 @@ Upgrades Node.js dependencies using npm, yarn, or pnpm with automatic breaking c
 |-------|----------|-------------------|
 | Lock file (package-lock.json, yarn.lock, pnpm-lock.yaml) | Yes | Warn and run `npm install` first |
 | package.json | Yes | Block upgrade |
+| Git clean state | Yes | Block (need clean baseline for revert) |
 
 > Workers assume coordinator (ln-820) already verified git state and created backup.
+
+### Worktree & Branch Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use ln-821 row.
 
 ---
 

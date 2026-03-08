@@ -39,8 +39,13 @@ Executes OSS replacement plans from ln-645-open-source-replacer auditor. For eac
 | Migration plan OR target module | Yes | Block replacement |
 | Test infrastructure | Yes | Block (need tests for verification) |
 | Package manager available | Yes | Block (need to install OSS packages) |
+| Git clean state | Yes | Block (need clean baseline for revert) |
 
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` — use Test Frameworks section for test detection.
+
+### Worktree & Branch Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use ln-831 row.
 
 ---
 
