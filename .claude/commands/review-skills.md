@@ -69,7 +69,7 @@ done
 ```bash
 for f in {scoped SKILL.md files}; do
   dir=$(dirname "$f")
-  grep -oP 'MANDATORY READ.*?Load \K`[^`]+`' "$f" | tr -d '\`' | while read path; do
+  grep -oP 'MANDATORY READ.*?Load \K`[^`]+`' "$f" | tr -d '\`' | grep -v '{' | while read path; do
     resolved=$(realpath "$dir/$path" 2>/dev/null || realpath "$path" 2>/dev/null)
     [ ! -f "$resolved" ] && echo "FAIL: missing MANDATORY READ target: $path (from $f)"
   done

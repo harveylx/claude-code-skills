@@ -165,24 +165,22 @@ Phase 8: REPORT
 
 ## Startup: Agent Availability Check
 
-**Health check is performed inline at the start of agent review, inside ln-310 and ln-510.**
+**Health check is performed inline at the start of agent review.**
 
-```bash
-python shared/agents/agent_runner.py --health-check
-```
+**MANDATORY READ:** Load `shared/references/agent_review_workflow.md` "Step: Health Check" (disabled flags check + agent probe).
 
 **HARD RULES:**
-1. **ALWAYS execute the EXACT command above** — copy-paste, no modifications, no substitutions.
-2. **Do NOT invent alternative checks** (e.g., `where`, `which`, `--version`, PATH lookup). ONLY the command above is valid.
-3. **Only command output determines availability.** Do NOT reason about file existence, environment, or installation — run the command and read its output.
-4. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → return SKIPPED verdict.
+1. **Check `docs/environment_state.json` disabled flags BEFORE running health-check.** Disabled agents are never probed.
+2. **ALWAYS execute the EXACT command** `python shared/agents/agent_runner.py --health-check` — no modifications, no substitutions.
+3. **Do NOT invent alternative checks** (e.g., `where`, `which`, `--version`, PATH lookup). ONLY the command above is valid.
+4. **Only command output determines availability.** Do NOT reason about file existence, environment, or installation — run the command and read its output.
+5. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → return SKIPPED verdict.
 
-Check that at least 1 review agent is available (no skill_group filtering).
-
-| Command Output | Impact |
-|----------------|--------|
-| >=1 review agent OK | Run agents, return suggestions |
-| All agents UNAVAILABLE | Return `{verdict: "SKIPPED"}` |
+| Situation | Impact |
+|-----------|--------|
+| >=1 agent OK (not disabled, health check passed) | Run agents, return suggestions |
+| All agents disabled (environment_state.json) | Return `{verdict: "SKIPPED", reason: "all agents disabled"}` |
+| All agents UNAVAILABLE (health check) | Return `{verdict: "SKIPPED", reason: "no agents available"}` |
 | Command error/not found | Same as UNAVAILABLE |
 
 ## Background Execution + Process-as-Arrive Pattern

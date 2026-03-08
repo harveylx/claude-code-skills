@@ -9,8 +9,12 @@ Any skill that modifies code checks its git context and creates isolation if nee
 | Step | Action |
 |------|--------|
 | 1 | `git branch --show-current` — if already on `feature/*` / `optimize/*` / `upgrade/*` / `modernize/*` → skip to step 4 |
-| 2 | Sync base branch: `git fetch origin && git merge origin/master` (ensure develop has all master changes) |
+| 2 | Check for uncommitted changes: `changes=$(git diff HEAD)` |
+| 2a | IF changes not empty: `git diff HEAD > .pipeline/carry-changes.patch` |
+| 2b | Sync base branch: `git fetch origin && git merge origin/master` (ensure develop has all master changes) |
 | 3 | `git worktree add {worktree_dir} -b {branch}` |
+| 3a | IF patch exists: `git -C {worktree_dir} apply .pipeline/carry-changes.patch && rm .pipeline/carry-changes.patch` |
+| 3b | IF apply fails (conflicts): warn user "Patch conflicts — continuing without uncommitted changes", continue (non-blocking) |
 | 4 | All edits, benchmarks, commits in worktree |
 | 5 | `git push -u origin {branch}` + report branch name to caller |
 | 6 | `git worktree remove {worktree_dir}` (branch preserved on remote) |
@@ -38,6 +42,7 @@ Read `docs/tools_config.md` → Git → Branch strategy:
 | Operation | worktree (default) | branch (fallback) |
 |-----------|----------|--------|
 | **Create** | `git worktree add -b {branch} {dir} develop` | `git checkout -b {branch}` |
+| **Uncommitted** | Carry via patch (steps 2-3a above) | Stay in working dir (no action) |
 | **Work dir** | `{worktree_dir}/` | Current directory |
 | **Git commands** | `git -C {dir} ...` | `git ...` (no -C needed) |
 | **Cleanup** | `git worktree remove {dir}` | `git branch -d {branch}` |

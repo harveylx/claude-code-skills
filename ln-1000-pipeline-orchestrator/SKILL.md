@@ -1,6 +1,6 @@
 ---
 name: ln-1000-pipeline-orchestrator
-description: "Meta-orchestrator: reads kanban board, lets user pick ONE Story, drives it through pipeline 300->310->400->500 via TeamCreate. Workers own worktree isolation; ln-1000 coordinates + reports."
+description: "Meta-orchestrator: reads kanban board, lets user pick ONE Story, drives it through pipeline 300->310->400->500 via TeamCreate. Creates worktree isolation; coordinates workers + reports."
 license: MIT
 ---
 
@@ -114,6 +114,7 @@ IF .pipeline/state.json exists AND complete == false:
   3. Re-read kanban board → verify selected story still exists
   4. Read team config → verify worker_map members still exist
   5. Set suspicious_idle = false (ephemeral, reset on recovery)
+  5a. IF worktree_dir exists (.worktrees/story-{selected_story_id}): cd {worktree_dir}
   6. IF story_state[id] IN ("STAGE_0".."STAGE_3"):
      IF checkpoint.agentId exists → Task(resume: checkpoint.agentId)
      ELSE → respawn worker with checkpoint context (see checkpoint_format.md)
@@ -233,7 +234,7 @@ Write .pipeline/state.json (full schema — see checkpoint_format.md):
     "stories_remaining": 1, "last_check": <now>,
     "story_state": {}, "worker_map": {}, "quality_cycles": {}, "validation_retries": {},
     "crash_count": {},
-    "story_results": {}, "infra_issues": [],
+    "story_results": {}, "infra_issues": [],    # story_results includes stage{N}_agents for Stage 1/3
     "status_cache": {<status_name: status_uuid>},    # Empty object if file mode
     "stage_timestamps": {}, "git_stats": {}, "pipeline_start_time": <now>, "readiness_scores": {},
     "skill_repo_path": <absolute path to skills repository root>,
@@ -265,7 +266,37 @@ IF platform == "win32":
    TeamCreate(team_name: "pipeline-{YYYY-MM-DD}-{HHmm}")
    ```
 
-Worker is spawned in Phase 4. Worktree isolation is handled by ln-400 (self-detection per `shared/references/git_worktree_fallback.md`).
+#### 3.4 Worktree Isolation
+
+**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md`
+
+```
+branch_check = git branch --show-current
+IF branch_check matches feature/* / optimize/* / upgrade/* / modernize/*:
+  # Already isolated — skip (standalone ln-400 created it earlier)
+  worktree_dir = CWD
+ELSE:
+  # Create worktree so ALL workers (Stage 0-3) operate in feature branch
+  story_slug = slugify(selected_story.title)    # lowercase, spaces→dashes
+  branch = "feature/{selected_story_id}-{story_slug}"
+  worktree_dir = ".worktrees/story-{selected_story_id}"
+
+  # Carry uncommitted changes (per git_worktree_fallback.md steps 2-3a)
+  changes = git diff HEAD
+  IF changes not empty:
+    git diff HEAD > .pipeline/carry-changes.patch
+
+  git fetch origin && git merge origin/master
+  git worktree add {worktree_dir} -b {branch}
+
+  IF .pipeline/carry-changes.patch exists:
+    git -C {worktree_dir} apply .pipeline/carry-changes.patch && rm .pipeline/carry-changes.patch
+    IF apply fails: WARN user "Patch conflicts — continuing without uncommitted changes"
+
+  cd {worktree_dir}    # All subsequent workers inherit this CWD
+```
+
+Workers self-detect `feature/*` on startup → skip their own worktree creation (ln-400 Phase 1 step 5).
 
 ### Phase 4: Execution Loop
 
@@ -285,7 +316,7 @@ crash_count[selected_story.id] = 0          # crash respawn counter, limit 1
 suspicious_idle = false                      # crash detection flag
 story_state[selected_story.id] = "QUEUED"
 worker_map = {}                              # {storyId: worker_name}
-story_results = {}                           # {storyId: {stage0: "...", ...}} — for pipeline report
+story_results = {}                           # {storyId: {stage0: "...", stage1_agents: "...", stage3_agents: "...", ...}} — for pipeline report
 infra_issues = []                            # [{phase, type, message}] — infrastructure problems
 heartbeat_count = 0                          # Heartbeat cycle counter (ephemeral, resets on recovery)
 stage_timestamps = {}                        # {storyId: {stage_N_start: ISO, stage_N_end: ISO}}
@@ -376,7 +407,7 @@ WHILE story_state[id] NOT IN ("DONE", "PAUSED"):
 
 **`determine_stage(story)` routing:** Stage-to-Status Mapping table in `references/pipeline_states.md` (loaded above).
 
-> **Branch finalization** (commit, push, worktree cleanup) is handled by ln-500 after quality gate verdict. ln-1000 collects the branch name + stats from the worker's completion report.
+> **Worktree** created by ln-1000 in Phase 3.4 — all workers operate in `feature/*`. **Branch finalization** (commit, push, worktree cleanup) is handled by ln-500 after quality gate verdict. ln-1000 collects the branch name + stats from the worker's completion report.
 
 ### Phase 5: Cleanup & Report
 
@@ -393,68 +424,87 @@ verification = {
 }
 IF ANY verification == false: WARN user with details
 
-# 2. Finalize pipeline report
+# 2. Read stage notes (written by workers in .pipeline/)
+stage_notes = {}
+FOR N IN 0..3:
+  IF .pipeline/stage_{N}_notes_{id}.md exists:
+    stage_notes[N] = read file content
+  ELSE:
+    stage_notes[N] = "(no notes captured)"
+
+# 3. Finalize pipeline report
+durations = {N: stage_timestamps[id]["stage_{N}_end"] - stage_timestamps[id]["stage_{N}_start"]
+             FOR N IN 0..3 IF both timestamps exist}
+
 Write docs/tasks/reports/pipeline-{date}.md:
+
   # Pipeline Report — {date}
-  | Metric | Value |
-  |--------|-------|
-  | Story | {selected_story_id}: {title} |
-  | Final State | {story_state[id]} |
-  | Branch | {branch_name from worker report} |
-  | Quality verdict | {verdict} |
-  | Quality rework cycles | {quality_cycles[id]} |
-  | Validation retries | {validation_retries[id]} |
-  | Crash recoveries | {crash_count[id]} |
-  | Infrastructure issues | {len(infra_issues)} |
 
-# 2b. Stage Duration Breakdown
-  ## Stage Duration Breakdown
-  | Stage 0 | Stage 1 | Stage 2 | Stage 3 | Total | Bottleneck |
-  |---------|---------|---------|---------|-------|------------|
-  durations = {N: stage_timestamps[id]["stage_{N}_end"] - stage_timestamps[id]["stage_{N}_start"]
-               FOR N IN 0..3 IF both timestamps exist}
+  **Story:** {selected_story_id} — {title}
+  **Branch:** {branch_name from worker report}
+  **Final State:** {story_state[id]}
+  **Duration:** {now() - pipeline_start_time}
 
-# 2c. Code Output Metrics (from worker report git_stats)
-  ## Code Output Metrics
-  | Files Changed | Lines Added | Lines Deleted | Net Lines |
-  |--------------|-------------|---------------|-----------|
-  | {git_stats[id].files_changed} | +{git_stats[id].lines_added} | -{git_stats[id].lines_deleted} | {net} |
+  ## Task Planning (ln-300)
+  | Tasks | Plan Score | Duration |
+  |-------|-----------|----------|
+  | {N} created | {score}/4 | {durations[0]} |
 
-# 2d. Cost Estimate
-  ## Cost Estimate
-  | Metric | Value |
-  |--------|-------|
-  | Wall-clock time | {now() - pipeline_start_time} |
-  | Total worker spawns | {count of Task() calls in session} |
+  {stage_notes[0] — Key Decisions + Artifacts sections}
 
-# 2e. Infrastructure Issues + Operational Recommendations
-  (same format as before — from infra_issues + counters)
+  ## Validation (ln-310)
+  | Verdict | Readiness | Agent Review | Duration |
+  |---------|-----------|-------------|----------|
+  | {verdict} | {score}/10 | {story_results[id].stage1_agents} | {durations[1]} |
 
-# 3. Show pipeline summary to user
+  {stage_notes[1] — Key Decisions + Artifacts sections}
+
+  ## Implementation (ln-400)
+  | Status | Files | Lines | Duration |
+  |--------|-------|-------|----------|
+  | {result} | {git_stats[id].files_changed} | +{git_stats[id].lines_added}/-{git_stats[id].lines_deleted} | {durations[2]} |
+
+  {stage_notes[2] — Key Decisions + Artifacts sections}
+
+  ## Quality Gate (ln-500)
+  | Verdict | Score | Agent Review | Rework | Duration |
+  |---------|-------|-------------|--------|----------|
+  | {verdict} | {score}/100 | {story_results[id].stage3_agents} | {quality_cycles[id]} | {durations[3]} |
+
+  {stage_notes[3] — Key Decisions + Artifacts sections}
+
+  ## Pipeline Metrics
+  | Wall-clock | Workers | Crashes | Validation retries | Infra issues |
+  |------------|---------|---------|-------------------|--------------|
+  | {total_duration} | {worker_spawn_count} | {crash_count[id]} | {validation_retries[id]} | {len(infra_issues)} |
+
+  {IF infra_issues: list each issue with phase, type, message}
+
+# 4. Show pipeline summary to user
 ```
 Pipeline Complete:
-| Story | Branch | Stage 0 | Stage 1 | Stage 2 | Stage 3 | Final State |
-|-------|--------|---------|---------|---------|---------|------------|
+| Story | Branch | Planning | Validation | Implementation | Quality Gate | State |
+|-------|--------|----------|------------|----------------|-------------|-------|
 | {id} | {branch} | {stage0} | {stage1} | {stage2} | {stage3} | {story_state[id]} |
 
 Report saved: docs/tasks/reports/pipeline-{date}.md
 ```
 
-# 4. Shutdown worker (if still active)
+# 5. Shutdown worker (if still active)
 IF worker_map[id]:
   SendMessage(type: "shutdown_request", recipient: worker_map[id])
 
-# 5. Cleanup team
+# 6. Cleanup team
 TeamDelete
 
-# 6. Stop sleep prevention (Windows safety net)
+# 7. Stop sleep prevention (Windows safety net)
 IF sleep_prevention_pid:
   kill $sleep_prevention_pid 2>/dev/null || true
 
-# 7. Remove pipeline state files
+# 8. Remove pipeline state files
 Delete .pipeline/ directory
 
-# 8. Report results and report location to user
+# 9. Report results and report location to user
 ```
 
 ## Kanban as Single Source of Truth
@@ -481,7 +531,7 @@ Delete .pipeline/ directory
 3. **Skills as-is.** Never modify or bypass existing skill logic. Workers call `Skill("ln-310-multi-agent-validator", args)` exactly as documented
 4. **Kanban verification.** Workers update Linear/kanban via skills. Lead re-reads and ASSERTs expected state after each stage. In file mode, lead resolves merge conflicts
 5. **Quality cycle limit.** Max 2 quality FAILs per Story (original + 1 rework cycle). After 2nd FAIL, escalate to user
-6. **No merge/worktree management.** ln-1000 does NOT create worktrees, merge branches, or cleanup. Worktree isolation owned by ln-400, branch finalization by ln-500
+6. **Worktree creation only.** ln-1000 creates worktree in Phase 3.4 so all workers start in feature branch. Branch finalization (commit, push, cleanup) owned by ln-500. ln-1000 does NOT merge or cleanup worktrees
 7. **Re-read kanban.** After every stage completion, re-read board for fresh state. Never cache
 8. **Graceful shutdown.** Always shutdown workers via shutdown_request. Never force-kill
 
@@ -492,7 +542,7 @@ Delete .pipeline/ directory
 ## Anti-Patterns
 - Running ln-300/ln-310/ln-400/ln-500 directly from lead instead of delegating to workers
 - Processing multiple stories without user selection
-- Creating worktrees or managing branches (owned by ln-400/ln-500)
+- Creating worktrees outside Phase 3.4 or managing branches post-creation (finalization owned by ln-500)
 - Lead skipping kanban verification after worker updates (workers write via skills, lead MUST re-read + ASSERT)
 - Skipping quality gate after execution
 - Caching kanban state instead of re-reading

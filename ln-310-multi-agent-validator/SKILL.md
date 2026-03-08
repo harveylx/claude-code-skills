@@ -16,6 +16,10 @@ Validates Stories/Tasks (mode=story) or arbitrary context (mode=context) with pa
 |-------|----------|--------|-------------|
 | `storyId` | mode=story | args, git branch, kanban, user | Story to process |
 | `context {files}` | mode=context | args | File paths to review |
+| `identifier` | No | args or auto | Short label for file naming (default: `review_YYYYMMDD_HHMMSS`) |
+| `focus` | No | args | Areas to focus on (default: all) |
+| `review_title` | No | args | Human-readable title (default: `"Context Review"`) |
+| `tech_stack` | No | args or auto-detect | Technology stack override (e.g., `"Python FastAPI"`). Auto-detected if not provided |
 
 **Mode detection:** `"context {file1} {file2}..."` → mode=context. Anything else → mode=story.
 **Resolution (mode=story):** Story Resolution Chain. **Status filter:** Backlog
@@ -104,12 +108,12 @@ Phase 4: Auto-Fix (11 groups)
   - Fix Verification violations (#22)
   - Fix Traceability violations (#16-#17)
 
-Agent Launch (between Phase 1 and Phase 2 — mode=story)
+Phase 1b: Agent Launch (mode=story)
   - Health check: agent availability
   - Build prompt from review_base.md + modes/story.md (per shared workflow "Step: Build Prompt")
   - Launch codex-review + gemini-review as background tasks
 
-Agent Launch (between inputs and foreground research — mode=context)
+Phase 1b: Agent Launch (mode=context)
   - Health check: agent availability
   - Build prompt from review_base.md + modes/context.md (per shared workflow "Step: Build Prompt")
   - Launch codex-review + gemini-review as background tasks
@@ -155,14 +159,16 @@ All subsequent phases use `task_provider` to select operations per storage_mode_
 - Expect 1-8 implementation tasks; record parentId for filtering
 - Rationale: keep loading light; full descriptions arrive in Phase 2
 
-### Agent Launch (immediately after Phase 1 — before Phase 2)
+### Phase 1b: Agent Launch
 
 **MANDATORY READ:** Load `shared/references/agent_review_workflow.md`, `shared/references/agent_delegation_pattern.md`
 
 **mode=story:**
 
-1) **Health Check:** `python shared/agents/agent_runner.py --health-check`
-   - If 0 agents → skip agent review, proceed with Claude-only validation
+1) **Health Check** (per shared workflow "Step: Health Check"):
+   - Read `docs/environment_state.json` → exclude agents with `disabled: true`
+   - Run `python shared/agents/agent_runner.py --health-check` for remaining agents
+   - If 0 agents available → skip agent review, proceed with Claude-only validation
 2) **Get references:**
    - IF `task_provider` = `linear`: `get_issue(storyId)` → Story URL, `list_issues(parent=storyId)` → Task URLs
    - IF `task_provider` = `file`: Read story.md, Glob tasks → paths
@@ -181,7 +187,7 @@ Agents now run in background. Claude proceeds to foreground work.
 
 ### Foreground: mode=context (skip Phases 2-4, run MCP Ref research instead)
 
-**MANDATORY READ:** Load `shared/references/research_tool_fallback.md`
+**MANDATORY READ:** Load `references/context_review_pipeline.md` (weight table, stack detection, safety rules) and `shared/references/research_tool_fallback.md`
 
 While agents run in background, Claude performs foreground research:
 
@@ -196,6 +202,8 @@ g) **Save Findings** — write to `.agent-review/context/{identifier}_mcp_ref_fi
 Then proceed to Phase 5 (Merge).
 
 ### Phase 2: Research & Audit (mode=story only)
+
+> **PREREQUISITE:** Phase 1b (Agent Launch) must have completed before Phase 2. If agents were not launched and health check was not run, go back to Phase 1b.
 
 **MANDATORY READ:** Load `references/phase2_research_audit.md` for complete research and audit procedure:
 - Domain extraction from Story/Tasks
@@ -240,7 +248,7 @@ Then proceed to Phase 5 (Merge).
 
 ### Phase 5: Merge + Critical Verification (MANDATORY — DO NOT SKIP)
 
-> **MANDATORY STEP:** This phase merges agent results (launched before Phase 2) with Claude's own findings. Agents were already running in background during Phases 2-4 (mode=story) or during foreground research (mode=context).
+> **MANDATORY STEP:** This phase merges agent results (launched in Phase 1b) with Claude's own findings. Agents were already running in background during Phases 2-4 (mode=story) or during foreground research (mode=context).
 
 **MANDATORY READ:** Load `shared/references/agent_review_workflow.md` (Critical Verification + Debate), `shared/references/agent_review_memory.md`
 
@@ -364,6 +372,7 @@ Verify all 27 criteria (#1-#27) from Auto-Fix Actions pass with concrete evidenc
 **Story:** "Create user management API with rate limiting"
 
 1. **Phase 1:** Load metadata (5 Tasks, status Backlog)
+1b. **Phase 1b:** Health check → launch codex-review + gemini-review in background
 2. **Phase 2:**
    - Domain extraction: REST API, Rate Limiting
    - Delegate ln-002: creates Guide-05 (REST patterns), Guide-06 (Rate Limiting)
@@ -379,7 +388,7 @@ Verify all 27 criteria (#1-#27) from Auto-Fix Actions pass with concrete evidenc
    - Fix #13: Add Guide-05, Guide-06 references
    - Fix #17: Docs already created by ln-002
    - All fixes applied, Penalty Points = 0
-5. **Phase 5:** Merge agent results (launched before Phase 2) + Claude's findings → verify, debate, apply
+5. **Phase 5:** Merge agent results (launched in Phase 1b) + Claude's findings → verify, debate, apply
 6. **Phase 6:** Story -> Todo, tabular report
 
 ## Template Loading
@@ -431,6 +440,7 @@ Verify all 27 criteria (#1-#27) from Auto-Fix Actions pass with concrete evidenc
 - **Review templates:** `shared/agents/prompt_templates/review_base.md` + `modes/story.md`, `modes/context.md`
 - **Challenge template:** `shared/agents/prompt_templates/challenge_review.md`
 - **MCP Ref findings template:** `references/mcp_ref_findings_template.md`
+- **Context review pipeline:** `references/context_review_pipeline.md` (weight table, stack detection, safety rules for mode=context)
 
 ---
 **Version:** 7.0.0

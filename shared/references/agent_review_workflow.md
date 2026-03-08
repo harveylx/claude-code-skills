@@ -25,12 +25,22 @@ When running in Plan Mode (per `shared/references/plan_mode_pattern.md`, Workflo
 
 ## Step: Health Check
 
+**1. Check disabled flags** (before probing):
+```
+IF docs/environment_state.json exists:
+  Read file → for each agent (codex, gemini):
+    IF agent.disabled == true → exclude from health check
+  IF all agents disabled → return {verdict: "SKIPPED", reason: "all agents disabled"}
+IF file not exists: proceed with all agents (no exclusions)
+```
+
+**2. Probe remaining agents:**
 ```
 python shared/agents/agent_runner.py --health-check
 ```
 
-- If 0 agents available -> return `{verdict: "SKIPPED", reason: "no agents available"}`
-- Display: `"Agent Health: codex-review OK, gemini-review OK"` (or similar)
+- If 0 agents available (after disabled exclusions) -> return `{verdict: "SKIPPED", reason: "no agents available"}`
+- Display: `"Agent Health: codex-review OK, gemini-review OK"` (or `"disabled"` / `"unavailable"` per agent)
 
 ## Step: Ensure .agent-review/
 

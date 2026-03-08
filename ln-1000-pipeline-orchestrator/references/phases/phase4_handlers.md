@@ -33,6 +33,7 @@ IF mismatch:
 This prevents double-spawn when same completion message is delivered across heartbeats. Re-sending ACK ensures retrying workers get confirmation.
 
 ## Stage 0 Handlers (Task Planning)
+> **Note:** Stage names: 0=Task Planning, 1=Validation, 2=Implementation, 3=Quality Gate
 
 ### ON "Stage 0 COMPLETE for {id}. {N} tasks created. Plan score: {score}/4."
 
@@ -72,9 +73,9 @@ story_results[id].stage0 = "ERROR: {details}"
 Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
 ```
 
-## Stage 1 Handlers (Story Validation)
+## Stage 1 Handlers (Validation)
 
-### ON "Stage 1 COMPLETE for {id}. Verdict: GO. Readiness: {score}."
+### ON "Stage 1 COMPLETE for {id}. Verdict: GO. Readiness: {score}. Agents: {agents_info}."
 
 ```
 Re-read kanban board
@@ -95,10 +96,11 @@ Task(name: next_worker, team_name: "pipeline-{date}",
 worker_map[id] = next_worker
 Write .pipeline/worker-{next_worker}-active.flag
 story_results[id].stage1 = "GO, {score}"
+story_results[id].stage1_agents = "{agents_info}"    # From Agents: field; "N/A" if absent
 readiness_scores[id] = {score}            # Preserve for Stage 3 fast-track decision
 ```
 
-### ON "Stage 1 COMPLETE for {id}. Verdict: NO-GO. Readiness: {score}. Reason: {reason}"
+### ON "Stage 1 COMPLETE for {id}. Verdict: NO-GO. Readiness: {score}. Reason: {reason}. Agents: {agents_info}."
 
 ```
 validation_retries[id]++
@@ -124,7 +126,7 @@ ELSE:
   Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
 ```
 
-## Stage 2 Handlers (Story Execution)
+## Stage 2 Handlers (Implementation)
 
 ### ON "Stage 2 ERROR for {id}: {details}"
 
@@ -165,7 +167,7 @@ story_results[id].stage2 = "Done"
 
 ## Stage 3 Handlers (Quality Gate)
 
-### ON "Stage 3 COMPLETE for {id}. Verdict: PASS|CONCERNS|WAIVED. Quality Score: {score}/100."
+### ON "Stage 3 COMPLETE for {id}. Verdict: PASS|CONCERNS|WAIVED. Quality Score: {score}/100. Agents: {agents_info}."
 
 ```
 # ACK: confirm receipt before shutdown
@@ -175,6 +177,7 @@ stage_timestamps[id].stage_3_end = now()
 Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
 SendMessage(type: "shutdown_request", recipient: worker_map[id])
 story_results[id].stage3 = "{verdict} {score}/100"
+story_results[id].stage3_agents = "{agents_info}"    # From Agents: field; "N/A" if absent
 
 # Branch finalization (commit, push, cleanup) handled by ln-500
 # Lead collects branch name + git stats from worker's completion report
@@ -182,7 +185,7 @@ story_state[id] = "DONE"
 Update .pipeline/state.json
 ```
 
-### ON "Stage 3 COMPLETE for {id}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues}"
+### ON "Stage 3 COMPLETE for {id}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues}. Agents: {agents_info}."
 
 ```
 quality_cycles[id]++
