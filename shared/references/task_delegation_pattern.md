@@ -1,6 +1,6 @@
 # Task Tool Delegation Pattern
 
-Standard pattern for L2 coordinators delegating to L3 workers with context isolation.
+Standard pattern for coordinators delegating work through the Task tool with context isolation.
 
 ## Prompt Template
 
@@ -14,186 +14,52 @@ Task(
 
 ## Context Isolation Rules
 
-1. **Worker loads context independently** — never pass full context from coordinator
-2. **Pass only IDs** — worker fetches details via `get_issue()`, `Read`, etc.
-3. **Fresh eyes review** — worker analyzes without coordinator bias
-4. **No bulk delegations** — invoke one task at a time, wait for completion
+1. **Pass the minimum usable context** - prefer IDs or a compact contextStore, not the coordinator's full reasoning trace.
+2. **Fresh eyes review** - worker analyzes the task without coordinator bias.
+3. **Use Task when isolation matters** - audits, focused reviews, and parallel workers benefit most.
+4. **Validate outputs explicitly** - coordinator never assumes worker success without checking the returned summary or written artifacts.
 
-## Worker Output Contract
+## Output Contract
 
-Two delivery modes depending on coordinator scale:
+Choose one output mode per workflow and document it in the coordinator:
 
-### File-Based Output (All Audit Coordinators)
+- **Compact return** - worker returns a short result directly in the Task response.
+- **File-based return** - worker writes a file and returns a compact summary with the file path and key metrics.
 
-Workers write full report to `docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/{worker_id}.md` and return minimal summary in-context.
-
-**Template:** `shared/templates/audit_worker_report_template.md`
-
-**Worker return (in-context, ~50 tokens):**
-```
-Report written: docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/{worker-id}-security.md
-Score: 7.5/10 | Issues: 5 (C:0 H:2 M:2 L:1)
-```
-
-Extended workers (pattern analyzer, API contract auditor) include diagnostic sub-scores:
-```
-Report written: docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/{worker-id}-pattern-job-processing.md
-Score: 6.0/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
-```
-
-**Coordinator receives:** path + score + counts (enough for aggregation). Reads files only during report assembly or cross-domain aggregation.
-
-No deletion of previous date folders — history preserved for comparison.
-
-## Audit Coordinator → Worker Contract
-
-### Coordinator Input to Worker (contextStore)
-
-```json
-{
-  "tech_stack": {
-    "language": "TypeScript",
-    "frameworks": ["Express", "Prisma"],
-    "database": "PostgreSQL"
-  },
-  "best_practices": {
-    "express": "Use middleware for error handling...",
-    "prisma": "Always use transactions for multi-table..."
-  },
-  "principles": "docs/principles.md content...",
-  "codebase_root": ".",
-  "domain_mode": "domain-aware|global",
-  "current_domain": {
-    "name": "users",
-    "path": "src/users"
-  }
-}
-```
-
-### Worker Output (back to Coordinator)
-
-See `audit_output_schema.md` for full schema. Workers MUST return:
-- `category`: matches worker specialty
-- `score`: 0-10 per `audit_scoring.md`
-- `checks[]`: each rule checked
-- `findings[]`: issues with locations
-
-### Data Flow Diagrams
-
-**File-based (codebase auditor, pattern evolution auditor):**
-```
-┌─────────────────────┐
-│ L2 Coordinator      │
-│ (file-based output) │
-└─────────┬───────────┘
-          │ contextStore + output_dir
-          ▼
-┌─────────────────────┐     ┌─────────────────────┐
-│ L3 Worker (Task)    │     │ L3 Worker (Task)    │
-└──┬──────────────┬───┘     └──┬──────────────┬───┘
-   │ Write file   │ Return     │ Write file   │ Return
-   ▼              │ ~50 tok    ▼              │ ~50 tok
- .audit/          └─────┬──────.audit/        └────┬──
- 6XX-slug.md            │      6XX-slug.md         │
-                        ▼                          ▼
-              ┌─────────────────────┐
-              │ Aggregation         │
-              │ Read return values  │
-              │ Read files for      │
-              │ report/cross-domain │
-              └─────────────────────┘
-```
-
-**In-context JSON (persistence auditor, test auditor):**
-```
-┌─────────────────────┐
-│ L2 Coordinator      │
-│ (JSON output)       │
-└─────────┬───────────┘
-          │ contextStore
-          ▼
-┌─────────────────────┐     ┌─────────────────────┐
-│ L3 Worker (Task)    │     │ L3 Worker (Task)    │
-└─────────┬───────────┘     └─────────┬───────────┘
-          │ JSON output               │ JSON output
-          └───────────┬───────────────┘
-                      ▼
-            ┌─────────────────────┐
-            │ Aggregation         │
-            │ overall_score,      │
-            │ all findings        │
-            └─────────────────────┘
-```
+For file-based audit workflows, use:
+- `shared/references/audit_worker_core_contract.md`
+- `shared/templates/audit_worker_report_template.md`
 
 ## Anti-Patterns
 
-| ❌ DON'T | ✅ DO |
-|----------|------|
-| Direct Skill tool without Task wrapper | Use Task with subagent_type |
-| Pass full context to worker | Pass IDs, worker fetches details |
-| Batch multiple delegations | Sequential: delegate → wait → next |
-| Skip worker result analysis | Always analyze worker output |
-| Parse worker text output | Require JSON, validate structure |
+| DON'T | DO |
+|------|----|
+| Direct Skill tool without Task wrapper | Use Task with `subagent_type` |
+| Pass full coordinator reasoning trace | Pass IDs or a compact contextStore |
+| Assume the worker succeeded | Validate returned summary or written artifact |
+| Mix output modes inside one workflow | Pick one output contract per workflow |
+| Let workers make routing decisions | Keep workflow control in the coordinator |
 
 ## Parallelism Strategy
 
 **When to parallelize:**
-- Independent workers (no data dependencies)
+- Independent workers with no data dependencies
 - Different audit categories
-- Multiple files without overlap
+- Multiple domains or files with no overlap
 
 **When to serialize:**
 - Workers depend on previous results
-- Same resource being modified
-- Order matters (e.g., validation before execution)
+- Same resource is being modified
+- Order matters for correctness
 
 ## Error Handling
 
-```
+```text
 IF worker returns error:
-  1. Log error details
-  2. Continue with other workers (graceful degradation)
+  1. Log the error details
+  2. Continue with other workers when safe
   3. Include partial results in final output
-  4. Mark failed checks as "skipped" with error reason
-```
-
-## Usage
-
-Reference this pattern in skill files:
-
-```markdown
-## Worker Invocation
-
-See `shared/references/task_delegation_pattern.md` for prompt template and context isolation rules.
-
-Workers for this skill:
-- ln-XXX-worker-1: [purpose]
-- ln-XXX-worker-2: [purpose]
-```
-
-## Execution Workers (Non-Audit)
-
-For execution workers (task executor, task rework, test executor):
-
-**Input:** Task ID only (worker loads full context independently)
-
-```javascript
-Task(
-  description: "Execute task via task executor",
-  prompt: "Execute task executor for task PROJ-123. Read skill from task executor SKILL.md.",
-  subagent_type: "general-purpose"
-)
-```
-
-**Output:** Status update + summary
-```json
-{
-  "task_id": "PROJ-123",
-  "status": "To Review",
-  "summary": "Implemented UserService with 3 methods",
-  "files_changed": ["src/services/UserService.ts"],
-  "next_action": "Review via task reviewer"
-}
+  4. Mark failed checks as skipped/error with reason
 ```
 
 ---

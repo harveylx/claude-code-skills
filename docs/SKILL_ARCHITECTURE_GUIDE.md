@@ -285,13 +285,12 @@ Move detailed content to `references/` to stay within limits.
 | Directory | Purpose | This Repo | Plugins |
 |-----------|---------|-----------|---------|
 | `SKILL.md` | Metadata + instructions | ✅ Required | ✅ Required |
-| `diagram.html` | Mermaid workflow diagram | ✅ Required | — |
 | `references/` | Docs loaded on-demand | ✅ Common | ✅ Common |
 | `scripts/` | Executable utilities | — | ✅ Optional |
 | `examples/` | Working code examples | — | ✅ Optional |
 | `assets/` | Output files (templates, icons) | — | ✅ Optional |
 
-**This repo convention:** `ln-XXX-name/` with `SKILL.md` + `diagram.html` + `references/`. No `scripts/`, `examples/`, `assets/` (executable code lives in target projects, not skill definitions).
+**This repo convention:** `ln-XXX-name/` with `SKILL.md` + `references/`. No `scripts/`, `examples/`, `assets/` (executable code lives in target projects, not skill definitions).
 
 ---
 
@@ -422,7 +421,7 @@ Orchestrator automatically creates fix tasks when quality checks fail, then rest
 | **ln-640-pattern-evolution-auditor** | 3 | **Separate** | Workers analyze DIFFERENT patterns — isolation = focus |
 | **ln-510-quality-coordinator** | 4 | **Mixed** | ln-511 Separate (independent analysis), ln-513 Separate (agent review), ln-514/ln-510 Shared (need Gate context) |
 | **ln-520-test-planner** | 3 | **Separate** | Pipeline orchestration, workers read from Linear comments |
-| **ln-710-dependency-upgrader** | 3 | **Separate** | Independent package managers (npm/nuget/pip) |
+| **ln-820-dependency-optimization-coordinator** | 3 | **Separate** | Independent package managers (npm/nuget/pip) |
 | **ln-760-security-setup** | 2 | **Separate** | Independent scans (secrets/dependencies) |
 
 **Key Decision Factors:**
@@ -825,7 +824,6 @@ Every User Story should be:
 - [ ] **Orchestrator Pattern**: If coordinating work, does it delegate to workers?
 - [ ] **Token Efficiency**: Does orchestrator use lazy loading (metadata only)?
 - [ ] **Reusability**: Can workers be reused by other orchestrators?
-- [ ] **Documentation**: Is there a workflow diagram (mermaid)?
 - [ ] **Versioning**: Does SKILL.md have version and last updated date?
 - [ ] **Description Format**: Includes WHAT + WHEN triggers, < 200 chars, colons in quotes (per skill-creator)
 - [ ] **Name Format**: hyphen-case, no leading/trailing hyphens (per skill-creator)

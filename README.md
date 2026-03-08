@@ -1,24 +1,28 @@
 # Claude Code Skills
 
-![Version](https://img.shields.io/badge/version-3.1.0-blue)
-![Skills](https://img.shields.io/badge/skills-109-green)
+![Version](https://img.shields.io/badge/version-3.2.0-blue)
+![Skills](https://img.shields.io/badge/skills-116-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![GitHub stars](https://img.shields.io/github/stars/levnikolaevich/claude-code-skills?style=social)](https://github.com/levnikolaevich/claude-code-skills)
 
 > [!WARNING]
-> **Breaking Change: Plugin restructuring** — `full-development-workflow-skills` (77 skills) split into 3 focused plugins: **agile-workflow** (33), **documentation-pipeline** (11), **codebase-audit-suite** (33). `claude-code-bootstrap` renamed to **project-bootstrap**.
+> **Breaking Change: Plugin restructuring** — `full-development-workflow-skills` (77 skills) split into 3 focused plugins: **agile-workflow** (33), **documentation-pipeline** (11), **codebase-audit-suite** (33). `claude-code-bootstrap` renamed to **project-bootstrap** (28). New: **optimization-suite** (11).
 >
 > Reinstall to pick up new plugin names:
 > ```
-> /plugin add levnikolaevich/claude-code-skills                                    # all 4 plugins
+> /plugin add levnikolaevich/claude-code-skills                                    # all 5 plugins
 > /plugin add levnikolaevich/claude-code-skills --plugin agile-workflow            # or individually
 > /plugin add levnikolaevich/claude-code-skills --plugin documentation-pipeline
 > /plugin add levnikolaevich/claude-code-skills --plugin codebase-audit-suite
 > /plugin add levnikolaevich/claude-code-skills --plugin project-bootstrap
+> /plugin add levnikolaevich/claude-code-skills --plugin optimization-suite
 > ```
 
 > [!IMPORTANT]
 > **✨ NEW: ln-1000 Pipeline Orchestrator** — Autonomous multi-agent system that manages full development lifecycle. Orchestrates a team of specialized agents to execute complete development cycles: from task planning (ln-300) → validation (ln-310) → implementation (ln-400) → quality gate (ln-500) → user-confirmed merge to `develop`. One command, single Story per run.
+
+> [!IMPORTANT]
+> **✨ NEW: Optimization Suite** — 11 skills for performance optimization, dependency upgrades, and code modernization. **ln-811-algorithm-optimizer** implements an autoresearch loop inspired by [karpathy/autoresearch](https://github.com/karpathy/autoresearch): benchmark → hypothesize → keep/discard, with test coverage gate ensuring correctness before speed.
 
 > [!TIP]
 > **Multi-Model AI Review** — Delegate code & story reviews to Codex and Gemini agents running in parallel, with automatic fallback to Claude Opus. Ship faster with 3x review coverage.
@@ -32,7 +36,7 @@
 ## What's Inside
 
 ```
-claude-code-skills/                      # MARKETPLACE: 4 plugins, 109 skills
+claude-code-skills/                      # MARKETPLACE: 5 plugins, 116 skills
 |
 |  ┌─ Plugin: agile-workflow (33 skills) ──────────┐
 |
@@ -135,11 +139,10 @@ claude-code-skills/                      # MARKETPLACE: 4 plugins, 109 skills
 |   |   |-- ln-654-resource-lifecycle-auditor/  # Session scope mismatch, pool config, cleanup
 |
 |  └──────────────────────────────────────────────┘
-|  ┌─ Plugin: project-bootstrap (32 skills) ──────┐
+|  ┌─ Plugin: project-bootstrap (28 skills) ──────┐
 |
-|-- ln-7XX-*/                          # BOOTSTRAP (32 skills)
+|-- ln-7XX-*/                          # BOOTSTRAP (28 skills)
 |   |-- ln-700-project-bootstrap/      # L1: CREATE or TRANSFORM project
-|   |-- ln-710-dependency-upgrader/    # Upgrade npm/nuget/pip
 |   |-- ln-720-structure-migrator/     # SCAFFOLD or RESTRUCTURE to Clean Architecture
 |   |-- ln-730-devops-setup/           # Docker, CI/CD, env
 |   |   |-- ln-731-docker-generator/      # Dockerfiles, docker-compose
@@ -152,6 +155,22 @@ claude-code-skills/                      # MARKETPLACE: 4 plugins, 109 skills
 |   |-- ln-780-bootstrap-verifier/     # Build, test, Docker verification
 |
 |  └──────────────────────────────────────────────┘
+|  ┌─ Plugin: optimization-suite (11 skills) ─────┐
+|
+|-- ln-8XX-*/                          # OPTIMIZATION (11 skills)
+|   |-- ln-810-performance-optimization-coordinator/ # Performance optimization:
+|   |   |-- ln-811-algorithm-optimizer/      # Autoresearch loop: benchmark → hypothesize → keep/discard
+|   |   |-- ln-812-query-optimizer/          # Fix N+1, redundant fetches (companion to ln-651)
+|   |   |-- ln-813-runtime-optimizer/        # Fix blocking IO, allocations (companion to ln-653)
+|   |-- ln-820-dependency-optimization-coordinator/  # Dependency upgrades:
+|   |   |-- ln-821-npm-upgrader/             # npm/yarn/pnpm with breaking change handling
+|   |   |-- ln-822-nuget-upgrader/           # .NET NuGet with migration support
+|   |   |-- ln-823-pip-upgrader/             # pip/poetry/pipenv with security audit
+|   |-- ln-830-code-modernization-coordinator/       # Code modernization:
+|   |   |-- ln-831-oss-replacer/             # Replace custom code with OSS packages
+|   |   |-- ln-832-bundle-optimizer/         # JS/TS bundle size reduction
+|
+|  └──────────────────────────────────────────────┘
 |
 |-- hooks/                             # AUTOMATED VALIDATION HOOKS
 |   |-- hooks.json                     # Hook configuration (copy to settings.json)
@@ -159,7 +178,6 @@ claude-code-skills/                      # MARKETPLACE: 4 plugins, 109 skills
 |   |-- story-validator.py             # UserPromptSubmit: validates Story before execution
 |   |-- code-quality.py                # PostToolUse: DRY/KISS/YAGNI checks
 |
-|-- shared/css/diagram.css             # Universal diagram styles
 |-- docs/SKILL_ARCHITECTURE_GUIDE.md   # Orchestrator-Worker Pattern (L0-L3)
 |-- docs/AGENT_TEAMS_PLATFORM_GUIDE.md # Agent Teams runtime patterns
 |-- CLAUDE.md                          # Full documentation
@@ -169,7 +187,7 @@ claude-code-skills/                      # MARKETPLACE: 4 plugins, 109 skills
 
 ## Installation
 
-This marketplace contains **4 plugins** — install together or separately:
+This marketplace contains **5 plugins** — install together or separately:
 
 ```bash
 # All plugins (full suite)
@@ -180,6 +198,7 @@ This marketplace contains **4 plugins** — install together or separately:
 /plugin add levnikolaevich/claude-code-skills --plugin documentation-pipeline
 /plugin add levnikolaevich/claude-code-skills --plugin codebase-audit-suite
 /plugin add levnikolaevich/claude-code-skills --plugin project-bootstrap
+/plugin add levnikolaevich/claude-code-skills --plugin optimization-suite
 ```
 
 | Plugin | Skills | Description |
@@ -187,7 +206,8 @@ This marketplace contains **4 plugins** — install together or separately:
 | **agile-workflow** | 33 | Scope decomposition, Story/Task management, Execution, Quality gates, Orchestration |
 | **documentation-pipeline** | 11 | Full project docs pipeline with auto-detection (backend/frontend/devops) |
 | **codebase-audit-suite** | 33 | Documentation, Security, Build, Code quality, Tests, Architecture, Performance |
-| **project-bootstrap** | 32 | CREATE or TRANSFORM projects to production-ready Clean Architecture |
+| **project-bootstrap** | 28 | CREATE or TRANSFORM projects to production-ready Clean Architecture |
+| **optimization-suite** | 11 | Performance optimization, Dependency upgrades, Code modernization |
 
 ### Other AI Agents
 
@@ -386,7 +406,7 @@ ln-400-story-executor      # 3. Tasks -> Review -> Quality -> Done
 <details>
 <summary><b>What is Claude Code Skills?</b></summary>
 
-A plugin for [Claude Code](https://claude.ai/code) that provides 109 production-ready skills automating the full Agile development lifecycle — from project bootstrap and documentation through scope decomposition, task execution, quality gates, and comprehensive code audits.
+A plugin for [Claude Code](https://claude.ai/code) that provides 116 production-ready skills automating the full Agile development lifecycle — from project bootstrap and documentation through scope decomposition, task execution, quality gates, and comprehensive code audits.
 
 </details>
 
@@ -414,14 +434,43 @@ Claude Opus is the primary model. For code and story reviews, skills delegate to
 <details>
 <summary><b>How do I install it?</b></summary>
 
-Two options:
 ```bash
-# Plugin (Recommended)
+# All 5 plugins (full suite)
 /plugin add levnikolaevich/claude-code-skills
 
-# Git Clone
+# Or individually:
+/plugin add levnikolaevich/claude-code-skills --plugin agile-workflow
+/plugin add levnikolaevich/claude-code-skills --plugin documentation-pipeline
+/plugin add levnikolaevich/claude-code-skills --plugin codebase-audit-suite
+/plugin add levnikolaevich/claude-code-skills --plugin project-bootstrap
+/plugin add levnikolaevich/claude-code-skills --plugin optimization-suite
+
+# Git Clone (alternative)
 git clone https://github.com/levnikolaevich/claude-code-skills.git ~/.claude/skills
 ```
+
+</details>
+
+<details>
+<summary><b>Which plugin do I need?</b></summary>
+
+| If you want to... | Install |
+|---|---|
+| Run full Agile pipeline (plan → execute → review) | `agile-workflow` |
+| Generate project documentation | `documentation-pipeline` |
+| Audit existing code for issues | `codebase-audit-suite` |
+| Scaffold a new project or restructure existing | `project-bootstrap` |
+| Optimize performance, dependencies, bundle size | `optimization-suite` |
+| Everything | `/plugin add levnikolaevich/claude-code-skills` (all 5) |
+
+Each plugin works independently — install only what you need.
+
+</details>
+
+<details>
+<summary><b>Can I run individual skills without the full pipeline?</b></summary>
+
+Yes. Most skills work standalone — just invoke them directly (e.g., `/ln-620-codebase-auditor` for a full code audit). Pipeline orchestrators (`ln-1000`, `ln-400`) coordinate other skills but aren't required. Audit skills (`ln-6XX`) and bootstrap skills (`ln-7XX`) are fully self-contained.
 
 </details>
 
@@ -456,14 +505,14 @@ Through the Orchestrator-Worker pattern. Instead of feeding the entire codebase 
 <details>
 <summary><b>What can the audit skills detect?</b></summary>
 
-29 audit skills organized in 7 groups: security vulnerabilities (secrets, XSS, SQL injection), build health (compiler errors, type issues), code principles (DRY/KISS/YAGNI violations), code quality (complexity, magic numbers), dependencies (outdated packages, CVEs), test suite quality (coverage gaps, isolation issues), architectural patterns (layer violations, coupling metrics), and open-source replacement opportunities (goal-based analysis with migration plans).
+33 audit skills in 5 groups: documentation quality (structure, semantics, fact-checking, code comments), codebase health (security, build, DRY/KISS/YAGNI, complexity, dependencies, dead code, observability, concurrency, lifecycle), test suites (business logic, E2E coverage, value scoring, coverage gaps, isolation), architecture (patterns, layer boundaries, API contracts, dependency graphs, OSS replacements, project structure), and persistence performance (query efficiency, transactions, runtime, resource lifecycle).
 
 </details>
 
 <details>
 <summary><b>How is it different from custom prompts or slash commands?</b></summary>
 
-Custom prompts are ad-hoc and context-free. Claude Code Skills provides 109 coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
+Custom prompts are ad-hoc and context-free. Claude Code Skills provides 116 coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
 
 </details>
 
@@ -522,6 +571,7 @@ Papers, docs, and methodologies studied and implemented in the skill architectur
 | [Test Desiderata](https://testdesiderata.com/) (Kent Beck, 2019) | 12 properties of valuable tests — behavioral, predictive, specific, inspiring, deterministic... No numerical targets, only usefulness | [`risk_based_testing_guide.md`](shared/references/risk_based_testing_guide.md) — 6 Test Usefulness Criteria (Risk Priority ≥15, Confidence ROI, Behavioral, Predictive, Specific, Non-Duplicative) |
 | Vertical Slicing ([Humanizing Work](https://www.humanizingwork.com/the-humanizing-work-guide-to-splitting-user-stories/)) | "Never split by architectural layer" | Foundation-First task ordering |
 | [Claude Code Picks](https://amplifying.ai/research/claude-code-picks) (Amplifying AI, 2026) | Claude's tool preferences are learned maturity signals, not bias — Drizzle/Vitest/Zustand chosen for objective quality. Build-not-buy in 12/20 categories. "Correcting" valid preferences = recommending worse tools | Research-to-Action Gate in CLAUDE.md — require concrete defect before turning research into skill changes |
+| [autoresearch](https://github.com/karpathy/autoresearch) (Karpathy, 2025) | Autoresearch loop: modify → benchmark → binary keep/discard; compound baselines; simplicity criterion (marginal gain + ugly code = discard) | [`ln-811-algorithm-optimizer`](ln-811-algorithm-optimizer/SKILL.md) — keep/discard with ≥10% threshold, crash triage, experiment log, test coverage gate |
 
 ---
 

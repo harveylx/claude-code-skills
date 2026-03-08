@@ -60,6 +60,17 @@ Resolve commands in this order (stop at first match per category):
 | Rust | `Cargo.toml` | `cargo build` | 5min |
 | Java | `pom.xml` | `mvn compile` | 5min |
 
+### Benchmarks
+
+| Stack | Config Detection | Run | Output | Timeout |
+|-------|-----------------|-----|--------|---------|
+| Go | `*_test.go` + `func Benchmark` | `go test -bench={name} -benchmem -count=5 -run=^$ {pkg}` | `-json` | 5min |
+| Python | `pytest-benchmark` in deps | `pytest --benchmark-only --benchmark-json=bench.json` | JSON | 5min |
+| Rust | `benches/` directory | `cargo bench -- {name}` | stdout | 5min |
+| JS (Vitest) | `*.bench.ts` | `npx vitest bench` | `--reporter=json` | 5min |
+| Java (JMH) | `@Benchmark` annotation | `mvn exec:java` | `-rf json` | 10min |
+| .NET | `[Benchmark]` attribute | `dotnet run -c Release` | stdout | 10min |
+
 ## Execution Rules
 
 1. **Exit code:** 0 = PASS, non-zero = FAIL
@@ -89,6 +100,11 @@ Each skill adds its own logic ON TOP of this guide:
 | Tech debt cleaner | Revert ALL changes on any FAIL (`git checkout .`) |
 | Regression checker | Tests only; prefer runbook.md commands over auto-detect |
 | Build auditor | Full audit with severity scoring (CRITICAL/HIGH/MEDIUM/LOW) |
+| Algorithm optimizer | Benchmark only; 5 runs median; generated bench cleanup |
+| Query optimizer | Tests only; metric = query count reduction |
+| Runtime optimizer | Tests + lint; fix blocking IO patterns |
+| OSS replacer | Tests only; atomic per-module revert; delete old on keep |
+| Bundle optimizer | Build only; metric = bundle size; JS/TS specific |
 
 ---
 **Version:** 1.0.0

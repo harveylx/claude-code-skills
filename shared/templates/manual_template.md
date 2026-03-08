@@ -5,7 +5,7 @@
 
 <!-- NO_CODE_EXAMPLES: Manuals document APIs, not implementations.
      FORBIDDEN: Code blocks, implementation snippets, code examples
-     ALLOWED: Method signatures (1 line inline), parameter tables, ASCII-схемы
+     ALLOWED: Method signatures (1 line inline), parameter tables, ASCII diagrams
      INSTEAD OF CODE: Link to official documentation or real project file
 
      CORRECT: "See [Official docs: CreateClient()](https://docs.example.com/CreateClient)"

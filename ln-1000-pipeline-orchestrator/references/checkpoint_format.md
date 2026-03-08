@@ -56,6 +56,7 @@ Lead writes ALL state variables to `.pipeline/state.json` on every heartbeat cyc
 | `story_state` | object | `{storyId: "STAGE_0"\|"STAGE_1"\|...\|"PENDING_MERGE"\|"DONE"\|"PAUSED"}` |
 | `worker_map` | object | `{storyId: worker_name}` — assigned worker |
 | `quality_cycles` | object | `{storyId: count}` — FAIL->retry counter (limit 2) |
+| `previous_quality_score` | object | `{storyId: score}` — quality score from first Stage 3 FAIL (for rework degradation comparison). Absent until first FAIL. |
 | `validation_retries` | object | `{storyId: count}` — NO-GO retry counter (limit 1) |
 | `crash_count` | object | `{storyId: count}` — crash respawn counter (limit 1) |
 | `story_results` | object | `{storyId: {stage0: "...", stage1: "...", ...}}` — per-stage results for report |
@@ -84,6 +85,7 @@ Lead writes ALL state variables to `.pipeline/state.json` on every heartbeat cyc
   "story_state": { "API-427": "STAGE_2" },
   "worker_map": { "API-427": "story-API-427-s2" },
   "quality_cycles": { "API-427": 0 },
+  "previous_quality_score": {},
   "validation_retries": { "API-427": 0 },
   "crash_count": { "API-427": 0 },
   "story_results": { "API-427": { "stage0": "skip", "stage1": "skip" } },

@@ -1,11 +1,11 @@
 # Audit Scoring Algorithm
 
-Unified scoring formula for all L3 audit workers (ln-6XX series).
+Unified scoring formula for audit workers.
 
 ## Penalty Formula
 
-```
-penalty = (critical × 2.0) + (high × 1.0) + (medium × 0.5) + (low × 0.2)
+```text
+penalty = (critical x 2.0) + (high x 1.0) + (medium x 0.5) + (low x 0.2)
 score = max(0, 10 - penalty)
 ```
 
@@ -32,9 +32,8 @@ score = max(0, 10 - penalty)
 
 **Input:** 1 CRITICAL + 2 HIGH + 3 MEDIUM + 2 LOW
 
-**Calculation:**
-```
-penalty = (1 × 2.0) + (2 × 1.0) + (3 × 0.5) + (2 × 0.2)
+```text
+penalty = (1 x 2.0) + (2 x 1.0) + (3 x 0.5) + (2 x 0.2)
         = 2.0 + 2.0 + 1.5 + 0.4
         = 5.9
 
@@ -43,24 +42,19 @@ score = max(0, 10 - 5.9) = 4.1
 
 **Result:** 4.1/10 (Significant issues)
 
-## Diagnostic Sub-Scores (ln-641, ln-643)
+## Diagnostic Sub-Scores
 
-Workers ln-641 and ln-643 additionally report 4 diagnostic sub-scores (0-100 each):
-- **Compliance** — How well does implementation follow documented pattern?
-- **Completeness** — Are all required components present?
-- **Quality** — Code quality of pattern implementation
-- **Implementation** — Technical correctness of implementation
+Some workers additionally report 4 diagnostic sub-scores (0-100 each):
+- **Compliance** - How well implementation follows the documented pattern
+- **Completeness** - Whether required components are present
+- **Quality** - Code quality of the implementation
+- **Implementation** - Technical correctness of the implementation
 
-These sub-scores are **informational only** — reported in AUDIT-META for diagnostic purposes. The primary `score` field uses the same penalty formula as all other workers.
+These sub-scores are informational only. The primary `score` field still uses the penalty formula above.
 
 ## Usage in SKILL.md
 
-Reference this file instead of duplicating formula:
-
-```markdown
-## Reference Files
-- **Scoring algorithm:** `shared/references/audit_scoring.md`
-```
+Prefer one `**MANDATORY READ:**` block in the scoring section instead of restating the formula.
 
 ---
 **Version:** 2.0.0

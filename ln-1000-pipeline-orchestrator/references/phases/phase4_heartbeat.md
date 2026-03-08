@@ -145,7 +145,7 @@ ON HEARTBEAT (Stop hook stderr: "HEARTBEAT: ..."):
     complete, selected_story_id,
     stories_remaining = (1 if story_state[selected_story_id] NOT IN ("DONE", "PAUSED") else 0),
     last_check=now,
-    story_state, worker_map, quality_cycles, validation_retries,
+    story_state, worker_map, quality_cycles, previous_quality_score, validation_retries,
     crash_count, story_results, infra_issues,
     worktree_map, stage_timestamps, git_stats,
     pipeline_start_time, readiness_scores, team_name,

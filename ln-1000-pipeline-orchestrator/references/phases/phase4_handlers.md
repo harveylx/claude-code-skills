@@ -203,6 +203,7 @@ SendMessage(recipient: worker_map[id],
   content: "ACK Stage 3 for {id}", summary: "{id} Stage 3 ACK")
 stage_timestamps[id].stage_3_end = now()
 IF quality_cycles[id] < 2:
+  previous_quality_score[id] = {score}          # Save for rework comparison on next FAIL
   story_state[id] = "STAGE_2"
   stage_timestamps[id].stage_2_start = now()    # Rework: restart Stage 2 timer
   # Shutdown old worker, spawn fresh for Stage 2 re-entry (fix tasks)
@@ -215,13 +216,24 @@ IF quality_cycles[id] < 2:
   worker_map[id] = next_worker
   Write .pipeline/worker-{next_worker}-active.flag
 ELSE:
+  # Score comparison: detect rework degradation (autoresearch pattern)
+  prev = previous_quality_score[id] OR null
+  IF prev != null:
+    delta = {score} - prev
+    noise = "(within noise margin)" IF abs(delta) < 5 ELSE ""
+    IF {score} < prev:
+      escalation_msg = "Rework DEGRADED quality ({prev} → {score}) {noise}. Consider reverting."
+    ELSE:
+      escalation_msg = "Rework insufficient ({prev} → {score}) {noise}. Manual review needed."
+  ELSE:
+    escalation_msg = "Failed quality gate {quality_cycles[id]} times."
   story_state[id] = "PAUSED"
   Bash: rm -f .pipeline/worker-{worker_map[id]}-active.flag .pipeline/worker-{worker_map[id]}-done.flag
   Bash: git worktree remove .worktrees/story-{id} --force
   worktree_map[id] = null
-  ESCALATE to user: "Story {id} failed quality gate {quality_cycles[id]} times"
+  ESCALATE to user: "Story {id}: {escalation_msg}"
   SendMessage(type: "shutdown_request", recipient: worker_map[id])
-  story_results[id].stage3 = "FAIL {score}/100 (cycles exhausted)"
+  story_results[id].stage3 = "FAIL {score}/100 (cycles exhausted, {escalation_msg})"
   Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
 ```
 

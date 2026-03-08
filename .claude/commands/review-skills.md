@@ -1,11 +1,11 @@
 ---
-description: "Review changed skills: 9 structural dimensions (D1-D9) + 5 intent checks (M1-M5: goal clarity, approach optimality, ecosystem consistency, rewrite delta, necessity). Fix in-place."
+description: "Review changed skills: automated bash checks + 9 structural dimensions (D1-D9) + 5 intent checks (M1-M5). PASS/FAIL verdict. Fix in-place."
 allowed-tools: Read, Grep, Glob, Bash, Edit
 ---
 
 # Skill Coherence Review
 
-You review changed skills across 9 structural dimensions (D1-D9) and 5 intent checks (M1-M5), then fix issues in-place.
+You review changed skills with automated bash checks (Phase 2), 9 structural dimensions (D1-D9), and 5 intent checks (M1-M5). Fix issues in-place. Report with PASS/FAIL verdict.
 
 ## Phase 1: Scope Detection
 
@@ -26,9 +26,81 @@ Extract unique skill dirs (pattern `ln-\d+-[^/]+`) and shared paths (`shared/`).
 
 Deduplicate. Report: `Scope: N primary, M affected, K dependency skills.`
 
-## Phase 2: Nine-Dimension Review
+## Phase 2: Automated Verification
 
-Read every SKILL.md in scope. Check ALL dimensions across ALL skills in scope.
+Run these bash commands for every SKILL.md in scope. Record failures — they feed D7/D8 as pre-verified violations. Every FAIL is a confirmed violation — no judgment needed, no skipping allowed.
+
+**Frontmatter check** (D7):
+```bash
+for f in {scoped SKILL.md files}; do
+  head -5 "$f" | grep -q "^---" || echo "FAIL: no frontmatter: $f"
+  grep -q "^name:" "$f" || echo "FAIL: no name: $f"
+  grep -q "^description:" "$f" || echo "FAIL: no description: $f"
+done
+```
+
+**Version/date check** (D7):
+```bash
+for f in {scoped SKILL.md files}; do
+  grep -q "\*\*Version:\*\*" "$f" || echo "FAIL: no version: $f"
+  grep -q "\*\*Last Updated:\*\*" "$f" || echo "FAIL: no date: $f"
+  grep -q "\*\*Changes:\*\*" "$f" && echo "FAIL: has Changes section: $f"
+done
+```
+
+**Size check** (D8):
+```bash
+for f in {scoped SKILL.md files}; do
+  lines=$(wc -l < "$f")
+  [ "$lines" -gt 800 ] && echo "FAIL: $lines lines (>800): $f"
+done
+```
+
+**Description length check** (D8):
+```bash
+for f in {scoped SKILL.md files}; do
+  desc=$(sed -n '/^description:/p' "$f" | sed 's/^description: *//' | tr -d '"')
+  len=${#desc}
+  [ "$len" -gt 200 ] && echo "FAIL: description $len chars (>200): $f"
+done
+```
+
+**MANDATORY READ path verification** (D2):
+```bash
+for f in {scoped SKILL.md files}; do
+  dir=$(dirname "$f")
+  grep -oP 'MANDATORY READ.*?Load \K`[^`]+`' "$f" | tr -d '\`' | while read path; do
+    resolved=$(realpath "$dir/$path" 2>/dev/null || realpath "$path" 2>/dev/null)
+    [ ! -f "$resolved" ] && echo "FAIL: missing MANDATORY READ target: $path (from $f)"
+  done
+done
+```
+
+**Orphan references check** (D7):
+```bash
+for f in {scoped SKILL.md files}; do
+  dir=$(dirname "$f")
+  if [ -d "$dir/references" ]; then
+    for ref in "$dir/references/"*; do
+      base=$(basename "$ref")
+      grep -q "$base" "$f" || echo "FAIL: orphan reference: $ref (not in $f)"
+    done
+  fi
+done
+```
+
+**Passive file reference check** (D2):
+```bash
+for f in {scoped SKILL.md files}; do
+  grep -nP '(^See |^Per |^Follows |See \[).*\.(md|txt|yaml)' "$f" | grep -v "MANDATORY READ" && echo "WARN: passive file ref in $f"
+done
+```
+
+## Phase 3: Nine-Dimension Review
+
+**MANDATORY READ:** Load `docs/SKILL_ARCHITECTURE_GUIDE.md` (Skill Directory Structure, Red Flags tables, SRP Decision Tree, all Checklists).
+
+Read every SKILL.md in scope. Check ALL dimensions across ALL skills in scope. Phase 2 failures are pre-verified — include them directly, do not re-check.
 
 ### D1: Flow Integrity
 - Every `ln-NNN` reference in workflow/worker tables points to an existing `ln-NNN-*/SKILL.md`
@@ -82,7 +154,6 @@ Read every SKILL.md in scope. Check ALL dimensions across ALL skills in scope.
 - If `description` contains `:`, it is wrapped in double quotes (prevents YAML parse break)
 - `**Version:** X.Y.Z` and `**Last Updated:** YYYY-MM-DD` present at end of file
 - No `**Changes:**` section exists (git history tracks changes, not inline changelog)
-- `diagram.html` file exists in the skill directory
 - Files in `references/` are actually referenced from SKILL.md (no orphan reference files)
 
 ### D8: Architecture Conformance
@@ -99,11 +170,9 @@ Read every SKILL.md in scope. Check ALL dimensions across ALL skills in scope.
 - Scoring formula consistent: `penalty = (C×2.0) + (H×1.0) + (M×0.5) + (L×0.2)`
 - Report structure follows `shared/templates/audit_worker_report_template.md`
 
-## Phase 3: Intent Review
+## Phase 4: Intent Review
 
 Evaluate DESIGN INTENT of changes. Applies to primary skills only (affected/dependency skills have no changed intent to review).
-
-**MANDATORY READ:** Load `docs/SKILL_ARCHITECTURE_GUIDE.md` (Red Flags, SRP Decision Tree, Best Practices Checklists).
 
 For each primary skill, read the git diff (`git diff HEAD -- {skill_dir}/`).
 
@@ -142,21 +211,38 @@ For each primary skill, read the git diff (`git diff HEAD -- {skill_dir}/`).
 - **RETHINK** — design decision needed, NOT auto-fixable, advisory only
 - **REVERT** — change does not fix a concrete defect, must be rolled back
 
-## Phase 4: Fix
+## Phase 5: Fix
 
 For each finding:
 - **Fixable** (wrong path, stale ref, missing bidirectional ref, duplicated content) — fix immediately via Edit
 - **Ambiguous** (conflicting thresholds where correct value unclear) — list in report, do NOT guess
-- **SIMPLIFY** (from Phase 3) with unambiguous action — fix immediately
-- **REVERT** (from Phase 3) — roll back the change via Edit (restore original content from git)
-- **RETHINK** (from Phase 3) — do NOT fix, pass to Phase 5 report
+- **SIMPLIFY** (from Phase 4) with unambiguous action — fix immediately
+- **REVERT** (from Phase 4) — roll back the change via Edit (restore original content from git)
+- **RETHINK** (from Phase 4) — do NOT fix, pass to Phase 6 report
 
-## Phase 5: Report
+## Phase 6: Report
+
+**Verdict rules:**
+- Any D1-D9 violation NOT auto-fixed → **FAIL**
+- Only RETHINK findings (no unfixed violations) → **PASS with CONCERNS**
+- Zero findings → **PASS**
 
 ```
-## Skill Coherence Review
+## Skill Coherence Review — {PASS|PASS with CONCERNS|FAIL}
 
 **Scope:** {list of reviewed skills}
+**Verdict:** {PASS|PASS with CONCERNS|FAIL}
+
+### Automated Checks (Phase 2)
+| Check | Result | Failures |
+|-------|--------|----------|
+| Frontmatter (D7) | {PASS/FAIL} | {list or —} |
+| Version/Date (D7) | {PASS/FAIL} | {list or —} |
+| Size ≤800 (D8) | {PASS/FAIL} | {list or —} |
+| Description ≤200 (D8) | {PASS/FAIL} | {list or —} |
+| MANDATORY READ paths (D2) | {PASS/FAIL} | {list or —} |
+| Orphan references (D7) | {PASS/FAIL} | {list or —} |
+| Passive file refs (D2) | {PASS/FAIL} | {list or —} |
 
 ### Fixed ({count})
 | # | Skill | Dim | Issue | Fix Applied |
@@ -176,9 +262,12 @@ Categories: RETHINK (design decision needed), SIMPLIFY (concrete reduction — a
 Dimensions with no findings: {list}
 ```
 
-If zero findings: `All 9 structural dimensions + 5 intent checks clean. No issues found.`
+If zero findings: `All 9 structural dimensions + 5 intent checks clean. PASS.`
 
 ## Rules
+- Automated checks (Phase 2) are NON-NEGOTIABLE — every FAIL must appear in the report
+- Do NOT skip any dimension for any skill in scope — check ALL D1-D9 for ALL skills
+- If unsure whether something violates a rule — it violates the rule (strict interpretation)
 - Read ALL skills in scope before reporting — do not stop at first finding
 - Fix errors immediately, do not defer
 - Do NOT update versions or dates unless user explicitly requests it

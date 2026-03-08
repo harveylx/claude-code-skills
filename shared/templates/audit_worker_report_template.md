@@ -1,68 +1,31 @@
 # Audit Worker Report Template
 
-Standardized markdown format for L3 audit workers writing file-based reports.
+Standardized markdown format for audit workers writing file-based reports.
 
 ## Why File-Based
 
-Workers write reports to `docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/` instead of returning full JSON in-context. This prevents coordinator context overflow when aggregating results.
+Workers write reports to `docs/project/.audit/{audit-id}/{YYYY-MM-DD}/` instead of returning full findings in-context. This keeps coordinator context small while preserving full evidence on disk.
 
 **Output directory convention:**
-```
-docs/project/.audit/{coordinator-id}/{YYYY-MM-DD}/
-# e.g., docs/project/.audit/ln-620/2026-03-01/
+```text
+docs/project/.audit/{audit-id}/{YYYY-MM-DD}/
 ```
 
-No deletion of previous date folders — history preserved for comparison.
+No deletion of previous date folders - history is preserved for comparison.
 
 ## File Naming
 
-### ln-610 Documentation Workers
+Choose one file naming convention per coordinator and keep it stable across workers.
 
-| Worker | Slug | Example |
-|--------|------|---------|
-| ln-611 | `structure` | `611-structure.md` |
-| ln-612 | `semantic-{doc}` | `612-semantic-architecture.md` |
-| ln-613 | `code-comments` | `613-code-comments.md` |
-| ln-614 | `fact-checker` | `614-fact-checker.md` |
+Recommended patterns:
+- Global worker: `{worker-id}-{slug}.md`
+- Domain-aware worker: `{worker-id}-{slug}-{domain}.md`
+- Worker with one analyzed object: `{worker-id}-{slug}-{item}.md`
 
-### ln-620 Codebase Workers
-
-| Worker Type | Pattern | Example |
-|-------------|---------|---------|
-| Global workers | `62X-{slug}.md` | `621-security.md` |
-| Domain-aware (domain mode) | `62X-{slug}-{domain}.md` | `623-principles-users.md` |
-| Domain-aware (global fallback) | `62X-{slug}.md` | `623-principles.md` |
-
-| Worker | Slug |
-|--------|------|
-| ln-621 | `security` |
-| ln-622 | `build` |
-| ln-623 | `principles` |
-| ln-624 | `quality` |
-| ln-625 | `dependencies` |
-| ln-626 | `dead-code` |
-| ln-627 | `observability` |
-| ln-628 | `concurrency` |
-| ln-629 | `lifecycle` |
-
-### ln-630 Test Workers
-
-| Worker | Slug | Example |
-|--------|------|---------|
-| ln-631 | `business-logic` | `631-business-logic.md` |
-| ln-632 | `e2e-priority` | `632-e2e-priority.md` |
-| ln-633 | `test-value` | `633-test-value.md` |
-| ln-634 | `coverage-gaps[-{domain}]` | `634-coverage-gaps-users.md` |
-| ln-635 | `isolation` | `635-isolation.md` |
-
-### ln-650 Persistence Workers
-
-| Worker | Slug | Example |
-|--------|------|---------|
-| ln-651 | `query-efficiency` | `651-query-efficiency.md` |
-| ln-652 | `transaction-correctness` | `652-transaction-correctness.md` |
-| ln-653 | `runtime-performance` | `653-runtime-performance.md` |
-| ln-654 | `resource-lifecycle` | `654-resource-lifecycle.md` |
+Examples:
+- `621-security.md`
+- `623-principles-users.md`
+- `641-pattern-job-processing.md`
 
 ## Report Structure
 
@@ -101,20 +64,20 @@ status: complete
 
 ### AUDIT-META Block
 
-HTML comment block parsed by coordinator via Grep. One key-value pair per line.
+HTML comment block parsed by the coordinator. One key-value pair per line.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `worker` | string | Worker skill ID (e.g., `ln-621`) |
-| `category` | string | Audit category matching `codebase_audit_template.md` sections |
-| `domain` | string | Domain name or `global` for non-domain-aware workers |
-| `scan_path` | string | Path scanned (e.g., `src/users`) or `.` for global |
+| `worker` | string | Worker skill ID |
+| `category` | string | Audit category used in the final report |
+| `domain` | string | Domain name or `global` |
+| `scan_path` | string | Path scanned or `.` for global |
 | `score` | number | 0-10 scale per `audit_scoring.md` |
 | `total_issues` | integer | Sum of all severity counts |
-| `critical` | integer | CRITICAL severity count |
-| `high` | integer | HIGH severity count |
-| `medium` | integer | MEDIUM severity count |
-| `low` | integer | LOW severity count |
+| `critical` | integer | CRITICAL count |
+| `high` | integer | HIGH count |
+| `medium` | integer | MEDIUM count |
+| `low` | integer | LOW count |
 | `status` | string | `complete` or `error` |
 
 ### Checks Table
@@ -123,8 +86,6 @@ Matches `audit_output_schema.md` checks array. Status values: `passed`, `failed`
 
 ### Findings Table
 
-Columns match `codebase_audit_template.md` category sections. Coordinator copies rows directly into final report.
-
 | Column | Required | Description |
 |--------|----------|-------------|
 | Severity | Yes | CRITICAL, HIGH, MEDIUM, LOW |
@@ -132,11 +93,15 @@ Columns match `codebase_audit_template.md` category sections. Coordinator copies
 | Issue | Yes | Concise problem description |
 | Principle | Yes | Category / Specific Rule |
 | Recommendation | Yes | Actionable fix |
-| Effort | Yes | S (<1h), M (1-4h), L (>4h) |
+| Effort | Yes | S (`<1h`), M (`1-4h`), L (`>4h`) |
 
-## FINDINGS-EXTENDED Block (ln-623 Only)
+## Optional Extension Blocks
 
-Only ln-623-code-principles-auditor includes this block for cross-domain DRY analysis. Contains JSON array with `pattern_signature` field that coordinator uses to detect same violations across domains.
+Add these blocks only when the worker's local workflow requires them.
+
+### FINDINGS-EXTENDED
+
+Use when the coordinator needs machine-readable fields beyond the visible findings table, for example pattern signatures or cross-domain grouping keys.
 
 ```markdown
 <!-- FINDINGS-EXTENDED
@@ -144,60 +109,11 @@ Only ln-623-code-principles-auditor includes this block for cross-domain DRY ana
 -->
 ```
 
-Other workers do NOT include this block.
+### AUDIT-META: Extended Variant
 
-## Worker Return Value (In-Context)
-
-After writing the report file, worker returns minimal summary to coordinator:
-
-```
-Report written: docs/project/.audit/ln-620/{YYYY-MM-DD}/621-security.md
-Score: 7.5/10 | Issues: 5 (C:0 H:2 M:2 L:1)
-```
-
-This gives coordinator enough data for Compliance Score and Severity Summary tables without reading files.
-
-## Writing Rules
-
-- Build **entire report content in memory** before writing (atomic single Write call)
-- If worker encounters error before completing: return error status, do NOT write partial file
-- Findings table rows sorted by severity: CRITICAL first, then HIGH, MEDIUM, LOW
-
-## Usage in Worker SKILL.md
+Workers with diagnostic sub-scores add informational fields alongside the primary penalty-based `score`:
 
 ```markdown
-## Write Report
-
-**MANDATORY READ:** Load `shared/templates/audit_worker_report_template.md` for file format.
-
-Build report in memory, write to `{output_dir}/62X-{slug}.md`.
-Return summary line to coordinator.
-```
-
----
-
-# Pattern Evolution Workers (ln-640)
-
-ln-640 workers use the same file-based approach with two extensions: **4-score AUDIT-META** and **DATA-EXTENDED** block for cross-domain aggregation.
-
-## File Naming (ln-640)
-
-| Worker | Slug | Mode | Example |
-|--------|------|------|---------|
-| ln-641 | `pattern-{name}` | global only | `641-pattern-job-processing.md` |
-| ln-642 | `layer-boundary` | domain-aware | `642-layer-boundary-users.md` / `642-layer-boundary.md` |
-| ln-643 | `api-contract` | domain-aware | `643-api-contract-users.md` / `643-api-contract.md` |
-| ln-644 | `dep-graph` | domain-aware | `644-dep-graph-users.md` / `644-dep-graph.md` |
-| ln-645 | `open-source-replacer` | domain-aware | `645-open-source-replacer-users.md` / `645-open-source-replacer.md` |
-| ln-646 | `structure` | domain-aware | `646-structure-users.md` / `646-structure.md` |
-
-**Pattern name slug:** lowercase, hyphens, no spaces: `Job Processing` → `job-processing`.
-
-## AUDIT-META: Extended Variant (ln-641, ln-643)
-
-Workers ln-641 and ln-643 add **informational sub-scores** alongside the primary penalty-based `score`:
-
-```
 <!-- AUDIT-META
 worker: ln-641
 category: Pattern Analysis
@@ -218,81 +134,63 @@ status: complete
 -->
 ```
 
-**Primary `score`** is penalty-based (`max(0, 10 - penalty)`) — same formula as all other workers. Sub-scores are **diagnostic only** (not used for overall scoring).
+Any worker using this variant still uses the standard penalty-based primary score.
 
-Additional fields vs standard AUDIT-META:
+### DATA-EXTENDED
 
-| Field | Type | Workers | Description |
-|-------|------|---------|-------------|
-| `pattern` | string | ln-641, ln-643 | Pattern name being analyzed |
-| `score_compliance` | integer | ln-641, ln-643 | Compliance diagnostic 0-100 |
-| `score_completeness` | integer | ln-641, ln-643 | Completeness diagnostic 0-100 |
-| `score_quality` | integer | ln-641, ln-643 | Quality diagnostic 0-100 |
-| `score_implementation` | integer | ln-641, ln-643 | Implementation diagnostic 0-100 |
+Use when the coordinator needs structured machine-readable payloads for cross-domain or cross-worker aggregation.
 
-All ln-640 workers (including ln-641, ln-643) use penalty-based primary score.
-
-## DATA-EXTENDED Block
-
-JSON in HTML comment for coordinator cross-domain aggregation. All ln-640 workers include this block.
-
-```markdown
-<!-- DATA-EXTENDED
-{JSON object}
--->
-```
-
-### Per-Worker DATA-EXTENDED Content
-
-**ln-641 (Pattern Analyzer):**
+Pattern analysis:
 ```json
 {"pattern":"Job Processing","codeReferences":["src/jobs/processor.ts","src/workers/base.ts"],"gaps":{"missingComponents":["Dead letter queue"],"inconsistencies":["Retry config exists but no backoff strategy"]},"recommendations":["Add DLQ configuration for failed jobs"]}
 ```
 
-**ln-642 (Layer Boundary):**
+Layer boundary:
 ```json
 {"architecture":{"type":"Layered","layers":["api","services","domain","infrastructure"]},"coverage":{"http_abstraction":75,"error_centralization":false,"transaction_boundary_consistent":false,"session_ownership_consistent":true}}
 ```
 
-**ln-643 (API Contract):**
+API contract:
 ```json
 [{"severity":"HIGH","location":"app/services/user/service.py:23","issue":"Service accepts parsed_body","principle":"API Contract / Layer Leakage","domain":"users"}]
 ```
 
-**ln-644 (Dependency Graph):**
+Dependency graph:
 ```json
 {"graph_stats":{"modules_analyzed":12,"edges":34,"cycles_detected":2,"ccd":42,"nccd":1.3},"cycles":[{"type":"transitive","path":["auth","billing","notify","auth"],"severity":"CRITICAL"}],"boundary_violations":[{"rule_type":"forbidden","from":"domain","to":"infrastructure","severity":"CRITICAL"}],"sdp_violations":[{"from":"domain","to":"utils","I_from":0.2,"I_to":0.8,"severity":"HIGH"}],"metrics":{"users":{"Ca":3,"Ce":5,"I":0.625}},"baseline":{"new":3,"resolved":1,"frozen":4}}
 ```
 
-**ln-645 (Open Source Replacer):**
+Replacement analysis:
 ```json
 {"modules_scanned":15,"modules_with_alternatives":8,"reuse_opportunity_score":6.5,"replacements":[{"module":"src/utils/email-validator.ts","lines":245,"classification":"utility","goal":"Email validation with MX checking","alternative":"zod + zod-email","confidence":"HIGH","stars":28000,"license":"MIT","license_class":"PERMISSIVE","security_status":"CLEAN","ecosystem_match":true,"feature_coverage":95,"effort":"M","migration_steps":["Install","Create schema","Replace calls","Remove module","Test"]}],"no_replacement_found":[{"module":"src/lib/domain-scorer.ts","reason":"Domain-specific business logic","classification":"domain-specific"}]}
 ```
 
-**ln-646 (Project Structure):**
+Structure analysis:
 ```json
 {"tech_stack":{"language":"typescript","framework":"react","structure":"monolith"},"dimensions":{"file_hygiene":{"checks":6,"issues":2},"ignore_files":{"checks":4,"issues":1},"framework_conventions":{"checks":3,"issues":0},"domain_organization":{"checks":3,"issues":1},"naming_conventions":{"checks":3,"issues":0}},"junk_drawers":[{"path":"src/utils","file_count":23}],"naming_dominant_case":"PascalCase","naming_violations_pct":5}
 ```
 
-## Worker Return Value (ln-640)
+## Worker Return Value (In-Context)
 
-### Extended Workers (ln-641, ln-643)
+After writing the report file, return a compact summary:
 
+```text
+Report written: docs/project/.audit/{audit-id}/{YYYY-MM-DD}/{worker-file}.md
+Score: 7.5/10 | Issues: 5 (C:0 H:2 M:2 L:1)
 ```
-Report written: docs/project/.audit/ln-640/{YYYY-MM-DD}/641-pattern-job-processing.md
+
+Workers with diagnostic sub-scores return:
+
+```text
+Report written: docs/project/.audit/{audit-id}/{YYYY-MM-DD}/{worker-file}.md
 Score: 6.0/10 (C:72 K:85 Q:68 I:90) | Issues: 3 (H:1 M:2 L:0)
 ```
 
-Format: `C`=Compliance, `K`=Completeness, `Q`=Quality, `I`=Implementation (diagnostic sub-scores). Primary score is penalty-based.
+## Writing Rules
 
-### Standard Workers (ln-642, ln-644, ln-645, ln-646)
-
-```
-Report written: docs/project/.audit/ln-640/{YYYY-MM-DD}/642-layer-boundary-users.md
-Score: 4.5/10 | Issues: 8 (C:1 H:3 M:4 L:0)
-```
-
-Same format as ln-620 workers.
+- Build the entire report in memory before writing.
+- If the worker fails before completion, do not write a partial file.
+- Sort findings by severity: CRITICAL, HIGH, MEDIUM, LOW.
 
 ---
 **Version:** 2.0.0

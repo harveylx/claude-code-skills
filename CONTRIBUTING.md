@@ -33,7 +33,6 @@ git checkout -b feature/amazing-feature
 Follow these guidelines when making changes:
 
 - **Follow CLAUDE.md standards** - All skills follow unified structure
-- **Add diagrams for new skills** - Use `diagram.html` with embedded Mermaid code
 - **Update CLAUDE.md** - If adding new skills or changing architecture
 - **Include version and last updated date** - At the end of modified files
 - **Test thoroughly** - Verify your skill works end-to-end
@@ -86,7 +85,6 @@ Creating a new skill? Follow this structure:
 ```
 ln-XXX-skill-name/
 ├── SKILL.md              # Metadata and full description
-├── diagram.html          # Standalone HTML with embedded Mermaid diagram
 └── references/           # Templates and guides
     ├── template.md       # Document templates
     └── guide.md          # Reference guides
@@ -95,7 +93,6 @@ ln-XXX-skill-name/
 **Requirements:**
 - Follow naming convention: `ln-XXX-skill-name/`
 - Include SKILL.md with YAML frontmatter
-- Create workflow diagram in `diagram.html`
 - Add version and last updated date
 - Test end-to-end before submitting
 
@@ -132,7 +129,6 @@ Share suggestions and use cases:
 
 All skills must include:
 - Clear description in SKILL.md
-- Workflow diagram showing execution flow
 - Version number and last updated date
 - Examples of usage
 
@@ -142,7 +138,6 @@ Before submitting:
 - Test your skill in a real project
 - Verify all file paths work correctly
 - Check that all dependencies are documented
-- Ensure diagrams render correctly
 
 ## Updating Your Fork
 

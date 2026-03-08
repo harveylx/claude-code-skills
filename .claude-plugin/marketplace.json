@@ -8,8 +8,8 @@
   },
 
   "metadata": {
-    "description": "4 plugins, 109 skills: Agile workflow (Planning, Execution, Quality) + Documentation pipeline + Codebase audit suite + Project Bootstrap (scaffolding, Docker, CI/CD, quality tooling).",
-    "version": "3.1.0"
+    "description": "5 plugins, 116 skills: Agile workflow (Planning, Execution, Quality) + Documentation pipeline + Codebase audit suite + Project Bootstrap (scaffolding, Docker, CI/CD) + Optimization suite (Performance, Dependencies, Modernization).",
+    "version": "3.2.0"
   },
   "plugins": [
     {
@@ -115,15 +115,11 @@
     },
     {
       "name": "project-bootstrap",
-      "description": "32 project bootstrap skills: CREATE new or TRANSFORM existing projects to production-ready Clean Architecture with Docker, CI/CD, linters, security scanning, verification. Works without Linear.",
+      "description": "28 project bootstrap skills: CREATE new or TRANSFORM existing projects to production-ready Clean Architecture with Docker, CI/CD, linters, security scanning, verification. Works without Linear.",
       "source": "./",
       "strict": false,
       "skills": [
         "./ln-700-project-bootstrap",
-        "./ln-710-dependency-upgrader",
-        "./ln-711-npm-upgrader",
-        "./ln-712-nuget-upgrader",
-        "./ln-713-pip-upgrader",
         "./ln-720-structure-migrator",
         "./ln-721-frontend-restructure",
         "./ln-722-backend-generator",
@@ -151,6 +147,25 @@
         "./ln-781-build-verifier",
         "./ln-782-test-runner",
         "./ln-783-container-launcher"
+      ]
+    },
+    {
+      "name": "optimization-suite",
+      "description": "11 optimization skills: Performance optimization (algorithm, query, runtime), Dependency upgrades (npm, NuGet, pip), Code modernization (OSS replacement, bundle optimization). Keep/discard verification pattern.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./ln-810-performance-optimization-coordinator",
+        "./ln-811-algorithm-optimizer",
+        "./ln-812-query-optimizer",
+        "./ln-813-runtime-optimizer",
+        "./ln-820-dependency-optimization-coordinator",
+        "./ln-821-npm-upgrader",
+        "./ln-822-nuget-upgrader",
+        "./ln-823-pip-upgrader",
+        "./ln-830-code-modernization-coordinator",
+        "./ln-831-oss-replacer",
+        "./ln-832-bundle-optimizer"
       ]
     }
   ]

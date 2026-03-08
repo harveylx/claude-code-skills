@@ -27,13 +27,9 @@ This is a collection of skills for Codex with config-driven Agile task managemen
 
 See [Writing Guidelines](docs/SKILL_ARCHITECTURE_GUIDE.md#writing-guidelines-progressive-disclosure-pattern) in SKILL_ARCHITECTURE_GUIDE.md.
 
-## Visual Documentation
-
-Most skills have `diagram.html` (embedded Mermaid) + `shared/css/diagram.css` (87 of 109). See [Visual Documentation](README.md#-visual-documentation) in README.md.
-
 ## Available Skills
 
-**109 skills** in 9 categories (0XX Shared/Research, 1XX Documentation, 2XX Planning, 3XX Task Management, 4XX Execution, 5XX Quality, 6XX Audit, 7XX Bootstrap, 10XX Orchestration). See [README.md](README.md#-features) for complete list.
+**116 skills** in 10 categories (0XX Shared/Research, 1XX Documentation, 2XX Planning, 3XX Task Management, 4XX Execution, 5XX Quality, 6XX Audit, 7XX Bootstrap, 8XX Optimization, 10XX Orchestration). See [README.md](README.md#-features) for complete list.
 
 **Key workflow:** ln-700-project-bootstrap -> ln-100-documents-pipeline -> ln-201-opportunity-discoverer (optional) -> ln-200-scope-decomposer -> **ln-1000-pipeline-orchestrator** (or manually: ln-400-story-executor -> ln-500-story-quality-gate)
 
@@ -51,7 +47,7 @@ Four levels: Scope -> Epics (ln-210) -> Stories (ln-220) -> RICE Prioritization 
 
 ## Skill Workflows
 
-All 109 skills documented in [README.md](README.md#-features) with workflows in each SKILL.md. Follow Orchestrator-Worker Pattern per [SKILL_ARCHITECTURE_GUIDE.md](docs/SKILL_ARCHITECTURE_GUIDE.md).
+All 116 skills documented in [README.md](README.md#-features) with workflows in each SKILL.md. Follow Orchestrator-Worker Pattern per [SKILL_ARCHITECTURE_GUIDE.md](docs/SKILL_ARCHITECTURE_GUIDE.md).
 
 ## Important Details
 
