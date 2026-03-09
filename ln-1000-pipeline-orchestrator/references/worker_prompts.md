@@ -69,7 +69,7 @@ Task(
 )
 ```
 
-**Note:** ln-1000 creates worktree in Phase 3.4 — all workers start in `feature/*` branch. Workers self-detect via `git branch --show-current` (per `shared/references/git_worktree_fallback.md`). ln-400 skips its own worktree creation when already on `feature/*`. `PIPELINE_DIR` = project root for `.pipeline/` files.
+**Note:** ln-1000 creates worktree in Phase 3.4 — all workers start in `feature/*` branch. Workers self-detect via `git branch --show-current` (per `shared/references/git_worktree_fallback.md`). ln-400 skips its own worktree creation when already on `feature/*`. `PIPELINE_DIR` = absolute path to `{project_root}/.pipeline` (set by lead in Phase 3.2).
 
 **Worker name:** The `{workerName}` variable in templates = the `name` parameter from Task() spawn. Workers derive it from prompt context: `story-{storyId}-s{stage}` (or `-retry` suffix for retries).
 
@@ -83,8 +83,8 @@ Your assignment: Story {storyId} "{storyTitle}"
 
 GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
 If on feature/* branch — work here (ln-1000 creates worktree before spawning workers).
-PIPELINE_DIR: .pipeline (relative to project root)
-ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR.
+PIPELINE_DIR: {pipeline_dir}
+ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR (absolute path).
 
 TASK: Execute Stage 0 — Task Planning (create implementation tasks).
 
@@ -142,8 +142,8 @@ Your assignment: Story {storyId} "{storyTitle}"
 
 GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
 If on feature/* branch — work here (ln-1000 creates worktree before spawning workers).
-PIPELINE_DIR: .pipeline (relative to project root)
-ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR.
+PIPELINE_DIR: {pipeline_dir}
+ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR (absolute path).
 
 TASK: Execute Stage 1 — Story Validation.
 
@@ -211,8 +211,8 @@ Your assignment: Story {storyId} "{storyTitle}"
 
 GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
 If on feature/* branch — work here (ln-1000 creates worktree before spawning workers).
-PIPELINE_DIR: .pipeline (relative to project root)
-ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR.
+PIPELINE_DIR: {pipeline_dir}
+ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR (absolute path).
 
 MCP TOOL PREFERENCES (code editing only):
 When mcp__hashline-edit__* tools are available (check via ToolSearch "+hashline-edit"),
@@ -282,8 +282,8 @@ Your assignment: Story {storyId} "{storyTitle}"
 
 GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
 If on feature/* branch — work here (ln-1000 creates worktree before spawning workers).
-PIPELINE_DIR: .pipeline (relative to project root)
-ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR.
+PIPELINE_DIR: {pipeline_dir}
+ALL .pipeline/ file operations (checkpoint, done.flag) use PIPELINE_DIR (absolute path).
 
 TASK: Execute Stage 3 — Quality Gate.
 
@@ -383,7 +383,7 @@ THINKING: Always enabled (adaptive). Reasoning effort: {effort}.
 Your assignment: Story {storyId} "{storyTitle}"
 
 GIT CONTEXT: Worker self-detects branch via `git branch --show-current`.
-If on feature/* branch — work here. PIPELINE_DIR: .pipeline
+If on feature/* branch — work here. PIPELINE_DIR: {pipeline_dir}
 
 TASK: {task_description}
 

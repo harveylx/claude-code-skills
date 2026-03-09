@@ -230,11 +230,13 @@ Bash: cp {skill_repo}/ln-1000-pipeline-orchestrator/references/hooks/worker-keep
 #### 3.2 Initialize Pipeline State
 
 ```
+pipeline_dir = "$(pwd)/.pipeline"                    # Absolute path — workers in worktree use this
 Write .pipeline/state.json (schema: checkpoint_format.md → Pipeline State Schema):
   Initialize: complete=false, selected_story_id, stories_remaining=1,
   all counters=0, empty collections, team_name="pipeline-{YYYY-MM-DD}",
   business_answers from Phase 2, storage_mode, project_brief, story_briefs,
-  status_cache (Linear) or {} (file), plan_revision_count={"0":0,"1":0,"2":0,"3":0}
+  status_cache (Linear) or {} (file), plan_revision_count={"0":0,"1":0,"2":0,"3":0},
+  pipeline_dir
 Write .pipeline/lead-session.id with current session_id   # Stop hook uses this to only keep lead alive
 ```
 
@@ -251,7 +253,12 @@ IF platform == "win32":
 
 #### 3.3 Create Team
 
-**Model routing:** All stages use `model: "opus"`. Effort routing via prompt: `effort_for_stage(0) = "low"`, `effort_for_stage(1) = "medium"`, `effort_for_stage(2) = "medium"`, `effort_for_stage(3) = "medium"`. Crash recovery = same as target stage. Thinking mode: always enabled (adaptive).
+**Model routing:** All stages use `model: "opus"`. Thinking mode: always enabled (adaptive). Crash recovery = same effort as target stage.
+
+| Worker Type | Stage 0 | Stage 1 | Stage 2 | Stage 3 |
+|-------------|---------|---------|---------|---------|
+| **Execute** | low | medium | medium | medium |
+| **Plan-Only** | low | low | medium | low |
 
 1. Create team:
    ```
@@ -278,8 +285,8 @@ ELSE:
   IF changes not empty:
     git diff HEAD > .pipeline/carry-changes.patch
 
-  git fetch origin && git merge origin/master
-  git worktree add {worktree_dir} -b {branch}
+  git fetch origin
+  git worktree add -b {branch} {worktree_dir} origin/master    # Branch from origin/master directly, don't touch current branch
 
   IF .pipeline/carry-changes.patch exists:
     git -C {worktree_dir} apply .pipeline/carry-changes.patch && rm .pipeline/carry-changes.patch
@@ -317,6 +324,7 @@ pipeline_start_time = now()                  # ISO 8601 — wall-clock start for
 readiness_scores = {}                        # {storyId: readiness_score} — from Stage 1 GO
 plan_revision_count = {"0": 0, "1": 0, "2": 0, "3": 0}  # Plan gate revision counter per stage
 plan_approved = {}                           # {storyId: true} — set by ON PLAN_RESULT handler
+previous_quality_score = {}                  # {storyId: score} — saved on FAIL for rework degradation detection
 
 # Helper functions — defined in phase4_heartbeat.md (loaded above)
 # skill_name_from_stage(stage), predict_next_step(stage), stage_duration(id, N)
@@ -470,17 +478,34 @@ Report saved: docs/tasks/reports/pipeline-{date}.md
 IF worker_map[id]:
   SendMessage(type: "shutdown_request", recipient: worker_map[id])
 
-# 6. Cleanup team
-TeamDelete
+# 6. Cleanup team (with hung agent escalation)
+SendMessage(type: "shutdown_request") to all remaining workers
+TeamDelete(team_name)
+IF TeamDelete fails (timeout 60s or error):
+  # Force cleanup: platform doesn't support force-kill (#31788)
+  Bash: rm -rf ~/.claude/teams/{team_name} ~/.claude/tasks/{team_name}
+  Display: "TeamDelete blocked by hung agent. Force-cleaned team resources."
 
-# 7. Stop sleep prevention (Windows safety net)
+# 7. Worktree cleanup
+IF story_state[id] == "PAUSED" AND worktree_dir exists AND worktree_dir != CWD:
+  # Save partial work to branch before cleanup
+  git -C {worktree_dir} add -A
+  git -C {worktree_dir} commit -m "WIP: {storyId} pipeline paused at stage {current_stage}" --allow-empty
+  git -C {worktree_dir} push -u origin {branch}
+  # Clean worktree (branch preserved on remote)
+  cd {project_root}
+  git worktree remove {worktree_dir} --force
+  Display: "Partial work saved to branch {branch} (remote). Worktree cleaned."
+# IF story_state[id] == "DONE": worktree already cleaned by ln-500
+
+# 8. Stop sleep prevention (Windows safety net)
 IF sleep_prevention_pid:
   kill $sleep_prevention_pid 2>/dev/null || true
 
-# 8. Remove pipeline state files
+# 9. Remove pipeline state files
 Delete .pipeline/ directory
 
-# 9. Report results and report location to user
+# 10. Report results and report location to user
 ```
 
 ## Kanban as Single Source of Truth
@@ -507,16 +532,16 @@ Delete .pipeline/ directory
 3. **Skills as-is.** Never modify or bypass existing skill logic. Workers call `Skill("ln-310-multi-agent-validator", args)` exactly as documented
 4. **Kanban verification.** Workers update Linear/kanban via skills. Lead re-reads and ASSERTs expected state after each stage. In file mode, lead resolves merge conflicts
 5. **Quality cycle limit.** Max 2 quality FAILs per Story (original + 1 rework cycle). After 2nd FAIL, escalate to user
-6. **Worktree creation only.** ln-1000 creates worktree in Phase 3.4 so all workers start in feature branch. Branch finalization (commit, push, cleanup) owned by ln-500. ln-1000 does NOT merge or cleanup worktrees
+6. **Worktree lifecycle.** ln-1000 creates worktree in Phase 3.4 (Pipeline-Managed model). Branch finalization (commit, push, worktree cleanup) owned by ln-500 on DONE. On PAUSED, lead saves partial work + cleans worktree in Phase 5
 7. **Re-read kanban.** After every stage completion, re-read board for fresh state. Never cache
-8. **Graceful shutdown.** Always shutdown workers via shutdown_request. Never force-kill
+8. **Graceful shutdown.** Always attempt shutdown via shutdown_request first. If TeamDelete blocked by hung agent, force-clean team resources (Phase 5 step 6)
 
 ## Known Issues
 
 | Symptom | Likely Cause | Self-Recovery |
 |---------|-------------|---------------|
 | Lead outputs generic text after long run | Context compression destroyed SKILL.md + state | Follow CONTEXT RECOVERY PROTOCOL in phase4_heartbeat.md |
-| Worker checkpoint/done.flag not found | Worker in worktree wrote to `.worktrees/` not project root | Verify PIPELINE_DIR in worker prompt = absolute path |
+| Worker checkpoint/done.flag not found | Worker in worktree wrote to `.worktrees/` not project root | `pipeline_dir` set as absolute path in Phase 3.2, passed to workers via `{pipeline_dir}` template var |
 | hashline-edit tools unavailable | MCP tool references lost after compression | `ToolSearch("+hashline-edit")` to reload |
 | Lead can't spawn workers after compression | team_name/business_answers lost | Read from `.pipeline/state.json` (persisted since Phase 3.2) |
 
@@ -577,15 +602,19 @@ When invoked in Plan Mode, show available Stories and ask user which one to plan
 
 ## Definition of Done (self-verified in Phase 5)
 
-| # | Criterion | Verified By |
-|---|-----------|-------------|
-| 1 | User selected Story from kanban board | `selected_story_id` is set |
-| 2 | Business questions asked in single batch (or none found) | `business_answers` stored OR skip |
-| 3 | Team created, single worker spawned | Worker spawned for selected Story |
-| 4 | Selected Story processed: state = DONE or PAUSED | `story_state[id] IN ("DONE", "PAUSED")` |
-| 5 | Pipeline report generated with branch name, stats, verdict | Report file exists |
-| 6 | Pipeline summary shown to user | Phase 5 table output |
-| 7 | Team cleaned up (worker shutdown, TeamDelete) | TeamDelete called |
+Pipeline-level verification. Per-stage verifications are in `phase4_handlers.md` VERIFY blocks.
+
+| # | Criterion | Verified By | Scope |
+|---|-----------|-------------|-------|
+| 1 | User selected Story | `selected_story_id` is set | Always |
+| 2 | Business questions resolved | `business_answers` stored OR skip | Always |
+| 3 | Team created + operated | team exists in state | Always |
+| 4 | Story processed to terminal state | `story_state[id] IN ("DONE", "PAUSED")` | Always |
+| 5 | Per-stage verifications passed | All VERIFY blocks passed (phase4_handlers.md) | DONE only |
+| 6 | Pipeline report generated | Report file exists at `docs/tasks/reports/` | Always |
+| 7 | Pipeline summary shown to user | Phase 5 table output | Always |
+| 8 | Team cleaned up | TeamDelete called | Always |
+| 9 | Worktree status communicated | DONE: cleaned by ln-500. PAUSED: saved + cleaned by lead | Always |
 
 ## Reference Files
 

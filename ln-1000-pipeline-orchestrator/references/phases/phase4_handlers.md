@@ -38,9 +38,11 @@ This prevents double-spawn when same completion message is delivered across hear
 ### ON "Stage 0 COMPLETE for {id}. {N} tasks created. Plan score: {score}/4."
 
 ```
+# VERIFY
 Re-read kanban board
 ASSERT tasks exist under Story {id}         # Guard: verify ln-300 output
-IF tasks missing: story_state[id] = "PAUSED"; ESCALATE; CONTINUE
+ASSERT task count IN 1..8                   # Guard: reasonable task count
+IF ANY ASSERT fails: story_state[id] = "PAUSED"; ESCALATE; CONTINUE
 story_state[id] = "STAGE_1"
 stage_timestamps[id].stage_0_end = now()
 stage_timestamps[id].stage_1_start = now()
@@ -79,8 +81,11 @@ Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
 ### ON "Stage 1 COMPLETE for {id}. Verdict: GO. Readiness: {score}. Agents: {agents_info}."
 
 ```
+# VERIFY
 Re-read kanban board
 ASSERT Story {id} status = Todo              # Guard: verify ln-310 output
+ASSERT readiness_score >= 5                  # Guard: ln-310 should have set score >= 5 for GO
+IF ANY ASSERT fails: story_state[id] = "PAUSED"; ESCALATE; CONTINUE
 story_state[id] = "STAGE_2"
 stage_timestamps[id].stage_1_end = now()
 stage_timestamps[id].stage_2_start = now()
@@ -148,8 +153,12 @@ Append story report section to docs/tasks/reports/pipeline-{date}.md (PAUSED)
 ### ON "Stage 2 COMPLETE for {id}. All tasks Done. Story set to To Review."
 
 ```
+# VERIFY
 Re-read kanban board
 ASSERT Story {id} status = To Review         # Guard: verify ln-400 output
+ASSERT all tasks status = Done               # Guard: ln-400 should have completed all tasks
+ASSERT feature branch has commits: `git log origin/{base_branch}..HEAD --oneline | wc -l` > 0
+IF ANY ASSERT fails: story_state[id] = "PAUSED"; ESCALATE; CONTINUE
 story_state[id] = "STAGE_3"
 stage_timestamps[id].stage_2_end = now()
 stage_timestamps[id].stage_3_start = now()
@@ -183,8 +192,22 @@ SendMessage(type: "shutdown_request", recipient: worker_map[id])
 story_results[id].stage3 = "{verdict} {score}/100"
 story_results[id].stage3_agents = "{agents_info}"    # From Agents: field; "N/A" if absent
 
-# Branch finalization (commit, push, cleanup) handled by ln-500
-# Lead collects branch name + git stats from worker's completion report
+# VERIFY (read-only — lead ASSERTs, ln-500 is sole kanban writer per §9)
+Re-read kanban board
+ASSERT Story {id} status = Done                     # ln-500 set this
+ASSERT all tasks status = Done
+ASSERT branch pushed: `git branch -r` contains feature branch
+# Extract git_stats from stage notes (written by worker in .pipeline/)
+IF .pipeline/stage_3_notes_{id}.md exists:
+  Parse git stats (files_changed, lines_added, lines_deleted) from stage notes
+  git_stats[id] = { files_changed, lines_added, lines_deleted }
+  branch_name = extract branch name from stage notes or Phase 3.4 variable
+ELSE:
+  # Fallback: extract from git directly
+  git_stats[id] = parse `git diff --stat origin/{base_branch}..HEAD`
+  branch_name = `git branch --show-current`
+IF ANY ASSERT fails: WARN user (non-blocking: story likely Done, verification incomplete)
+
 story_state[id] = "DONE"
 Update .pipeline/state.json
 ```
@@ -192,6 +215,10 @@ Update .pipeline/state.json
 ### ON "Stage 3 COMPLETE for {id}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues}. Agents: {agents_info}."
 
 ```
+# VERIFY (read-only — lead ASSERTs, ln-500 is sole kanban writer per §9)
+Re-read kanban board
+ASSERT Story {id} status = To Rework        # ln-500 set this on FAIL
+
 quality_cycles[id]++
 # ACK: confirm receipt before shutdown (prevents worker retry latency)
 SendMessage(recipient: worker_map[id],

@@ -181,10 +181,21 @@ Pipeline runs can exceed Windows idle timeout, causing the system to sleep mid-e
 | Rule | Details |
 |------|---------|
 | Max 3 concurrent workers | Anthropic recommends right-sizing: "Too many subagents for simple queries" is anti-pattern |
-| Worker owns worktree isolation | Each code-writing skill creates its own worktree + branch (per `shared/references/git_worktree_fallback.md`) |
 | Self-detection pattern | Worker checks `git branch --show-current` at startup. If already on feature/optimize/upgrade/modernize branch → use it. If on develop/main → create worktree |
-| Orchestrator does NOT manage worktrees | ln-1000 coordinates + reports. ln-400 creates worktree, ln-500 finalizes (commit, push, cleanup) |
 | Dependency guard before spawn | All prerequisites must be DONE before spawning dependent story's worker |
+
+### Worktree Isolation Models
+
+Two models depending on whether the skill runs standalone or within a pipeline:
+
+| Model | Who Creates | Who Finalizes | When |
+|-------|-------------|---------------|------|
+| **Standalone** | Worker skill (ln-400) creates worktree + branch | ln-500 finalizes (commit, push, cleanup) | User invokes ln-400 directly |
+| **Pipeline-Managed** | Orchestrator (ln-1000) creates worktree + branch in Phase 3.4 | ln-500 finalizes (commit, push, cleanup) | ln-1000 drives Story through 4 stages |
+
+**Standalone model:** Each code-writing skill creates its own worktree + branch (per `shared/references/git_worktree_fallback.md`). Orchestrator only coordinates and reports.
+
+**Pipeline-Managed model:** Orchestrator creates ONE worktree before spawning workers. All 4 stage workers (ln-300 → ln-310 → ln-400 → ln-500) inherit the same `feature/*` branch. Workers self-detect via `git branch --show-current` and skip their own worktree creation when already on a feature branch.
 
 ## 8. State Persistence
 

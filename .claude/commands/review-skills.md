@@ -69,9 +69,8 @@ done
 ```bash
 for f in {scoped SKILL.md files}; do
   dir=$(dirname "$f")
-  grep -oP 'MANDATORY READ.*?Load \K`[^`]+`' "$f" | tr -d '\`' | grep -v '{' | while read path; do
-    resolved=$(realpath "$dir/$path" 2>/dev/null || realpath "$path" 2>/dev/null)
-    [ ! -f "$resolved" ] && echo "FAIL: missing MANDATORY READ target: $path (from $f)"
+  grep "MANDATORY READ" "$f" | tr '`' '\n' | grep -E '\.(md|json|txt|yaml|sh)$' | grep -v '{' | sort -u | while read path; do
+    [ -f "$dir/$path" ] || [ -f "$path" ] || echo "FAIL: missing MANDATORY READ target: $path (from $f)"
   done
 done
 ```
@@ -81,8 +80,9 @@ done
 for f in {scoped SKILL.md files}; do
   dir=$(dirname "$f")
   if [ -d "$dir/references" ]; then
-    for ref in "$dir/references/"*; do
+    find "$dir/references" -type f | while read ref; do
       base=$(basename "$ref")
+      [[ "$base" == .* ]] && continue
       grep -q "$base" "$f" || echo "FAIL: orphan reference: $ref (not in $f)"
     done
   fi
@@ -92,13 +92,13 @@ done
 **Passive file reference check** (D2):
 ```bash
 for f in {scoped SKILL.md files}; do
-  grep -nP '(^See |^Per |^Follows |See \[).*\.(md|txt|yaml)' "$f" | grep -v "MANDATORY READ" && echo "WARN: passive file ref in $f"
+  grep -nE '(^See |^Per |^Follows |See \[).*\.(md|txt|yaml)' "$f" | grep -v "MANDATORY READ" && echo "WARN: passive file ref in $f"
 done
 ```
 
 **Marketplace skill path check** (D8):
 ```bash
-grep -oP '"\.\/ln-[^"]+' .claude-plugin/marketplace.json | tr -d '"' | while read path; do
+grep -oE '"\.\/ln-[^"]+' .claude-plugin/marketplace.json | tr -d '"' | while read path; do
   [ ! -d "$path" ] && echo "FAIL: marketplace.json references missing dir: $path"
 done
 ```
@@ -106,7 +106,8 @@ done
 **Root docs stale skill name check** (D6):
 ```bash
 for doc in README.md AGENTS.md .claude-plugin/marketplace.json; do
-  grep -oP 'ln-\d+-[a-z-]+' "$doc" | sort -u | while read skill; do
+  [ -f "$doc" ] || continue
+  grep -oE 'ln-[0-9]+-[a-z-]+' "$doc" | sort -u | while read skill; do
     ls -d ${skill}*/ >/dev/null 2>&1 || echo "FAIL: $doc references missing skill: $skill"
   done
 done
@@ -115,9 +116,9 @@ done
 **Skill count accuracy check** (D8):
 ```bash
 actual=$(ls -d ln-*/SKILL.md 2>/dev/null | wc -l)
-badge=$(grep -oP 'skills-\K\d+' README.md)
+badge=$(grep -oE 'skills-[0-9]+' README.md | grep -oE '[0-9]+')
 [ "$badge" != "$actual" ] && echo "FAIL: README badge says $badge, actual $actual"
-market=$(grep -oP '"\.\/ln-[^"]+' .claude-plugin/marketplace.json | wc -l)
+market=$(grep -oE '"\.\/ln-[^"]+' .claude-plugin/marketplace.json | wc -l)
 [ "$market" != "$actual" ] && echo "FAIL: marketplace.json has $market entries, actual $actual"
 ```
 

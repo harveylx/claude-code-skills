@@ -183,7 +183,7 @@ next_steps = {
   0: "Validation (ln-310) -> Todo",
   1: "Execution (ln-400) -> To Review",
   2: "Quality Gate (ln-500) -> Done/To Rework",
-  3: "Sync with develop -> User confirmation -> Done"
+  3: "Branch finalization (ln-500) -> Done"
 }
 RETURN next_steps[current_stage]
 ```

@@ -25,7 +25,7 @@ Approval criteria for automatic plan evaluation by Lead. Each stage has binary c
 | # | Criterion | Check | Pass |
 |---|-----------|-------|------|
 | 1 | Task approach | Each task has implementation approach | All present |
-| 2 | File ownership | Files listed per task, no overlaps between tasks | No conflicts |
+| 2 | File ownership | Primary files listed per task, shared files (types, config, utils) documented as shared | No undocumented overlaps |
 | 3 | Test plan | Test approach stated (what to test, how) | Stated |
 
 ### Stage 3: Quality Gate (ln-500)
@@ -69,7 +69,7 @@ Please revise and include the missing elements.
 
 - Max 2 revisions per stage (3 total attempts: initial + 2 revisions)
 - After limit reached: `story_state = "PAUSED"`, escalate to user
-- Counter: `plan_revision_count[stage]` in `.pipeline/state.json`
+- Counter: `plan_revision_count[str(N)]` in `.pipeline/state.json` (string keys: `"0"`, `"1"`, `"2"`, `"3"`)
 
 ---
 **Version:** 1.0.0
