@@ -1,6 +1,6 @@
 ---
 name: ln-220-story-coordinator
-description: "CREATE/REPLAN Stories for Epic (5-10 Stories). Multi-epic routing: auto-groups Stories by correct Epic, creates missing Epics. Delegates ln-001 for standards research. Self-Check phase."
+description: "CREATE/REPLAN Stories for Epic (5-10 Stories). Multi-epic routing: auto-groups Stories by correct Epic. Delegates ln-001 for standards research. Self-Check phase."
 license: MIT
 ---
 
@@ -20,7 +20,7 @@ Use when:
 - Rebalance Story scopes within Epic
 - Add new Stories to existing Epic structure
 - Request spans multiple Epics (routing auto-groups Stories by correct Epic)
-- Story doesn't fit any existing Epic (auto-creates new Epic via ln-210)
+- Story doesn't fit any existing Epic (creates stub Epic inline)
 
 ## Core Pattern: Decompose-First
 
@@ -46,7 +46,7 @@ Use when:
 
 **Resolution:** Epic Resolution Chain.
 **Status filter:** Active (planned/started)
-**Multi-epic:** If IDEAL plan (Phase 3) produces Stories that don't fit resolved Epic, Phase 3 Step 7 auto-routes them to correct Epics (or creates new ones via ln-210).
+**Multi-epic:** If IDEAL plan (Phase 3) produces Stories that don't fit resolved Epic, Phase 3 Step 7 auto-routes them to correct Epics (or creates stub Epics inline).
 
 ## Workflow
 
@@ -73,7 +73,7 @@ Auto-discovers from `docs/tasks/kanban_board.md`:
 3. **Load Epic description:**
    - **IF task_provider == "linear":** `get_project(query="Epic N")` → Fetch full Epic document
    - **ELSE:** `Read("docs/tasks/epics/epic-{N}-*/epic.md")` → Load file-based Epic
-   - **Extract:** Goal, Scope In/Out, Success Criteria, Technical Notes (Standards Research if Epic created by ln-210 v7.0.0+)
+   - **Extract:** Goal, Scope In/Out, Success Criteria, Technical Notes
    - **Note:** Epic N = Linear Project number (global), NOT initiative-internal index (Epic 0-N)
 4. **Next Story Number:** Reads Epic Story Counters table → Gets next sequential number
 
@@ -230,8 +230,11 @@ ANALYZE tags:
     a. Group: epicGroups = {epicId: Story[]}
     b. Show ROUTING PREVIEW (see format below)
     c. User confirms or reassigns Stories
-    d. NEEDS_NEW_EPIC Stories → delegate to ln-210-epic-coordinator
-       for new Epic creation → assign returned epicId
+    d. NEEDS_NEW_EPIC Stories → create stub Epic inline:
+       1. Read kanban_board.md → Next Epic Number, teamId
+       2. Create Epic (Linear: save_project, File: mkdir + Write minimal epic.md)
+       3. Update kanban_board.md: increment Next Epic Number, add Epic Story Counters row, add to Epics Overview → Active
+       4. Assign returned epicId to tagged Stories
 ```
 
 **Routing Preview Format:**
@@ -484,7 +487,6 @@ Mark each as in_progress when starting, completed when done.
 
 **Calls:**
 - **ln-001-standards-researcher** (Phase 2) - research standards/patterns for Epic
-- **ln-210-epic-coordinator** (Phase 3 Step 7) - create new Epic when NEEDS_NEW_EPIC detected during routing
 - **ln-221-story-creator** (Phase 5a, 5c) - CREATE and ADD worker
 - **ln-222-story-replanner** (Phase 5b) - REPLAN worker
 
@@ -493,7 +495,7 @@ Mark each as in_progress when starting, completed when done.
 - **Manual** - user invokes for Epic Story creation/replanning
 
 **Upstream:**
-- **ln-210-epic-coordinator** - creates Epics (prerequisite for Story creation; also called on-demand for NEEDS_NEW_EPIC)
+- **ln-210-epic-coordinator** - creates Epics (prerequisite for Story creation)
 
 **Downstream:**
 - **ln-300-task-coordinator** - creates implementation tasks for each Story
@@ -525,7 +527,7 @@ Mark each as in_progress when starting, completed when done.
 - [ ] Story Grouping Guidelines validated (vertical slicing)
 - [ ] INVEST checklist validated for all Stories
 - [ ] Epic Routing executed (Step 7): fast path OR multi-epic grouping confirmed by user
-- [ ] NEEDS_NEW_EPIC resolved (if any): new Epic(s) created via ln-210
+- [ ] NEEDS_NEW_EPIC resolved (if any): stub Epic(s) created inline
 
 **✅ Phase 4: Check Existing Complete:**
 - [ ] Queried task provider for existing Stories per epicGroup
