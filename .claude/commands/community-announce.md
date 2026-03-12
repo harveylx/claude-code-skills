@@ -16,6 +16,12 @@ Compose and publish a structured announcement to GitHub Discussions (Announcemen
 3. Read `README.md` — check current version badge, any WARNING/IMPORTANT callouts
 4. Run: `git log --oneline -20` — recent commits for context
 5. If `$ARGUMENTS` contains a topic keyword (not a date), use it as the announcement subject
+6. Run: `git diff --name-only` (uncommitted) or `git diff --name-only HEAD~1..HEAD` (last commit) — build the list of changed files to understand scope and scale
+7. Read key source files from the diff (max 5 files, prioritize by relevance to `$ARGUMENTS` topic):
+   - `shared/references/*.md` files in diff → read full (protocols/guides — the substance)
+   - `SKILL.md` files in diff → read only changed sections via `git diff -- {file}`
+   - `references/*.md` in skill directories → read if substantially changed
+   - Goal: understand the "why" behind changes that CHANGELOG doesn't spell out
 
 **Gate check:** "Can community input change the outcome?" If YES → suggest `/community-debate` instead.
 

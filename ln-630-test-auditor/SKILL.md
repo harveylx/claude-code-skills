@@ -296,6 +296,12 @@ Each worker:
 - Report written to `docs/project/test_audit.md`
 - Summary returned to user
 
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `review-coordinator` (workers only). Run after all phases complete. Output to chat using the `review-coordinator — workers only` format.
+
 ## Reference Files
 
 - **Orchestrator lifecycle:** `shared/references/orchestrator_pattern.md`

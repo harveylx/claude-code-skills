@@ -12,11 +12,11 @@ Standard pattern for skills delegating work to external CLI AI agents (Codex, Ge
 
 | Skill Group | Primary Agent | Model | Fallback | Use Case |
 |-------------|--------------|-------|----------|----------|
-| 200 (Decomposition) | Gemini | gemini-3-flash-preview | Opus | Scope analysis, epic planning |
-| 300 (Task Mgmt) | Codex | gpt-5.3-codex | Opus | Task decomposition, plan review |
-| 400 (Execution) | Opus (native) | claude-opus-4-6 | -- | Direct code writing |
-| 310 (Validator) | codex-review + gemini-review | parallel | Self-review (if both fail) | Story/Tasks + context validation |
-| 510 (Quality) | codex-review + gemini-review | parallel | Self-review (if both fail) | Code review |
+| Decomposition | Gemini | gemini-3-flash-preview | Opus | Scope analysis, epic planning |
+| Task management | Codex | gpt-5.3-codex | Opus | Task decomposition, plan review |
+| Execution | Opus (native) | claude-opus-4-6 | -- | Direct code writing |
+| Validation | codex-review + gemini-review | parallel | Self-review (if both fail) | Story/Tasks + context validation |
+| Quality review | codex-review + gemini-review | parallel | Self-review (if both fail) | Code review |
 
 ## Inline Agent Review
 
@@ -196,7 +196,7 @@ Prompt ------+                                                                  
 ```
 
 **Rules:**
-1. Launch BOTH agents as background Bash tasks (`run_in_background=true`)
+1. Launch BOTH agents as background Bash tasks (`run_in_background=true`) via `agent_runner.py` — ALL modes, including Plan Mode (agents are external OS processes, not affected by Claude Code plan mode)
 2. Both agents receive identical prompt, run simultaneously with `--output-file`
 3. When first agent completes (background task notification): read result file, proceed to Critical Verification
 4. When second agent completes: read result file, verify, merge with first batch

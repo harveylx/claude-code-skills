@@ -261,6 +261,12 @@ Append one row to `docs/project/.audit/results_log.md` with: Skill=`ln-650`, Met
 - [ln-653-runtime-performance-auditor](../ln-653-runtime-performance-auditor/SKILL.md)
 - [ln-654-resource-lifecycle-auditor](../ln-654-resource-lifecycle-auditor/SKILL.md)
 
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `review-coordinator` (workers only). Run after all phases complete. Output to chat using the `review-coordinator — workers only` format.
+
 ## Reference Files
 
 - Tech stack: `docs/project/tech_stack.md`

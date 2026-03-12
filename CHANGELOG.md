@@ -12,9 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## 2026-03-12
+
+Bulk D3 dedup pass across 19 skills: replaced 4-line inline Story/Task/Epic Resolution Chain summaries with 1-line `Run {Story/Task/Epic} Resolution Chain per guide (status filter: [...])` in 18 skills (Category A: ln-302, 400, 500, 510, 511, 520, 521, 522, 523; Category B: ln-220, 221, 222, 230; Category C: ln-401, 402, 403, 404; plus ln-300). Fixed ln-511 step 3 Enrich duplication: moved MANDATORY READ to top of step 3 (applies to both coordinator and standalone paths), removed redundant inline Enrich and "Analyze ALL files" lines already covered by git_scope_detection.md. D8 coupling fixes: removed skill IDs from `meta_analysis_protocol.md` Skill Types table and `agent_delegation_pattern.md` Agent Selection Matrix (generic role names instead). Fixed orphan reference: added `risk_based_testing_examples.md` to ln-523 Reference Files section.
+
+---
+
 ## 2026-03-11
 
-Renamed ln-514-regression-checker to ln-513-regression-checker; all cross-references updated (ln-510, ln-500, marketplace.json, README.md). Overhauled ln-1000 pipeline orchestrator reference files: updated checkpoint_format, message_protocol, pipeline_states, worker_health_contract, worker_prompts, phase4_handlers/heartbeat; deleted plan_gate_criteria.md. Updated ln-401, ln-500, ln-510, ln-520 SKILL.md and ln-510 criteria_validation.md. Coherence review fix: corrected H1/H2 structural inversion in ln-520-test-planner (## Inputs was before # Test Planning Orchestrator).
+Renamed ln-514-regression-checker to ln-513-regression-checker; all cross-references updated (ln-510, ln-500, marketplace.json, README.md). Overhauled ln-1000 pipeline orchestrator reference files: updated checkpoint_format, message_protocol, pipeline_states, worker_health_contract, worker_prompts, phase4_handlers/heartbeat; deleted plan_gate_criteria.md. Updated ln-401, ln-500, ln-510, ln-520 SKILL.md and ln-510 criteria_validation.md. Coherence review fix: corrected H1/H2 structural inversion in ln-520-test-planner (## Inputs was before # Test Planning Orchestrator). Coherence review fix (D3): extracted git scope detection algorithm from ln-510 Phase 1 and ln-511 step 3 (duplicate 14-line block) into `shared/references/git_scope_detection.md`; both skills now use MANDATORY READ.
 
 ---
 

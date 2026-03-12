@@ -39,11 +39,7 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 **File Mode transitions:** To Rework → In Progress → To Review
 
 ## Workflow (concise)
-1) **Resolve taskId** (per input_resolution_pattern.md):
-   - IF args provided → use args
-   - ELSE IF Story context available → list To Rework tasks under Story, suggest if 1
-   - ELSE IF kanban has exactly 1 Task in [To Rework] → suggest
-   - ELSE → AskUserQuestion: show To Rework Tasks from kanban
+1) **Resolve taskId:** Run Task Resolution Chain per guide (status filter: [To Rework]).
 2) **Load task:** Read task (Linear: get_issue; File: Read task file), review notes, parent Story.
 2b) **Goal gate:** **MANDATORY READ:** `shared/references/goal_articulation_gate.md` — State REAL GOAL of this rework (what was actually broken, not "apply feedback"). Combine with 5 Whys (`shared/references/problem_solving.md`) to ensure root cause is articulated alongside the rework goal. NOT THE GOAL: a superficial patch that addresses the symptom, not the cause.
 3) **Plan fixes:** Map each comment to an action; confirm no new scope added.

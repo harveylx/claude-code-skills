@@ -149,11 +149,7 @@ Step 9: Update & Commit
 ```
 
 ## Workflow (concise)
-1) **Resolve taskId** (per input_resolution_pattern.md):
-   - IF args provided → use args
-   - ELSE IF Story context available → list To Review tasks under Story, suggest if 1
-   - ELSE IF kanban has exactly 1 Task in [To Review] → suggest
-   - ELSE → AskUserQuestion: show To Review Tasks from kanban
+1) **Resolve taskId:** Run Task Resolution Chain per guide (status filter: [To Review]).
 2) **Load task:** Load full task and parent Story independently. Detect type (label "tests" -> test task, else implementation/refactor).
 3) **Read context:** Full task + parent Story; load affected components/docs; review diffs if available.
 3b) **Goal gate:** **MANDATORY READ:** `shared/references/goal_articulation_gate.md` — Before reviewing, state: (1) REAL GOAL: what specific quality question must this review answer for THIS task? (2) DONE: what evidence proves quality is sufficient? (3) NOT THE GOAL: what would a surface-level rubber-stamp look like? (4) INVARIANTS: what non-obvious constraint exists (side-effects on other modules, implicit AC)?

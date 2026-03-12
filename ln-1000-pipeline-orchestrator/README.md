@@ -1,6 +1,10 @@
 # ln-1000 Pipeline Orchestrator — Architecture Reference
 
-Quick-reference for understanding how the pipeline works at runtime. For implementation details, see SKILL.md and reference files.
+> **Purpose:** Human-readable architecture reference for developers and maintainers. Describes how the pipeline works, its components, and runtime behaviour.
+> **Scope:** Conceptual overview, diagrams, per-stage breakdown, verification checklists, report format. NOT an execution spec — agents use `SKILL.md` and `references/` directly.
+> **Audience:** Developers reviewing or extending the pipeline. Not loaded by agents during execution.
+
+For full implementation spec (all phases, pseudocode, error handling), see `SKILL.md`.
 
 ## Execution Levels
 
@@ -47,6 +51,13 @@ Phase 5: Cleanup ◄─────────────────┘
 ┌──────────────────────────────────────────────────────┐
 │ IN:  story_state, stage_notes, git_stats             │
 │ OUT: Pipeline report, TeamDelete, .pipeline/ removed │
+└──────────────────────┬───────────────────────────────┘
+                       │
+Phase 6: Meta-Analysis ◄┘
+┌──────────────────────────────────────────────────────┐
+│ IN:  pipeline report, stage metrics, infra_issues    │
+│ OUT: ## Meta-Analysis appended to report             │
+│      docs/tasks/reports/quality-trend.md updated     │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -74,7 +85,7 @@ Plan is NOT passed to Execute Worker. It's a gate check only — Lead evaluates,
 
 ```
 ln-1000 Lead
-  └─ Task(name: "story-{id}-s0", team: "pipeline-...")     ← L1: teammate
+  └─ Task(name: "story-{id}-decompose", team: "pipeline-...")     ← L1: teammate
        └─ Skill("ln-300-task-coordinator")                  ← L2: inline
             ├─ Task("ln-301-task-creator ...")               ← L3: subagent (creates tasks)
             └─ Task("ln-302-task-replanner ...")             ← L3: subagent (if replan needed)
@@ -93,7 +104,7 @@ ln-1000 Lead
 
 ```
 ln-1000 Lead
-  └─ Task(name: "story-{id}-s1", team: "pipeline-...")     ← L1: teammate
+  └─ Task(name: "story-{id}-validate", team: "pipeline-...")     ← L1: teammate
        └─ Skill("ln-310-multi-agent-validator")             ← L2: inline
             ├─ Agent("codex-review", background=true)       ← external agent (Codex CLI)
             ├─ Agent("gemini-review", background=true)      ← external agent (Gemini CLI)
@@ -115,7 +126,7 @@ ln-1000 Lead
 
 ```
 ln-1000 Lead
-  └─ Task(name: "story-{id}-s2", team: "pipeline-...")     ← L1: teammate
+  └─ Task(name: "story-{id}-implement", team: "pipeline-...")     ← L1: teammate
        └─ Skill("ln-400-story-executor")                    ← L2: inline
             │
             │  Task loop (per task, priority: To Review > To Rework > Todo):
@@ -149,7 +160,7 @@ ln-1000 Lead
 
 ```
 ln-1000 Lead
-  └─ Task(name: "story-{id}-s3", team: "pipeline-...")     ← L1: teammate
+  └─ Task(name: "story-{id}-qa", team: "pipeline-...")     ← L1: teammate
        └─ Skill("ln-500-story-quality-gate")                ← L2: inline
             ├─ Skill("ln-510-quality-coordinator")          ← L2: inline
             │    ├─ Task("ln-511-code-quality-checker")     ← L3: subagent (metrics + static analysis)
@@ -316,6 +327,18 @@ Generated in Phase 5 at `docs/tasks/reports/pipeline-{date}.md`. Combines worker
 | Wall-clock | Workers | Crashes | Retries | Infra Issues |
 |------------|---------|---------|---------|--------------|
 | {duration} | {count} | {N} | {N} | {N} |
+
+## Meta-Analysis
+| Stage | Skill  | Duration | Worker  | Skill Result                              |
+|-------|--------|----------|---------|-------------------------------------------|
+| 0     | ln-300 | {time}   | {✓/⚠/✗} | Plan {score}/4, {N} tasks                 |
+| 1     | ln-310 | {time}   | {✓/⚠/✗} | {GO/NO-GO}, Readiness {score}/10          |
+| 2     | ln-400 | {time}   | {✓/⚠/✗} | {files} files, +{add}/-{del}              |
+| 3     | ln-500 | {time}   | {✓/⚠/✗} | {verdict}, Score {score}/100, {rework} rework |
+### Problems & Limitations
+{infra issues table or "None detected."}
+### Improvement Candidates
+{numbered list or "None — pipeline ran clean."}
 ```
 
 ### Stage Notes (written by workers)
@@ -358,6 +381,7 @@ Pipeline-level verification (Phase 5). Per-stage checks are in VERIFY blocks abo
 | 7 | Pipeline summary shown to user | Phase 5 table output | Always |
 | 8 | Team cleaned up | TeamDelete (or force-clean) | Always |
 | 9 | Worktree resolved | DONE: cleaned by ln-500. PAUSED: saved + cleaned by lead | Always |
+| 10 | Meta-Analysis run | Phase 6 completed, appended to pipeline report | Always |
 
 ## Phase 5 Cleanup Sequence
 
@@ -374,13 +398,14 @@ Pipeline-level verification (Phase 5). Per-stage checks are in VERIFY blocks abo
     PAUSED → git add -A → commit WIP → push → git worktree remove --force
  9. Stop sleep prevention (Windows)
 10. Delete .pipeline/ directory
+11. Phase 6: Meta-Analysis (see SKILL.md `## Phase 6`)
 ```
 
 ## File Map
 
 | File | Purpose | Read by |
 |------|---------|---------|
-| `SKILL.md` | Full implementation spec (phases 0-5) | Lead agent |
+| `SKILL.md` | Full implementation spec (phases 0-6) | Lead agent |
 | `references/worker_prompts.md` | Prompt templates for all teammates | Lead (at spawn time) |
 | `references/phases/phase4_handlers.md` | ON message handlers (stage completion, crash) | Lead (Phase 4) |
 | `references/phases/phase4_heartbeat.md` | Health monitoring + structured heartbeat output | Lead (Phase 4) |
@@ -391,6 +416,7 @@ Pipeline-level verification (Phase 5). Per-stage checks are in VERIFY blocks abo
 | `references/kanban_parser.md` | Story extraction from kanban board | Lead (Phase 1) |
 | `references/settings_template.json` | Permissions + hooks config | Lead (Phase 3) |
 | `references/hooks/*.sh` | Keepalive hook scripts | Claude Code runtime |
+| `docs/tasks/reports/quality-trend.md` | Cross-run quality trend tracker (created in target project) | Lead (Phase 6) |
 
 ---
 **Version:** 1.0.0

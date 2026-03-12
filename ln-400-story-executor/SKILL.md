@@ -41,11 +41,7 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 
 **MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use "Story execution" row.
 
-1. **Resolve storyId** (per input_resolution_pattern.md):
-   - IF args provided → use args
-   - ELSE IF git branch matches `feature/{id}-*` → extract id
-   - ELSE IF kanban has exactly 1 Story in [Todo, In Progress] → suggest
-   - ELSE → AskUserQuestion: show Stories from kanban filtered by [Todo, In Progress]
+1. **Resolve storyId:** Run Story Resolution Chain per guide (status filter: [Todo, In Progress]).
 2. Auto-discover Team ID/config from kanban_board.md + CLAUDE.md
 3. Get Story title from resolved storyId
 4. Generate branch name: `feature/{identifier}-{story-title-slug}` (lowercase, spaces→dashes, no special chars)
@@ -179,6 +175,12 @@ When invoked in Plan Mode (agent cannot execute), generate execution plan instea
 - Loop executed: all tasks delegated with immediate review after each
 - Story set to **To Review** (NOT Done); kanban updated
 - Final report with task counts and recommended next step: quality gate
+
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `execution-orchestrator`. Run after all phases complete. Output to chat using the `execution-orchestrator` format.
 
 ## Reference Files
 - **Tools config:** `shared/references/tools_config_guide.md`

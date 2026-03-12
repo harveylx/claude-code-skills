@@ -58,11 +58,7 @@ ln-520-test-planner (Orchestrator)
 
 **MANDATORY READ:** Load `shared/references/input_resolution_pattern.md`
 
-1. **Resolve storyId** (per input_resolution_pattern.md):
-   - IF args provided → use args
-   - ELSE IF git branch matches `feature/{id}-*` → extract id
-   - ELSE IF kanban has exactly 1 Story in [To Review] → suggest
-   - ELSE → AskUserQuestion: show Stories from kanban filtered by [To Review]
+1. **Resolve storyId:** Run Story Resolution Chain per guide (status filter: [To Review]).
 
 ### Phase 1: Discovery
 
@@ -157,6 +153,12 @@ Task(description: "[Phase N] test planning via ln-52X",
 - [ ] Summary returned to ln-500-story-quality-gate
 
 **Output:** Summary with phase results + test task URL
+
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `planning-coordinator`. Run after all phases complete. Output to chat using the `planning-coordinator` format.
 
 ## Reference Files
 

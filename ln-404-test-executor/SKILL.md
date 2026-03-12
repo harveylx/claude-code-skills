@@ -41,11 +41,7 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 **File Mode transitions:** Todo → In Progress → To Review
 
 ## Workflow (concise)
-1) **Resolve taskId** (per input_resolution_pattern.md):
-   - IF args provided → use args
-   - ELSE IF Story context available → list Todo tasks (label: tests) under Story, suggest if 1
-   - ELSE IF kanban has exactly 1 test Task in [Todo] → suggest
-   - ELSE → AskUserQuestion: show Todo test Tasks from kanban
+1) **Resolve taskId:** Run Task Resolution Chain per guide (status filter: [Todo, label: tests]).
 2) **Load task:** Fetch full test task description (Linear: get_issue; File: Read task file); read linked guides/manuals/ADRs/research; review parent Story and manual test results if provided.
 2b) **Goal gate:** **MANDATORY READ:** `shared/references/goal_articulation_gate.md` — State REAL GOAL of these tests (which business behavior must be verified, not "write tests"). NOT THE GOAL: testing infrastructure or framework behavior instead of business logic. HIDDEN CONSTRAINT: which existing tests might break from implementation changes.
 3) **Read environment docs:** **Read `docs/project/infrastructure.md`** — get server IPs, ports, service endpoints. **Read `docs/project/runbook.md`** — understand test environment setup, Docker commands, test execution prerequisites. Use exact commands from runbook.

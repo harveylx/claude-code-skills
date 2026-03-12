@@ -270,6 +270,12 @@ Worker SKILL.md files contain the detailed audit rules:
 - [ln-628-concurrency-auditor](../ln-628-concurrency-auditor/SKILL.md)
 - [ln-629-lifecycle-auditor](../ln-629-lifecycle-auditor/SKILL.md)
 
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `review-coordinator` (workers only). Run after all phases complete. Output to chat using the `review-coordinator — workers only` format.
+
 ## Reference Files
 
 - **Orchestrator lifecycle:** `shared/references/orchestrator_pattern.md`

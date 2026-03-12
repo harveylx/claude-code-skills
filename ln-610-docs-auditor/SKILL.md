@@ -207,6 +207,12 @@ Write consolidated report to `docs/project/docs_audit.md`:
 - Context Validation applied to all findings
 - Consolidated report written to `docs/project/docs_audit.md`
 
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `review-coordinator` (workers only). Run after all phases complete. Output to chat using the `review-coordinator — workers only` format.
+
 ## Reference Files
 
 - **Context validation rules:** `shared/references/context_validation.md`

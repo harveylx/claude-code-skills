@@ -7,7 +7,7 @@ Templates for spawning story-workers via Task tool with team_name.
 **CRITICAL:** All worker reports MUST use exact message formats defined in `references/message_protocol.md`. Lead parses messages by regex — deviations trigger escalation.
 
 **Key rules:**
-- Use `SendMessage(type: "message", recipient: "pipeline-lead")` for all reports
+- Use `SendMessage(type: "message", recipient: "team-lead")` for all reports
 - `content` must match exact format from protocol (Stage N COMPLETE/ERROR for {id}...)
 - `summary` must be `"{id} Stage {N} {result}"` (max 10 words)
 - After reporting, approve shutdown when lead requests it — never advance to next stage autonomously
@@ -117,11 +117,11 @@ Step 3: Write checkpoint:
     planScore={score from ln-300 (0-4)}
 
 Step 4a: Report SUCCESS to lead:
-  SendMessage(type: "message", recipient: "pipeline-lead",
+  SendMessage(type: "message", recipient: "team-lead",
     content: "Stage 0 COMPLETE for {storyId}. {N} tasks created. Plan score: {score}/4.",
     summary: "{storyId} Stage 0 {N} tasks")
 Step 4b: Report ERROR to lead (if Step 2 failed):
-  SendMessage(type: "message", recipient: "pipeline-lead",
+  SendMessage(type: "message", recipient: "team-lead",
     content: "Stage 0 ERROR for {storyId}: {details}",
     summary: "{storyId} Stage 0 ERROR")
 Step 5: Wait for ACK from lead:
@@ -186,11 +186,11 @@ Step 3: Write checkpoint:
 
 Step 4: Report to lead (use EXACT format per verdict):
   IF GO:
-    SendMessage(type: "message", recipient: "pipeline-lead",
+    SendMessage(type: "message", recipient: "team-lead",
       content: "Stage 1 COMPLETE for {storyId}. Verdict: GO. Readiness: {score}. Agents: {agents_info}.",
       summary: "{storyId} Stage 1 GO")
   IF NO-GO:
-    SendMessage(type: "message", recipient: "pipeline-lead",
+    SendMessage(type: "message", recipient: "team-lead",
       content: "Stage 1 COMPLETE for {storyId}. Verdict: NO-GO. Readiness: {score}. Reason: {reason}. Agents: {agents_info}.",
       summary: "{storyId} Stage 1 NO-GO")
 Step 5: Wait for ACK from lead:
@@ -257,11 +257,11 @@ Step 3: Write final checkpoint:
   Write {PIPELINE_DIR}/checkpoint-{storyId}.json with stage=2, all tasks in tasksCompleted
 
 Step 4a: Report SUCCESS to lead:
-  SendMessage(type: "message", recipient: "pipeline-lead",
+  SendMessage(type: "message", recipient: "team-lead",
     content: "Stage 2 COMPLETE for {storyId}. All tasks Done. Story set to To Review.",
     summary: "{storyId} Stage 2 Done")
 Step 4b: Report ERROR to lead (if Step 2 failed):
-  SendMessage(type: "message", recipient: "pipeline-lead",
+  SendMessage(type: "message", recipient: "team-lead",
     content: "Stage 2 ERROR for {storyId}: {details}",
     summary: "{storyId} Stage 2 ERROR")
 Step 5: Wait for ACK from lead:
@@ -330,11 +330,11 @@ Step 3: Write checkpoint:
 
 Step 4: Report to lead (use EXACT format per verdict):
   IF PASS/CONCERNS/WAIVED:
-    SendMessage(type: "message", recipient: "pipeline-lead",
+    SendMessage(type: "message", recipient: "team-lead",
       content: "Stage 3 COMPLETE for {storyId}. Verdict: {PASS|CONCERNS|WAIVED}. Quality Score: {score}/100. Agents: {agents_info}.",
       summary: "{storyId} Stage 3 {verdict}")
   IF FAIL:
-    SendMessage(type: "message", recipient: "pipeline-lead",
+    SendMessage(type: "message", recipient: "team-lead",
       content: "Stage 3 COMPLETE for {storyId}. Verdict: FAIL. Quality Score: {score}/100. Issues: {issues list}. Agents: {agents_info}.",
       summary: "{storyId} Stage 3 FAIL")
 Step 5: Wait for ACK from lead:

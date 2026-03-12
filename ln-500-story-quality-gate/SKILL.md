@@ -74,11 +74,7 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 
 ### Phase 1: Discovery
 
-1) **Resolve storyId** (per input_resolution_pattern.md):
-   - IF args provided → use args
-   - ELSE IF git branch matches `feature/{id}-*` → extract id
-   - ELSE IF kanban has exactly 1 Story in [To Review] → suggest
-   - ELSE → AskUserQuestion: show Stories from kanban filtered by [To Review]
+1) **Resolve storyId:** Run Story Resolution Chain per guide (status filter: [To Review]).
 2) Auto-discover team/config from `docs/tasks/kanban_board.md`
 3) Load Story + task metadata:
    - IF `task_provider` = `linear`: `get_issue(storyId)` + `list_issues(parentId=storyId)`
@@ -231,6 +227,12 @@ Skill(skill: "ln-520-test-planner", args: "{storyId}")
 - Branch finalized: committed, pushed to remote, worktree cleaned up (PASS/CONCERNS/WAIVED)
 - Root cause analysis recorded in architecture_health.md for every FAIL verdict
 - Comment with gate verdict posted
+
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `execution-orchestrator`. Run after all phases complete. Output to chat using the `execution-orchestrator` format.
 
 ## Reference Files
 - **Tools config:** `shared/references/tools_config_guide.md`

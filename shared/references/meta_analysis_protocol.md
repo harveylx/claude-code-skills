@@ -1,58 +1,112 @@
 # Meta-Analysis Protocol
 
-Shared protocol for orchestrators and coordinators to analyze delegation effectiveness and suggest improvements after completing their workflow.
+Universal post-completion protocol for all coordinators and orchestrators.
+Run as the LAST step after all delegated work completes and results are aggregated.
+Output to chat — visible to the user.
 
-## When to Run
+## Skill Types
 
-After all delegated work completes (agents, workers, subskills) and results are aggregated. This is the LAST step before returning results to caller.
+| Type | Key Metrics |
+|------|-------------|
+| `planning-coordinator` | Plan completeness, scope coverage, task quality |
+| `review-coordinator` — with agents | Coverage, findings quality, blind spots, agent effectiveness |
+| `review-coordinator` — workers only | Coverage, findings quality, blind spots |
+| `execution-orchestrator` | Stage completion, failure points, quality score |
+| `optimization-coordinator` | Fixes applied/discarded, impact achieved |
 
-## Analysis Dimensions
+## Universal Dimensions
 
-### 1. Coverage
+### 1. Deliverable Quality
+- Did output meet the stated goal?
+- Scope coverage: were all required areas addressed?
+- Any critical gaps or incomplete deliverables?
 
-- Did delegated agents/workers find issues the orchestrator missed?
-- Were there blind spots (areas with zero findings)?
-- If focus differentiation was used: did it produce distinct findings, or overlap?
+### 2. Worker / Subskill Effectiveness
+| Worker/Subskill | Status | Result |
+|----------------|--------|--------|
+| {name} | ✓ OK / ⚠ Degraded / ✗ Failed | {brief result} |
 
-### 2. Efficiency
+### 3. Failure Points
+- Errors, timeouts, crashes, retries during this run
+- Infra issues (missing files, message delivery, permissions)
+- Manual interventions required
 
-- Duration vs output quality (cost per actionable finding)
-- Acceptance rate per agent/worker (% of suggestions surviving verification)
-- Were debate/challenge rounds productive?
+### 4. Improvement Candidates
+Top 1-3 actionable items for next run (NOT one-off issues).
 
-### 3. Prompt/Delegation Quality
+## Output Format by Skill Type
 
-- Did provided goals lead to on-target findings, or did agents drift?
-- Did project context prevent known-bad suggestions?
-- Were instructions too broad or too narrow?
-
-## Output Format (to chat)
+### planning-coordinator
 
 ```
-### {Skill Name} Meta-Analysis
-| Agent/Worker | Accepted | Total | Rate | Actual Focus |
-|-------------|----------|-------|------|-------------|
-| {name}       | {N}      | {M}   | {%}  | {areas found} |
-
-- **Overlap:** {N} duplicate findings across agents
-- **Blind spots:** {areas with 0 findings from any agent}
-- **Goal alignment:** {did findings match review_goal?}
-- **Improvement suggestions:** {1-2 actionable items}
+### Meta-Analysis: {Skill Name}
+| Deliverable | Status | Coverage |
+|------------|--------|----------|
+| {plan/tasks/epics} | ✓/⚠/✗ | {N}/{total} items |
+- Failure points: {list or "None"}
+- Improvement: {1-2 items or "None"}
 ```
 
-If improvement is actionable and reproducible (pattern, not one-off):
+### review-coordinator — with agents
+
+```
+### Meta-Analysis: {Skill Name}
+| Agent/Worker | Accepted | Total | Rate | Focus |
+|-------------|----------|-------|------|-------|
+| {name} | {N} | {M} | {%} | {areas found} |
+- Overlap: {N} duplicate findings
+- Blind spots: {areas with 0 findings}
+- Improvement: {1-2 items or "None"}
+```
+
+### review-coordinator — workers only
+
+```
+### Meta-Analysis: {Skill Name}
+| Worker | Findings | Accepted | Rate |
+|--------|----------|----------|------|
+| {name} | {N} | {M} | {%} |
+- Coverage gaps: {areas with 0 findings or "None"}
+- Improvement: {1-2 items or "None"}
+```
+
+### execution-orchestrator
+
+```
+### Meta-Analysis: {Skill Name}
+| Stage/Step | Skill | Duration | Status | Result |
+|-----------|-------|----------|--------|--------|
+| {stage} | {ln-NNN} | {time} | ✓/⚠/✗ | {brief} |
+### Problems & Limitations
+{infra issues table or "None detected."}
+### Improvement Candidates
+{numbered list or "None — ran clean."}
+```
+
+### optimization-coordinator
+
+```
+### Meta-Analysis: {Skill Name}
+| Worker | Applied | Discarded | Impact |
+|--------|---------|-----------|--------|
+| {name} | {N} | {M} | {description} |
+- Failure points: {list or "None"}
+- Improvement: {1-2 items or "None"}
+```
+
+## Issue Suggestion Triggers (patterns across 3+ runs)
+
+| Pattern | Likely Cause | Action |
+|---------|-------------|--------|
+| Worker consistently ✗ Failed | Wrong config or missing prereq | Check worker setup |
+| Acceptance rate < 30% | Prompt quality or model mismatch | Refine delegation prompt |
+| Same blind spot repeated | Goal too narrow | Broaden scope in prompt |
+| Failure points > 2 per run | Infra or config issue | Fix root cause |
+| Same improvement candidate repeated | Not actionable in current design | Create GitHub issue |
+
+If pattern is reproducible:
 > Consider creating issue: https://github.com/levnikolaevich/claude-code-skills/issues
 
-## Issue Suggestion Triggers
-
-| Pattern (across 3+ runs) | Likely Cause | Action |
-|--------------------------|-------------|--------|
-| Acceptance rate < 30% | Prompt quality or model mismatch | Refine prompt template |
-| Agents always overlap | `focus_hint` not differentiating | Adjust focus slots |
-| Agent consistently times out | Prompt too broad or misconfigured | Narrow scope or fix config |
-| Same suggestion rejected 5+ times | Missing rejection pattern in context | Add to `{project_context}` |
-| Agent finds nothing (0 suggestions) | Goal too narrow or wrong mode | Broaden goal or check mode file |
-
 ---
-**Version:** 1.0.0
-**Last Updated:** 2026-03-10
+**Version:** 2.0.0
+**Last Updated:** 2026-03-12

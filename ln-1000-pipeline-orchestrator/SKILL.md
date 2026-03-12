@@ -261,6 +261,8 @@ IF platform == "win32":
 1. Create team:
    ```
    TeamCreate(team_name: "pipeline-{YYYY-MM-DD}-{HHmm}")
+   # TeamCreate assigns lead name "team-lead" (lead_agent_id: "team-lead@{team_name}")
+   # Workers use recipient: "team-lead" — hardcoded in references/worker_prompts.md
    ```
 
 #### 3.4 Worktree Isolation
@@ -534,6 +536,7 @@ Delete .pipeline/ directory
 | Worker checkpoint/done.flag not found | Worker in worktree wrote to `.worktrees/` not project root | `pipeline_dir` set as absolute path in Phase 3.2, passed to workers via `{pipeline_dir}` template var |
 | hashline-edit tools unavailable | MCP tool references lost after compression | `ToolSearch("+hashline-edit")` to reload |
 | Lead can't spawn workers after compression | team_name/business_answers lost | Read from `.pipeline/state.json` (persisted since Phase 3.2) |
+| Workers DM wrong lead name | `recipient: "pipeline-lead"` — TeamCreate assigns `"team-lead"` | Use `recipient: "team-lead"` hardcoded in `references/worker_prompts.md` |
 
 ## Anti-Patterns
 - Running ln-300/ln-310/ln-400/ln-500 directly from lead instead of delegating to workers
@@ -605,6 +608,93 @@ Pipeline-level verification. Per-stage verifications are in `phase4_handlers.md`
 | 7 | Pipeline summary shown to user | Phase 5 table output | Always |
 | 8 | Team cleaned up | TeamDelete called | Always |
 | 9 | Worktree status communicated | DONE: cleaned by ln-500. PAUSED: saved + cleaned by lead | Always |
+| 10 | Meta-Analysis run | Phase 6 completed, appended to pipeline report | Always |
+
+## Phase 6: Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `execution-orchestrator`. Output format: `execution-orchestrator` template. Specific pipeline implementation below.
+
+Runs after Phase 5 completes. Appends `## Meta-Analysis` section to the pipeline report and updates the cross-run quality trend tracker.
+
+```
+# 1. Worker & skill effectiveness audit
+skill_map = {0: "ln-300", 1: "ln-310", 2: "ln-400", 3: "ln-500"}
+
+FOR stage IN 0..3:
+  worker_status = "✓ OK"
+  IF crash_count for this stage > 0: worker_status = "⚠ Crashed (recovered)"
+  IF infra_issues has entry for this stage: worker_status = "⚠ Infra issue"
+  IF stage not completed (no timestamp): worker_status = "✗ Not reached"
+
+  skill_status = "✓" IF:
+    stage 0 → plan_score >= 3
+    stage 1 → verdict == "GO"
+    stage 2 → story_state[id] != "PAUSED"
+    stage 3 → verdict IN ("PASS", "CONCERNS", "WAIVED")
+  ELSE "⚠" (degraded) or "✗" (failed/not reached)
+
+  skill_result = {
+    0: "Plan {score}/4, {N} tasks",
+    1: "{GO/NO-GO}, Readiness {score}/10",
+    2: "{files} files, +{add}/-{del}",
+    3: "{verdict}, Score {score}/100, {rework} rework"
+  }[stage]
+
+# 2. Problems & recovery actions
+recovery_map = {
+  "message_delivery": "Fix recipient: 'team-lead' in worker_prompts.md",
+  "crash":            "Review checkpoint coverage in phase4_heartbeat.md",
+  "ack_timeout":      "Check keepalive hook installation (Phase 3.1 settings_template)"
+}
+
+# 3. Improvement candidates
+candidates = []
+IF any infra_issue.type == "message_delivery":
+  candidates += "Fix recipient name in worker_prompts.md (should be 'team-lead')"
+IF quality_cycles[id] > 1:
+  candidates += "Story needed {quality_cycles} rework cycles — improve test spec coverage in ln-520"
+IF crash_count[id] > 0:
+  candidates += "{crash_count} worker crash(es) — verify checkpoint coverage in phase4_heartbeat.md"
+IF stage_durations.get(2, 0) > 10800:  # 3h
+  candidates += "Stage 2 > 3h — consider task decomposition for complex stories"
+
+# 4. Append trend entry to cross-run tracker
+Append to docs/tasks/reports/quality-trend.md (create with header if missing):
+  Header: | Date | Story | Score | Rework | Crashes | Infra Issues |
+  Row:    | {date} | {story_id} | {score}/100 | {quality_cycles} | {crash_count} | {len(infra_issues)} |
+
+# 5. Append to pipeline report
+Append to docs/tasks/reports/pipeline-{date}.md:
+
+---
+
+## Meta-Analysis
+
+### Worker & Skill Effectiveness
+
+| Stage | Skill  | Duration | Worker   | Skill Result                             |
+|-------|--------|----------|----------|------------------------------------------|
+| 0     | ln-300 | {dur}    | {✓/⚠/✗} | Plan {score}/4, {N} tasks                |
+| 1     | ln-310 | {dur}    | {✓/⚠/✗} | {GO/NO-GO}, Readiness {score}/10         |
+| 2     | ln-400 | {dur}    | {✓/⚠/✗} | {files} files, +{add}/-{del}             |
+| 3     | ln-500 | {dur}    | {✓/⚠/✗} | {verdict}, Score {score}/100, {rework} rework |
+
+### Problems & Limitations
+
+{IF infra_issues empty: "None detected."}
+{ELSE:
+| # | Stage   | Type             | Description          | Recovery Action                          |
+|---|---------|------------------|----------------------|------------------------------------------|
+{row per infra_issue: [idx, "Stage N", issue.type, issue.description, recovery_map[issue.type]]}
+}
+
+### Improvement Candidates
+
+{IF candidates: numbered list}
+{ELSE: "None — pipeline ran clean."}
+```
 
 ## Reference Files
 

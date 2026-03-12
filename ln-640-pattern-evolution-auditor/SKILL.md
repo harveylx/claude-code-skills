@@ -490,6 +490,12 @@ Append one row to `docs/project/.audit/results_log.md` with: Skill=`ln-640`, Met
 - Trend analysis completed (current vs previous scores compared)
 - Summary report output
 
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `review-coordinator` (workers only). Run after all phases complete. Output to chat using the `review-coordinator — workers only` format.
+
 ## Reference Files
 
 - **Task delegation pattern:** `shared/references/task_delegation_pattern.md`

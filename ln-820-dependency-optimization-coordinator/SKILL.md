@@ -244,5 +244,13 @@ Options:
 
 ---
 
+## Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Skill type: `optimization-coordinator`. Run after all phases complete. Output to chat using the `optimization-coordinator` format.
+
+---
+
 **Version:** 1.1.0
 **Last Updated:** 2026-01-10
