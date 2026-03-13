@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## 2026-03-13
+
+Created ln-514-test-log-analyzer: new L3 worker under ln-510 for post-test log analysis. Two-layer architecture (Python script + AI): script collects logs from 3 sources (Docker/file/Loki), AI classifies errors into 4 categories (Real Bug, Test Artifact, Expected Behavior, Operational Warning) and assesses log quality (6 dimensions + 10-criterion format checklist). Only Real Bugs block quality verdict. Fixed ln-513-regression-checker: 6 structural violations (D2 passive refs, D5 qualifier, D7 missing Inputs/Phase 0, path fix). Updated ln-510-quality-coordinator: added Phase 8 (ln-514), renumbered Phases 8-10 → 9-11, added log_analysis to normalization matrix and fast-track mode.
+
+---
+
 ## 2026-03-12
 
 Bulk D3 dedup pass across 19 skills: replaced 4-line inline Story/Task/Epic Resolution Chain summaries with 1-line `Run {Story/Task/Epic} Resolution Chain per guide (status filter: [...])` in 18 skills (Category A: ln-302, 400, 500, 510, 511, 520, 521, 522, 523; Category B: ln-220, 221, 222, 230; Category C: ln-401, 402, 403, 404; plus ln-300). Fixed ln-511 step 3 Enrich duplication: moved MANDATORY READ to top of step 3 (applies to both coordinator and standalone paths), removed redundant inline Enrich and "Analyze ALL files" lines already covered by git_scope_detection.md. D8 coupling fixes: removed skill IDs from `meta_analysis_protocol.md` Skill Types table and `agent_delegation_pattern.md` Agent Selection Matrix (generic role names instead). Fixed orphan reference: added `risk_based_testing_examples.md` to ln-523 Reference Files section.

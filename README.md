@@ -1,7 +1,7 @@
 # Claude Code Skills
 
 ![Version](https://img.shields.io/badge/version-3.2.0-blue)
-![Skills](https://img.shields.io/badge/skills-114-green)
+![Skills](https://img.shields.io/badge/skills-116-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![GitHub stars](https://img.shields.io/github/stars/levnikolaevich/claude-code-skills?style=social)](https://github.com/levnikolaevich/claude-code-skills)
 
@@ -73,6 +73,7 @@ claude-code-skills/                      # MARKETPLACE
 |   |   |-- ln-511-code-quality-checker/  # DRY/KISS/YAGNI violations
 |   |   |-- ln-512-tech-debt-cleaner/    # Automated safe tech debt cleanup
 |   |   |-- ln-513-regression-checker/    # Run existing test suite
+|   |   |-- ln-514-test-log-analyzer/    # Classify errors + assess log quality
 |   |-- ln-520-test-planner/           # Test planning coordinator
 |   |   |-- ln-521-test-researcher/    # Research real-world problems
 |   |   |-- ln-522-manual-tester/      # Manual functional testing
@@ -122,6 +123,7 @@ claude-code-skills/                      # MARKETPLACE
 |   |   |-- ln-633-test-value-auditor/          # Risk-based test value scoring
 |   |   |-- ln-634-test-coverage-auditor/       # Missing tests for critical paths
 |   |   |-- ln-635-test-isolation-auditor/      # Isolation + anti-patterns
+|   |   |-- ln-636-manual-test-auditor/        # Manual test quality (harness, golden files, fail-fast)
 |   |-- ln-640-pattern-evolution-auditor/ # Architectural pattern analysis + 4-score model
 |   |   |-- ln-641-pattern-analyzer/      # Pattern scoring worker
 |   |   |-- ln-642-layer-boundary-auditor/# Layer violations, I/O isolation
