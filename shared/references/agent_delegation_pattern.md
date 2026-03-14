@@ -300,8 +300,9 @@ Standard steps before launching agents (performed inside agent review workers):
 .agent-review/
 ├── .gitignore                                      # * + !.gitignore
 ├── review_history.md                               # Append-only review log (all reviews)
-├── context/                                         # Materialized context files (universal review)
-│   └── arch-proposal_context.md
+├── context/                                         # Materialized files for agent access (context, plans)
+│   ├── arch-proposal_context.md
+│   └── velvet-giggling-acorn_plan.md
 ├── codex/
 │   ├── arch-proposal_contextreview_prompt.md        # Per-agent prompt (differs by {focus_hint})
 │   ├── arch-proposal_session.json                   # Session tracking for debate resume

@@ -78,7 +78,8 @@ Assemble the review prompt from base template + mode-specific content:
    - `## alt_extra` -> `{mode_alt_extra}`
    - `## schema` -> parse key-value pairs for `{mode_verdict}`, `{mode_areas}`, `{mode_suggestion_desc}`, `{mode_reason_desc}`, `{mode_verdict_question}`
 4. Replace all `{mode_*}` placeholders in base with corresponding mode content
-5. Fill instance variables: `{story_ref}`, `{task_refs}` (code/story) or `{review_title}`, `{context_refs}`, `{focus_areas}` (context)
+5. Fill instance variables: `{story_ref}`, `{task_refs}` (code/story) or `{review_title}`, `{context_refs}`, `{focus_areas}` (context) or `{plan_ref}`, `{codebase_context}`, `{focus_areas}` (plan_review)
+   > **External file rule:** Any file referenced in agent prompts that resides outside the project CWD MUST be copied to `.agent-review/context/` before use as placeholder value. Agents are sandboxed to project CWD and cannot read external paths. Use the materialized local path in the prompt.
 6. Assemble `{review_goal}` — Claude formulates 1-2 sentence review goal based on:
    - Story/Tasks analysis from validation phases
    - Known project risks and patterns

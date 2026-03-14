@@ -22,7 +22,7 @@ You are reviewing an implementation plan against the actual codebase, feasibilit
 Given these goals, articulate in your report's Goal section what specific feasibility risk YOU will prioritize and why — this is your refinement of the caller's goals, not a replacement. Focus your analysis on the areas most relevant to your primary focus while still covering the review goal.
 
 ## Instructions
-1. Read the plan file — it contains the full implementation proposal
+1. Read the plan file from `.agent-review/context/` — it has been materialized there from its original location
 2. Examine the actual codebase to verify plan assumptions (file paths, APIs, patterns)
 3. Search the web for best practices relevant to the technical decisions
 4. DO NOT modify any files. This is a read-only review.

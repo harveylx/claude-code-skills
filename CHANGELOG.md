@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## 2026-03-14
+
+Agent sandbox fix: external files (e.g. plan files from `~/.claude/plans/`) are now materialized to `.agent-review/context/` before being referenced in agent prompts. Gemini CLI cannot read files outside project workspace — this ensures all agent-referenced files are within CWD. Added general "External file rule" to `agent_review_workflow.md`, updated `plan_review.md` template instructions, and added plan file example to persistence pattern in `agent_delegation_pattern.md`.
+
 ## 2026-03-13
 
 Coherence review of 9XX Community Engagement group (ln-910..913): 13 structural fixes (D1/D2/D3/D8) + worker renumbering. Triager moved from ln-913 to ln-911 (workflow order: triage→decide→act), announcer→ln-912, debater→ln-913. R1 resolved: replaced ~50 lines of inline triage logic in ln-910 Phase 1a with delegation to ln-911 in `summary` mode (skip interactive preview). Triager Arguments section now supports `summary` token for coordinator use. R2 resolved: removed gate checks from worker skills (announcer/debater) — routing is coordinator's job, workers execute without re-validating intent. D3: deduplicated Announcement/RFC templates (68 lines removed). D8: removed consumer coupling from reference files, sequential phase numbering in debater.
