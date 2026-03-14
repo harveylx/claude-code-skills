@@ -1,6 +1,6 @@
 ---
 name: ln-523-auto-test-planner
-description: "Plans automated tests (E2E/Integration/Unit) using Risk-Based Testing after manual testing. Calculates priorities, delegates to ln-301-task-creator."
+description: "Plans automated tests (E2E/Integration/Unit) using Risk-Based Testing after research. Calculates priorities, delegates to ln-301-task-creator."
 license: MIT
 ---
 
@@ -8,7 +8,7 @@ license: MIT
 
 # Automated Test Planner
 
-Creates Story test task with comprehensive automated test coverage (E2E/Integration/Unit) based on Risk-Based Testing methodology and REAL manual testing results.
+Creates Story test task with comprehensive automated test coverage (E2E/Integration/Unit) based on Risk-Based Testing methodology and research findings.
 
 ## Inputs
 
@@ -22,29 +22,26 @@ Creates Story test task with comprehensive automated test coverage (E2E/Integrat
 ## Purpose & Scope
 - **Create** comprehensive test task for Story automation
 - **Calculate** risk-based priorities (Impact x Probability)
-- **Generate** 11-section test plan from manual test results
+- **Generate** 11-section test plan from Story AC and research findings
 - **Delegate** to ln-301-task-creator (CREATE) or ln-302-task-replanner (REPLAN)
-- **NOT** for: manual testing (ln-522), research (ln-521), orchestration (ln-520)
+- **NOT** for: research (ln-521), orchestration (ln-520)
 
 ## When to Use This Skill
 
 This skill should be used when:
-- **Invoked by ln-520-test-planner** after ln-521 research and ln-522 manual testing
+- **Invoked by ln-520-test-planner** after ln-521 research
 - All implementation tasks in Story are Done
-- Manual testing results documented in Linear comment (from ln-522)
 - Research findings available in Linear comment (from ln-521)
 
 **Prerequisites:**
 - All implementation Tasks in Story status = Done
 - ln-521-test-researcher completed (research comment exists)
-- ln-522-manual-tester completed (manual test results in Linear comment)
 
 **Automation:** Supports `autoApprove: true` (default when invoked by ln-520) to skip manual confirmation.
 
 ## When NOT to Use
 
 Do NOT use if:
-- Manual testing NOT completed -> Wait for ln-522
 - Research NOT completed -> Wait for ln-521
 - Implementation tasks NOT all Done -> Complete impl tasks first
 
@@ -72,21 +69,21 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 2. Extract: test commands, framework, patterns, coverage thresholds
 3. Ensures test planning aligns with project practices
 
-**Step 1: Load Research and Manual Test Results**
+**Step 1: Load Research Findings**
 1. Fetch Story (must have label "user-story"):
    - IF `task_provider` = `linear`: `get_issue(storyId)` — extract Story.id (UUID, NOT short ID)
    - IF `task_provider` = `file`: `Read story.md` — extract Story metadata
 2. Load research comment (from ln-521): "## Test Research: {Feature}"
    - IF `task_provider` = `linear`: `list_comments(issueId=storyId)` → find matching comment
    - IF `task_provider` = `file`: `Glob("docs/tasks/epics/*/stories/*/comments/*.md")` → find matching comment
-3. Load manual test results comment (from ln-522): "## Manual Testing Results"
-   - Same approach as research comment above
-   - If not found -> ERROR: Run ln-520-test-planner pipeline first
-4. Parse sections: AC results (PASS/FAIL), Edge Cases, Error Handling, Integration flows
-5. Map to test design: PASSED AC -> E2E, Edge cases -> Unit, Errors -> Error handling, Flows -> Integration
+   - If not found -> WARNING: proceed with Story AC only
+3. Parse Story AC and research into test scenarios:
+   - Each AC → candidate E2E test
+   - Edge cases from research → candidate Unit tests
+   - Integration patterns from research → candidate Integration tests
 
 **Step 2: Analyze Story + Tasks**
-1. Parse Story: Goal, Test Strategy, Technical Notes
+1. Parse Story: Goal, Test Strategy, Technical Notes, AC list
 2. Fetch all child Tasks (status = Done):
    - IF `task_provider` = `linear`: `list_issues(parentId=Story.id, state="Done")`
    - IF `task_provider` = `file`: `Glob("docs/tasks/epics/*/stories/*/tasks/*.md")` → filter by `**Status:** Done`
@@ -97,13 +94,7 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
    - Conditional branches (if/else/switch)
 4. Identify what needs testing
 
-### Phase 3: Parsing Strategy for Manual Test Results
-
-**Process:** Locate Linear comment with "Manual Testing Results" header -> Verify Format Version 1.0 -> Extract structured sections (Acceptance Criteria, Test Results by AC, Edge Cases, Error Handling, Integration Testing) using regex -> Validate (at least 1 PASSED AC, AC count matches Story, completeness check) -> Map parsed data to test design structure
-
-**Error Handling:** Missing comment -> ERROR (run ln-522 first), Missing format version -> WARNING (try legacy parsing), Required section missing -> ERROR (re-run ln-522), No PASSED AC -> ERROR (fix implementation)
-
-### Phase 4: Risk-Based Test Planning (Automated)
+### Phase 3: Risk-Based Test Planning (Automated)
 
 **MANDATORY READ:** Load `shared/references/risk_based_testing_guide.md` for complete methodology.
 
@@ -113,7 +104,7 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 
 **Step 1: Risk Assessment**
 
-Calculate Priority for each scenario from manual testing:
+Calculate Priority for each scenario derived from Story AC and research findings:
 
 ```
 Priority = Business Impact (1-5) x Probability (1-5)
@@ -122,7 +113,7 @@ Priority = Business Impact (1-5) x Probability (1-5)
 **Decision Criteria:**
 - Priority ≥15 -> **MUST test**
 - Priority 9-14 -> **SHOULD test** if not covered
-- Priority <=8 -> **SKIP** (manual testing sufficient)
+- Priority <=8 -> **SKIP**
 
 **Step 2: E2E Test Selection (2-5):** Baseline 2 (positive + negative) ALWAYS + 0-3 additional (Priority ≥15 only)
 
@@ -132,7 +123,7 @@ Priority = Business Impact (1-5) x Probability (1-5)
 
 **Step 5: Validation:** Each test passes Usefulness Criteria (Priority ≥15, Confidence ROI, Behavioral, Predictive, Specific, Non-Duplicative)
 
-### Phase 5: Test Task Generation (Automated)
+### Phase 4: Test Task Generation (Automated)
 
 Generates complete test task per `test_task_template.md` (11 sections):
 
@@ -148,7 +139,7 @@ Generates complete test task per `test_task_template.md` (11 sections):
 
 Shows preview for review.
 
-### Phase 6: Confirmation & Delegation
+### Phase 5: Confirmation & Delegation
 
 **Step 1:** Preview generated test plan (always displayed for transparency)
 
@@ -172,7 +163,6 @@ Invoke ln-301-task-creator worker with taskType: "test"
 **Pass to worker:**
 - taskType, teamId, storyData (Story.id, title, AC, Technical Notes, Context)
 - researchFindings (from ln-521 comment)
-- manualTestResults (from ln-522 comment)
 - testPlan (e2eTests, integrationTests, unitTests, riskPriorityMatrix)
 - infrastructureChanges, documentationUpdates, legacyCleanup
 
@@ -193,10 +183,9 @@ Invoke ln-302-task-replanner worker with taskType: "test"
 
 ## Definition of Done
 
-**Research and Manual Results Loaded:**
+**Research Findings Loaded:**
 - [ ] Research comment "## Test Research: {Feature}" found (from ln-521)
-- [ ] Manual test results "## Manual Testing Results" found (from ln-522)
-- [ ] At least 1 AC marked as PASSED
+- [ ] Story AC parsed into test scenarios
 
 **Risk-Based Test Plan Generated:**
 - [ ] Risk Priority Matrix calculated for all scenarios
@@ -242,7 +231,6 @@ Invoke ln-302-task-replanner worker with taskType: "test"
 
 ## Critical Rules
 
-- **Manual results required:** Never plan tests without ln-522 manual testing results — guessing coverage is worse than no tests
 - **E2E-first, not unit-first:** Baseline is always 2 E2E (positive + negative); unit/integration added only for Priority >= 15
 - **No framework testing:** Every test must validate OUR business logic; never test library/framework behavior
 - **Usefulness enforcement:** Every test beyond baseline must pass all 6 Usefulness Criteria (see risk_based_testing_guide.md)
@@ -252,9 +240,7 @@ Invoke ln-302-task-replanner worker with taskType: "test"
 
 **Minimum Viable Testing:** Start with baseline E2E (positive + negative). Each additional test must pass all 6 Usefulness Criteria.
 
-**Risk-Based Testing:** Prioritize by Business Impact x Probability. E2E-first from ACTUAL manual testing results. Priority ≥15 scenarios covered by tests.
-
-**Expected-Based Testing:** For deterministic tests, compare actual vs expected using `diff`. **MANDATORY READ:** Load `../ln-522-manual-tester/SKILL.md` — section "Test Design Principles".
+**Risk-Based Testing:** Prioritize by Business Impact x Probability. E2E-first from Story AC and research findings. Priority ≥15 scenarios covered by tests.
 
 ## Reference Files
 

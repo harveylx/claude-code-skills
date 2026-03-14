@@ -1,6 +1,6 @@
 ---
 name: ln-521-test-researcher
-description: "Researches real-world problems, competitor solutions, and customer complaints before test planning. Posts findings as Linear comment for ln-522 and ln-523."
+description: "Researches real-world problems, competitor solutions, and customer complaints before test planning. Posts findings as Linear comment for ln-523."
 license: MIT
 ---
 
@@ -136,7 +136,7 @@ Use available tools to find real-world problems:
 - [ ] Test case for customer pain point
 
 ---
-_This research informs both manual tests (ln-522) and automated tests (ln-523)._
+_This research informs automated tests (ln-523)._
 ```
 
 ## Critical Rules
@@ -163,7 +163,7 @@ _This research informs both manual tests (ln-522) and automated tests (ln-523)._
 
 - Research methodology: Web Search, MCP Ref, Context7 tools
 - Comment format: Structured markdown with sources
-- Downstream consumers: ln-522-manual-tester, ln-523-auto-test-planner
+- Downstream consumers: ln-523-auto-test-planner
 - **MANDATORY READ:** `shared/references/research_tool_fallback.md`
 
 ---

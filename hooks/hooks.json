@@ -25,19 +25,6 @@
           }
         ]
       }
-    ],
-
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/code-quality.py",
-            "timeout": 15
-          }
-        ]
-      }
     ]
   }
 }
