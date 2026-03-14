@@ -80,6 +80,9 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
    - IF `task_provider` = `linear`: `get_issue(storyId)` + `list_issues(parentId=storyId)`
    - IF `task_provider` = `file`: `Read story.md` + `Glob("docs/tasks/epics/*/stories/*/tasks/*.md")`
 4) Detect test task status (exists? Done?)
+5) **Classify story type** → `story_type: functional | ui_only`
+   - **ui_only** (ALL must apply): AC describes only visual/layout/text/style changes; no task mentions API/service/function/DB; no new logic introduced; changes are CSS/HTML/template/label/copy only.
+   - **functional** (default): Any doubt → `functional`. Business logic, API endpoints, data processing, calculations, auth, file handling → always `functional`.
 
 ### Phase 2: Fast-Track Decision
 
@@ -111,7 +114,7 @@ ELSE:
 ### Phase 3: Quality Checks (delegate to ln-510)
 
 1) **Invoke ln-510-quality-coordinator** via Skill tool
-   - Pass: Story ID (+ `--fast-track` flag if fast_track == true)
+   - Pass: Story ID (+ `--fast-track` flag if fast_track == true, or `--ui-only` flag if story_type == ui_only)
    - Full: ln-510 runs: code quality (ln-511) -> criteria validation -> linters -> regression (ln-513)
    - Fast-track: ln-510 runs: code metrics + static (ln-511 `--skip-mcp-ref`) -> criteria -> linters -> regression (ln-513) — skips MCP Ref/agent review
 2) **If ln-510 returns FAIL:**
@@ -120,7 +123,9 @@ ELSE:
 
 ### Phase 4: Test Planning (delegate to ln-520)
 
-1) **IF fast_track: SKIP Phase 4 entirely** (proceed to Phase 5)
+1) **IF fast_track OR story_type == ui_only: SKIP Phase 4 entirely** (proceed to Phase 5)
+   - `ui_only`: No testable logic; a test task adds no value for pure visual changes.
+
 2) Check test task status:
    - **No test task** -> invoke ln-520-test-planner to create
    - **Test task exists, not Done** -> report status, stop
@@ -128,9 +133,11 @@ ELSE:
 
 3) **Invoke ln-520-test-planner** via Skill tool (if needed)
    - Pass: Story ID
-   - ln-520 runs: research (ln-521) -> manual testing (ln-522) -> auto test planning (ln-523)
+   - ln-520 runs: research (ln-521) → auto test planning (ln-523)
 
 ### Phase 5: Test Verification (after test task Done)
+
+**IF fast_track OR story_type == ui_only: SKIP Phase 5 entirely** (proceed to Phase 6)
 
 1) Load test task:
    - IF `task_provider` = `linear`: `get_issue(testTaskId)`
@@ -173,10 +180,11 @@ Runs only when verdict is PASS, CONCERNS, or WAIVED. Consumes verified results f
 
 **TodoWrite format (mandatory):**
 ```
-- Invoke ln-510-quality-coordinator (in_progress)
-- Check test task status (pending)
-- Invoke ln-520-test-planner (pending, if needed)
-- Verify test coverage (pending)
+- Classify story type: functional | ui_only (in_progress)
+- Invoke ln-510-quality-coordinator (pending)
+- Check test task status [skip if ui_only] (pending)
+- Invoke ln-520-test-planner [skip if ui_only] (pending, if needed)
+- Verify test coverage [skip if ui_only] (pending)
 - Calculate Quality Score + NFR (pending)
 - Determine verdict + update Story (pending)
 - Branch finalization (pending)
@@ -187,7 +195,7 @@ Runs only when verdict is PASS, CONCERNS, or WAIVED. Consumes verified results f
 | Phase | Worker | Purpose |
 |-------|--------|---------|
 | 3 | ln-510-quality-coordinator | Code quality + criteria + linters + regression |
-| 4 | ln-520-test-planner | Research + manual testing + auto test planning |
+| 4 | ln-520-test-planner | Research + auto test planning (skipped for ui_only stories) |
 
 **Invocation:**
 ```
@@ -210,9 +218,10 @@ Skill(skill: "ln-520-test-planner", args: "{storyId}")
 - **Agent code review is MANDATORY regardless of execution mode.** If ln-510 is invoked — it handles agent review (Phase 4/8). If ln-510 is skipped or replaced with inline implementation — agent review MUST still be performed directly using `shared/agents/prompt_templates/modes/code.md` with at least 1 external agent and critical verification protocol. **MANDATORY READ:** Load `references/minimum_quality_checks.md` for non-negotiable checks.
 
 ## Definition of Done
+- Story type classified (functional | ui_only)
 - ln-510 quality checks: pass OR fix tasks created
-- Test task status checked; ln-520 invoked if needed
-- Test coverage verified (when test task Done)
+- Test task status checked; ln-520 invoked if needed (skipped for ui_only)
+- Test coverage verified (when test task Done and story_type == functional)
 - Quality Score calculated; NFR validation completed
 - **Gate output format:**
   ```yaml

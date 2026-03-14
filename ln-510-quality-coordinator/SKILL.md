@@ -52,6 +52,8 @@ Sequential coordinator for code quality pipeline. Invokes workers (ln-511 → ln
 
 **Fast-track mode:** When invoked with `--fast-track` flag (readiness 10/10), run Phase 2 with `--skip-mcp-ref` (metrics + static only, no MCP Ref), skip Phase 3 (ln-512), Phase 4 (agent review). Run Phase 5 (criteria), Phase 6 (linters), Phase 7 (ln-513), Phase 8 (ln-514).
 
+**UI-only mode:** When invoked with `--ui-only` flag (story_type == ui_only from ln-500), skip Phase 3 (ln-512 — auto-fixes risky for tiny changesets), skip Phase 4 (agent review — overkill for visual-only changes), skip Phase 8 (ln-514 — no meaningful test output to analyze). Run Phase 2 (ln-511 full), Phase 5 (criteria), Phase 6 (linters), Phase 7 (ln-513).
+
 ### Phase 2: Code Quality (delegate to ln-511 — ALWAYS runs)
 
 > **MANDATORY STEP:** ln-511 invocation required in ALL modes.
@@ -75,7 +77,7 @@ Skill(skill: "ln-511-code-quality-checker", args: "{storyId} --skip-mcp-ref")
 ### Phase 3: Tech Debt Cleanup (delegate to ln-512 — SKIP if --fast-track)
 
 > **MANDATORY STEP (full gate):** ln-512 invocation required. Safe auto-fixes only (confidence >=90%).
-> **Fast-track:** SKIP this phase.
+> **Fast-track or UI-only:** SKIP this phase.
 
 1) **Invoke ln-512-tech-debt-cleaner** via Skill tool
    - ln-512 consumes findings from ln-511 output (passed via coordinator context)
@@ -91,7 +93,7 @@ Skill(skill: "ln-512-tech-debt-cleaner", args: "{storyId}")
 ### Phase 4: Agent Review Launch (SKIP if --fast-track)
 
 > **MANDATORY STEP (full gate):** Launches agents in background, results merged in Phase 9.
-> **Fast-track:** SKIP this phase.
+> **Fast-track or UI-only:** SKIP this phase.
 
 **MANDATORY READ:** Load `shared/references/agent_review_workflow.md`, `shared/references/agent_delegation_pattern.md`
 
@@ -133,7 +135,7 @@ Skill(skill: "ln-512-tech-debt-cleaner", args: "{storyId}")
 Skill(skill: "ln-513-regression-checker", args: "{storyId}")
 ```
 
-### Phase 8: Test Log Analysis (delegate to ln-514 — runs after ln-513)
+### Phase 8: Test Log Analysis (delegate to ln-514 — runs after ln-513, skip if --ui-only)
 
 1) **Invoke ln-514-test-log-analyzer** via Skill tool with context instructions
    - Only Real Bugs affect quality verdict; log quality issues are informational
@@ -146,7 +148,7 @@ Skill(skill: "ln-513-regression-checker", args: "{storyId}")
 Skill(skill: "ln-514-test-log-analyzer", args: "review logs since test run start, expected errors from negative test cases")
 ```
 
-### Phase 9: Agent Merge (runs after Phase 8, when agent results arrive — SKIP if --fast-track or agents SKIPPED)
+### Phase 9: Agent Merge (runs after Phase 8, when agent results arrive — SKIP if --fast-track, --ui-only, or agents SKIPPED)
 
 **MANDATORY READ:** Load `shared/references/agent_review_workflow.md` (Critical Verification + Debate), `shared/references/agent_review_memory.md`
 
@@ -232,8 +234,8 @@ issues:
 **TodoWrite format (mandatory):**
 ```
 - Invoke ln-511-code-quality-checker (in_progress)
-- Invoke ln-512-tech-debt-cleaner (pending)
-- Launch agent review (background) (pending)
+- Invoke ln-512-tech-debt-cleaner [skip if --ui-only] (pending)
+- Launch agent review (background) [skip if --ui-only] (pending)
 - Criteria Validation (Story deps, AC coverage, DB schema) (pending)
 - Run linters from tech_stack.md (pending)
 - Invoke ln-513-regression-checker (pending)
