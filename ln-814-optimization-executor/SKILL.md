@@ -19,7 +19,7 @@ Executes optimization hypotheses from the researcher using keep/discard autorese
 
 | Aspect | Details |
 |--------|---------|
-| **Input** | `.optimization/context.md` OR conversation context (standalone invocation) |
+| **Input** | `.optimization/{slug}/context.md` OR conversation context (standalone invocation) |
 | **Output** | Optimized code on isolated branch, per-hypothesis results, experiment log |
 | **Pattern** | Strike-first: apply all → test → measure. Bisect only on failure. A/B only for contested alternatives |
 
@@ -35,7 +35,7 @@ Executes optimization hypotheses from the researcher using keep/discard autorese
 
 ### Step 1: Load Context
 
-Read `.optimization/context.md` from project root. Contains problem statement, profiling results, research hypotheses, and target metric.
+Read `.optimization/{slug}/context.md` from project root. Contains problem statement, profiling results, research hypotheses, and target metric.
 
 If file not found: check conversation context for the same data (standalone invocation).
 
@@ -70,7 +70,7 @@ Reuse baseline from performance map (already measured with real metrics).
 
 ### From Context File
 
-Read `performance_map.baseline` and `performance_map.test_command` from `.optimization/context.md`.
+Read `performance_map.baseline` and `performance_map.test_command` from `.optimization/{slug}/context.md`.
 
 | Field | Source |
 |-------|--------|
@@ -229,7 +229,7 @@ Present both tables to user. This is the primary deliverable — numbers the use
 
 ### Experiment Log
 
-Write to `{project_root}/.optimization/ln-814-log.tsv`:
+Write to `{project_root}/.optimization/{slug}/ln-814-log.tsv`:
 
 | Column | Description |
 |--------|-------------|
@@ -291,7 +291,7 @@ If target metric not reached after all hypotheses:
 - [ ] Contested alternatives A/B tested on top of full implementation
 - [ ] Bisect performed only if strike fails (not preemptively)
 - [ ] E2E safety test passes (or documented as unavailable)
-- [ ] Experiment log written to `.optimization/ln-814-log.tsv`
+- [ ] Experiment log written to `.optimization/{slug}/ln-814-log.tsv`
 - [ ] Report returned with baseline, final, improvement%, strike result
 - [ ] All changes on isolated branch, pushed to remote
 - [ ] Gap analysis provided if target metric not met

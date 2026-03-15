@@ -19,7 +19,7 @@ Validates optimization plan (performance_map + hypotheses + context) via paralle
 
 | Aspect | Details |
 |--------|---------|
-| **Input** | `.optimization/context.md` (performance_map, hypotheses, suspicion_stack) |
+| **Input** | `.optimization/{slug}/context.md` (performance_map, hypotheses, suspicion_stack) |
 | **Output** | Verdict (GO / GO_WITH_CONCERNS / NO_GO), corrected context.md, agent feedback summary |
 | **Pattern** | Parallel agent review (Codex + Gemini) + own feasibility check → merge → verdict |
 
@@ -38,7 +38,7 @@ Validates optimization plan (performance_map + hypotheses + context) via paralle
 
 ### Step 1: Load Context
 
-Read `.optimization/context.md` from project root. Verify required sections present:
+Read `.optimization/{slug}/context.md` from project root. Verify required sections present:
 
 | Section | Required | Verify |
 |---------|----------|--------|
@@ -65,7 +65,7 @@ python shared/agents/agent_runner.py --health-check
 Prepare context for external agents (they cannot read `.optimization/` directly):
 
 1. Ensure `.agent-review/` directory exists (with `.gitignore` containing `*`)
-2. Copy `.optimization/context.md` → `.agent-review/context/{id}_optimization_plan.md`
+2. Copy `.optimization/{slug}/context.md` → `.agent-review/context/{id}_optimization_plan.md`
 3. Build per-agent prompts per `agent_review_workflow.md` Step: Build Prompt (steps 1-9). Use `review_base.md` + `modes/plan_review.md`
 
 ### Optimization-Specific Focus Areas
@@ -135,7 +135,7 @@ Wait for agent results, then merge per `shared/references/agent_review_workflow.
 1. Parse agent suggestions from both result files
 2. Merge with own feasibility findings (Phase 3)
 3. For EACH suggestion: dedup → evaluate → AGREE or DISAGREE (debate per shared workflow)
-4. Apply accepted corrections directly to `.optimization/context.md`:
+4. Apply accepted corrections directly to `.optimization/{slug}/context.md`:
    - Remove invalid hypotheses
    - Add warnings to concerns
    - Adjust `conflicts_with` if agents found errors

@@ -42,7 +42,7 @@ Sequential diagnostic pipeline for performance optimization. Profiles the full r
 | Test infrastructure | Yes | Block: "tests required for safe optimization" |
 | Stack detection | Yes | Detect via ci_tool_detection.md |
 | Service topology | No | Detect multi-service architecture (see below) |
-| State file | No | If `.optimization/state.json` exists → resume from last completed gate |
+| State file | No | If `.optimization/{slug}/state.json` exists → resume from last completed gate |
 
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` for test/build detection.
 
@@ -63,7 +63,7 @@ If single-service (no signals): `service_topology = null` — standard single-co
 
 ### State Persistence
 
-Save `.optimization/state.json` after each gate completion. Enables resume on interruption.
+Save `.optimization/{slug}/state.json` after each gate completion. Enables resume on interruption.
 
 ```json
 {
@@ -75,7 +75,7 @@ Save `.optimization/state.json` after each gate completion. Enables resume on in
 }
 ```
 
-On startup: if state file exists, ask user: "Resume from {last_gate}?" or "Start fresh?"
+On startup: if `.optimization/{slug}/state.json` exists, ask user: "Resume from {last_gate}?" or "Start fresh?"
 
 ---
 
@@ -91,6 +91,18 @@ Parse user input into structured problem statement:
 | audit_report | Optional | Path to ln-650 output (additional hints for profiler) |
 
 If `target_metric` not provided by user, defer to Phase 5 (after research establishes industry benchmark).
+
+### Generate slug
+
+Derive `{slug}` from target for per-task isolation: sanitize to `[a-z0-9_-]`, max 50 chars.
+
+| Target | Slug |
+|--------|------|
+| `src/api/alignment.py::align_endpoint` | `align-endpoint` |
+| `test_idml_structure_preserved` | `test-idml-structure-preserved` |
+| `/api/v1/translate` | `api-v1-translate` |
+
+All artifacts go to `.optimization/{slug}/`: `context.md`, `state.json`, `ln-814-log.tsv`, `profile_test.sh`.
 
 ---
 
@@ -160,7 +172,7 @@ ln-812 will: competitive analysis → bottleneck-specific research → local cod
 
 Serialize diagnostic results from Phases 2-5 into structured context.
 
-- **Normal mode:** write `.optimization/context.md` in project root — input for ln-814
+- **Normal mode:** write `.optimization/{slug}/context.md` in project root — input for ln-814
 - **Plan mode:** write same structure to plan file (file writes restricted) → call ExitPlanMode
 
 **Context file structure:**
@@ -335,7 +347,7 @@ EXECUTE 2 — Validate + Execute
 - [ ] Wrong tool gate evaluated — exit with diagnostic if optimization not feasible
 - [ ] Solutions researched by ln-812 (benchmarks, hypotheses with conflicts_with)
 - [ ] Target metric established (user-provided or research-derived)
-- [ ] Context file written (.optimization/context.md)
+- [ ] Context file written (.optimization/{slug}/context.md)
 - [ ] Plan validated by ln-813 (agent review + feasibility check → GO/NO_GO)
 - [ ] Strike-first execution by ln-814 (applied/removed/contested)
 - [ ] Final report with before/after metrics, strike result, contested alternatives
