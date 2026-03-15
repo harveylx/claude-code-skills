@@ -55,7 +55,40 @@ Establish what "good" looks like for this type of operation. Define target metri
 | industry_benchmark | Expected performance range for this operation type |
 | competitor_approaches | How top systems solve this (2-3 examples) |
 | recommended_target | Suggested target metric (if user did not specify) |
+| target_metrics | Per-metric quantitative targets (see below) |
 | sources | URLs with dates for all findings |
+
+### Target Metric Research
+
+For each metric present in `performance_map.baseline`, research a quantitative target:
+
+| Metric | Query Template | Tool |
+|--------|---------------|------|
+| wall_time_ms | `"{domain} API response time benchmark {year}"` | WebSearch |
+| cpu_time_ms | `"{framework} handler CPU time benchmark"` | WebSearch |
+| memory_peak_mb | `"{domain} API memory usage benchmark {year}"` | WebSearch |
+| http_round_trips | `"{domain} API call count optimization best practice"` | WebSearch |
+| io_bytes | `"{domain} file processing throughput benchmark"` | WebSearch |
+
+**Output format:**
+
+```yaml
+target_metrics:
+  wall_time_ms:
+    value: 500
+    source: "industry benchmark: translation APIs p95 200-500ms"
+    confidence: HIGH
+  http_round_trips:
+    value: 2
+    source: "best practice: batch API reduces N calls to 1-2"
+    confidence: HIGH
+  memory_peak_mb:
+    value: 128
+    source: "similar workload: 64-128MB typical"
+    confidence: MEDIUM
+```
+
+**Confidence levels:** HIGH = benchmark found with source, MEDIUM = derived from best practices, LOW = estimated from general guidelines. Only include metrics present in the profiler baseline.
 
 ---
 
@@ -191,7 +224,11 @@ research_result:
     metric: "response_time"
     expected_range: "200-500ms"
     source: "..."
-  recommended_target: 500          # ms (if user did not specify)
+  recommended_target: 500          # ms — alias for target_metrics.wall_time_ms.value
+  target_metrics:                  # per-metric quantitative targets
+    wall_time_ms: { value: 500, source: "...", confidence: HIGH }
+    http_round_trips: { value: 2, source: "...", confidence: HIGH }
+    memory_peak_mb: { value: 128, source: "...", confidence: MEDIUM }
   competitor_analysis:
     - name, approach, metric, source
   solution_candidates:
@@ -235,6 +272,7 @@ Read-only worker — all phases use MCP research tools (Ref, Context7, WebSearch
 ## Definition of Done
 
 - [ ] Competitive analysis completed (industry benchmarks, competitor approaches)
+- [ ] Target metrics researched per baseline metric (value, source, confidence)
 - [ ] Target metric defined (user-provided or derived from research)
 - [ ] Bottleneck-specific solutions researched via MCP chain
 - [ ] Local codebase checked for existing unused capabilities

@@ -6,11 +6,11 @@
 
 ## 2026-03-15
 
-- **Optimization plan validation** — new step before code changes: parallel Codex + Gemini review catches infeasible hypotheses, missing optimizations, and incorrect conflict mappings. Pipeline: profile → research → **validate** → execute
-- **Cross-service performance profiling** — optimization pipeline now traces bottlenecks across microservices (monorepo, git submodules, docker-compose). Profiles inside accessible services instead of treating them as black boxes
-- **Community Engagement plugin** — new plugin with 4 skills for automated GitHub community management: triage issues/PRs, compose announcements, launch RFC debates, respond to threads
-- **Runtime profiling replaces estimation** — profiler now runs real benchmarks with CPU/memory/I/O metrics instead of estimating from static analysis. Instrumentation persists for before/after comparison
-- **Event channel consistency audit** — new check in persistence auditor (ln-652) detects publisher/subscriber name mismatches, orphaned channels. Defense-in-depth: also in code quality (ln-511 ARCH-EVENT-) and task review (ln-402)
+- **Multi-cycle optimization** — performance pipeline now iterates (profile → research → validate → execute → repeat) until target met or plateau detected; each cycle discovers new bottlenecks as dominant ones are fixed (Amdahl's law)
+- **Cross-service performance profiling** — optimization pipeline traces bottlenecks across microservices (monorepo, git submodules, docker-compose); profiles inside accessible services instead of treating them as black boxes
+- **Community Engagement plugin** — new plugin with skills for automated GitHub community management: triage issues/PRs, compose announcements, launch RFC debates, respond to threads
+- **Token efficiency: output normalization** — new shared reference normalizes, deduplicates, and groups CLI output before presenting to agent; reduces noise in test runners, build auditors, profilers, log analyzers
+- **Skill reviewer automated script** — ln-162 Phase 2 checks now run via executable `run_checks.sh` instead of manual template assembly
 
 ## 2026-03-14
 

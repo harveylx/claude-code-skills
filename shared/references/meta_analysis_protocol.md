@@ -154,6 +154,9 @@ Compare what the skill predicted/planned with what actually happened. Not all ty
 | Research Hit Rate | {hypotheses_applied}/{hypotheses_total} |
 | Strike Efficiency | clean/bisected/failed |
 | Overall Gain | (baseline - final) / baseline |
+| Cycles Used | {used}/{max} (multi-cycle only) |
+| Per-Cycle Gains | [{pct1}%, {pct2}%, ...] (multi-cycle only) |
+| Diminishing Returns | {trend: increasing/stable/decreasing} (multi-cycle only) |
 ```
 
 ## Issue Suggestion Triggers (patterns across 3+ runs)

@@ -20,6 +20,22 @@ Query templates organized by bottleneck type. Use with research_tool_fallback.md
 
 ---
 
+## Target Metric Queries
+
+Research quantitative targets per metric from `performance_map.baseline`. Use alongside Competitive Analysis to establish what "good" looks like for each measured dimension.
+
+| Metric | Query Template | Tool |
+|--------|---------------|------|
+| CPU time | `"{framework} handler CPU time benchmark"` | WebSearch |
+| Memory | `"{domain} API memory usage benchmark {year}"` | WebSearch |
+| HTTP round-trips | `"{domain} API call count optimization best practice"` | WebSearch |
+| I/O throughput | `"{domain} {operation} throughput benchmark"` | WebSearch |
+| GPU utilization | `"{framework} GPU inference latency benchmark"` | WebSearch |
+
+**Variables:** same as Competitive Analysis + `{framework}` from stack detection.
+
+---
+
 ## Solution Research by Bottleneck Type
 
 ### Architecture (N+1, Sequential, Missing Cache/Batch)

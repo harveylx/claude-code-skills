@@ -261,6 +261,7 @@ If target metric not reached after all hypotheses:
 |---------|---------|
 | Achievement | What was achieved (original → final, improvement %) |
 | Remaining bottlenecks | From time map: which steps still dominate |
+| Remaining cycles | If coordinator runs multi-cycle: "{remaining} optimization cycles available for remaining bottlenecks" |
 | Infrastructure recommendations | If bottleneck requires infra changes (scaling, caching layer, CDN) |
 | Further research | Optimization directions not explored in this run |
 

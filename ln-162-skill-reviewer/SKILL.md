@@ -63,9 +63,13 @@ Deduplicate. Report: `Scope: N primary, M affected, K dependency skills.`
 
 ### Phase 2: Automated Verification
 
-**MANDATORY READ:** Load `references/automated_checks_skill_mode.md`
+Run the automated checks script against all SKILL.md files in scope:
 
-Run all bash checks for every SKILL.md in scope. Record failures -- they feed D7/D8 as pre-verified violations. Every FAIL is confirmed -- no judgment needed, no skipping.
+```bash
+bash references/run_checks.sh {scoped SKILL.md files}
+```
+
+Record failures -- they feed D7/D8 as pre-verified violations. Every FAIL is confirmed -- no judgment needed, no skipping. Check definitions: `references/automated_checks_skill_mode.md`.
 
 ### Phase 3: Nine-Dimension Review
 

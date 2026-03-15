@@ -146,6 +146,15 @@ Suspicion checklist (**minimum, not limitation**):
 | Architecture | N+1 in loop? Batch API unused? Cache infra unused? Sequential-when-parallel? |
 | *(open)* | Anything else spotted — checklist does not limit findings |
 
+### Step 2b: Suspicion Deduplication
+
+**MANDATORY READ:** Load `shared/references/output_normalization.md`
+
+After generating suspicions across all call chain steps, normalize and deduplicate per §1-§2:
+- Normalize suspicion descriptions (replace specific values with placeholders)
+- Group identical suspicions across different steps → merge into single entry with `affected_steps: [list]`
+- Example: "Missing connection pooling" found in steps 1.1, 1.2, 1.3 → one suspicion with `affected_steps: ["1.1", "1.2", "1.3"]`
+
 ### Step 3: Verify & Map to Instrumentation Points
 
 ```

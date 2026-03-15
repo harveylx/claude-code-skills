@@ -212,7 +212,8 @@ Step 9: Update & Commit
    IF verdict == Done:
    - Detect lint/typecheck commands per discovery hierarchy in ci_tool_detection.md
    - Run detected checks (timeouts per guide: 2min linters, 5min typecheck)
-   - IF any FAIL → override verdict to To Rework with last 50 lines of output
+   **MANDATORY READ:** Load `shared/references/output_normalization.md`
+   - IF any FAIL → apply output normalization per §1 normalize → §2 deduplicate → §4 truncate to 50 lines → override verdict to To Rework with normalized output
    - IF no tooling detected → SKIP with info message
 9) **Update:** Set task status in Linear; update kanban: if Done → **remove task from kanban** (Done section tracks Stories only, not individual Tasks); if To Rework → move task to To Rework section; add review comment with findings/actions. If side-effect bugs created, mention them in comment.
 
@@ -260,6 +261,7 @@ Step 9: Update & Commit
 - AC Validation Checklist: `references/ac_validation_checklist.md` (4 criteria: Completeness, Specificity, Dependencies, DB Creation)
 - **Clean code checklist:** `shared/references/clean_code_checklist.md`
 - **CI tool detection:** `shared/references/ci_tool_detection.md`
+- **Output normalization:** `shared/references/output_normalization.md`
 - Kanban format: `docs/tasks/kanban_board.md`
 
 ---
