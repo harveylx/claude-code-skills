@@ -114,6 +114,16 @@ Trace call chain from code + build suspicion stack. **Purpose:** guide WHERE to 
 
 Starting from entry point, trace depth-first (max depth 5). At each step, READ the full function body.
 
+**Cross-service tracing:** If `service_topology` is available from coordinator and a step makes an HTTP/gRPC call to another service whose code is accessible:
+
+| Situation | Action |
+|-----------|--------|
+| HTTP call to service with code in submodule/monorepo | Follow into that service's handler: resolve route → trace handler code (depth resets to 0 for the new service) |
+| HTTP call to service without accessible code | Classify as External, record latency estimate |
+| gRPC/message queue to known service | Same as HTTP — follow into handler if code accessible |
+
+Record `service: "{service_name}"` on each step to track which service owns it. The performance_map `steps` tree can span multiple services.
+
 ### Step 2: Classify & Suspicion Scan
 
 For each step, classify by type (CPU, I/O-DB, I/O-Network, I/O-File, Architecture, External, Cache) and scan for performance concerns.
@@ -191,9 +201,10 @@ Add timing/logging along the call stack at instrumentation points identified in 
 1. FOR each CONFIRMED suspicion without measured data:
      Add timing wrapper around target function/I/O call
      Add counter for I/O round-trips if network/DB suspected
+     (cross-service: instrument in the correct service's codebase)
 2. Re-run test_command (3 runs, median)
 3. Collect per-function measurements from logs
-4. REMOVE all instrumentation: git checkout -- {modified_files}
+4. Record list of instrumented files (may span multiple services)
 ```
 
 | Instrumentation Type | When | Example |
@@ -202,7 +213,7 @@ Add timing/logging along the call stack at instrumentation points identified in 
 | I/O call counter | Network or DB bottleneck suspected | Count HTTP requests, DB queries in loop |
 | Memory snapshot | Memory accumulation suspected | `tracemalloc.get_traced_memory()` before/after |
 
-**Rule:** all instrumentation is temporary. Code returns to original state after measurement.
+**KEEP instrumentation in place.** ln-813 will reuse it for post-optimization per-function comparison, then clean up after strike. Report `instrumented_files` in output.
 
 ---
 
@@ -221,10 +232,11 @@ performance_map:
     io_read_bytes: 1200000
     io_write_bytes: 500000
     http_round_trips: 13
-  steps:
+  steps:                          # service field present only in multi-service topology
     - id: "1"
       function: "process_job"
       location: "app/services/job_processor.py:45"
+      service: "api"             # optional — which service owns this step
       wall_time_ms: 7200
       time_share_pct: 99
       type: "function_call"
@@ -236,11 +248,13 @@ performance_map:
           children:
             - id: "1.1.1"
               function: "tikal_extract"
+              service: "tikal"   # cross-service: code traced into submodule
               wall_time_ms: 2800
               type: "http_call"
               http_round_trips: 1
             - id: "1.1.2"
               function: "mt_translate"
+              service: "mt-engine"
               wall_time_ms: 3500
               type: "http_call"
               http_round_trips: 13
@@ -281,6 +295,7 @@ profile_result:
   e2e_test:
     command: <string|null>             # E2E safety test command (from Phase 0)
     source: <string>                   # user / route / function / module / none
+  instrumented_files: [<string>]       # Files with active instrumentation (empty if non-invasive only)
   wrong_tool_indicators: []            # Empty = proceed, non-empty = exit
 ```
 
@@ -326,7 +341,7 @@ profile_result:
 - [ ] Call graph traced and function bodies read
 - [ ] Suspicion stack built: each suspicion verified and mapped to instrumentation point
 - [ ] Deep profile completed (non-invasive preferred, invasive if needed)
-- [ ] All instrumentation removed (code returned to original state)
+- [ ] Instrumented files reported (cleanup deferred to ln-813)
 - [ ] Performance map built in standardized format (real measurements)
 - [ ] Top 3 bottlenecks identified from measured data
 - [ ] Wrong tool indicators evaluated from real metrics

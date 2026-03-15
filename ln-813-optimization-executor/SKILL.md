@@ -212,7 +212,20 @@ Show baseline vs final for EVERY metric from `performance_map.baseline`. Include
 Target: 5000ms → Achieved: 3800ms ✓ TARGET MET
 ```
 
-Present to user at end of execution. This is the primary deliverable — numbers the user sees first.
+### Per-Function Delta (if instrumentation available)
+
+If `instrumented_files` from context is non-empty, run `test_command` once more AFTER strike to capture per-function timing with the same instrumentation ln-811 placed:
+
+```
+| Function | Before (ms) | After (ms) | Delta |
+|----------|------------|------------|-------|
+| mt_translate | 3500 | 450 | -87% (7.8x) |
+| tikal_extract | 2800 | 2800 | 0% (unchanged) |
+```
+
+Then clean up: `git checkout -- {instrumented_files}` — remove all profiling instrumentation before final commit.
+
+Present both tables to user. This is the primary deliverable — numbers the user sees first.
 
 ### Experiment Log
 

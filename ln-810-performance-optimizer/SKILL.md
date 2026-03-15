@@ -41,9 +41,25 @@ Sequential diagnostic pipeline for performance optimization. Profiles the full r
 | Git clean state | Yes | Block: "commit or stash changes first" |
 | Test infrastructure | Yes | Block: "tests required for safe optimization" |
 | Stack detection | Yes | Detect via ci_tool_detection.md |
+| Service topology | No | Detect multi-service architecture (see below) |
 | State file | No | If `.optimization/state.json` exists → resume from last completed gate |
 
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` for test/build detection.
+
+### Service Topology Detection
+
+Detect if optimization target spans multiple services with accessible code:
+
+| Signal | How to Detect | Result |
+|--------|--------------|--------|
+| Git submodules | `git submodule status` — non-empty output | List of service paths |
+| Monorepo | `ls` for `services/`, `packages/`, `apps/` directories with independent package files | List of service paths |
+| Docker Compose | `docker-compose.yml` / `compose.yml` — map service names to build contexts | List of service paths + ports |
+| Workspace config | `pnpm-workspace.yaml`, Cargo workspace, Go workspace | List of module paths |
+
+**Output:** `service_topology` — map of service names to code paths. Pass to ln-811 for cross-service tracing.
+
+If single-service (no signals): `service_topology = null` — standard single-codebase profiling.
 
 ### State Persistence
 
@@ -160,6 +176,7 @@ Serialize diagnostic results from Phases 2-5 into structured context.
 | Local Codebase Findings | ln-812 | Batch APIs, cache infra, connection pools found in code |
 | Test Command | ln-811 | Command used for profiling (reused for post-optimization measurement) |
 | E2E Test | ln-811 | E2E safety test command + source (functional gate for executor) |
+| Instrumented Files | ln-811 | List of files with active instrumentation (ln-813 cleans up after strike) |
 
 ---
 
