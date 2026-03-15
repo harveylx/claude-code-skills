@@ -63,19 +63,31 @@ If single-service (no signals): `service_topology = null` — standard single-co
 
 ### State Persistence
 
-Save `.optimization/{slug}/state.json` after each gate completion. Enables resume on interruption.
+Save `.optimization/{slug}/state.json` after each phase completion. Enables resume on interruption.
 
 ```json
 {
   "target": "src/api/endpoint.py::handler",
-  "last_gate": "gate_1",
-  "profile_complete": true,
-  "research_complete": false,
-  "strike_complete": false
+  "slug": "endpoint-handler",
+  "phases": {
+    "0_preflight": { "status": "done", "ts": "2026-03-15T10:00:00Z" },
+    "1_parse": { "status": "done", "ts": "2026-03-15T10:00:05Z" },
+    "2_profile": { "status": "done", "ts": "2026-03-15T10:05:00Z", "worker": "ln-811" },
+    "3_gate": { "status": "done", "ts": "2026-03-15T10:05:10Z", "verdict": "PROCEED" },
+    "4_research": { "status": "done", "ts": "2026-03-15T10:10:00Z", "worker": "ln-812" },
+    "5_target": { "status": "done", "ts": "2026-03-15T10:10:05Z" },
+    "6_context": { "status": "done", "ts": "2026-03-15T10:10:10Z" },
+    "7_validate": { "status": "running", "ts": "2026-03-15T10:10:15Z", "worker": "ln-813", "mode": "agent" },
+    "8_execute": { "status": "pending" }
+  }
 }
 ```
 
-On startup: if `.optimization/{slug}/state.json` exists, ask user: "Resume from {last_gate}?" or "Start fresh?"
+**Phase status values:** `pending` → `running` → `done` | `failed`
+
+Update state BEFORE and AFTER each phase. For Agent-delegated phases (7, 8): set `running` before launch, `done`/`failed` after Agent returns.
+
+On startup: if `.optimization/{slug}/state.json` exists, ask user: "Resume from {last incomplete phase}?" or "Start fresh?"
 
 ---
 
@@ -190,17 +202,43 @@ Serialize diagnostic results from Phases 2-5 into structured context.
 | E2E Test | ln-811 | E2E safety test command + source (functional gate for executor) |
 | Instrumented Files | ln-811 | List of files with active instrumentation (ln-814 cleans up after strike) |
 
+### Worker Delegation Strategy
+
+| Worker | Tool | Rationale |
+|--------|------|-----------|
+| ln-811 | Skill() | Needs problem_statement from conversation. First heavy worker — context clean |
+| ln-812 | Skill() | Needs performance_map from ln-811 conversation output. Context still manageable (~11K) |
+| ln-813 | Agent() | Reads ALL input from context.md on disk. Zero conversation dependency. Isolated context prevents degradation |
+| ln-814 | Agent() | Reads ALL input from context.md on disk. Zero conversation dependency. Heaviest worker benefits most from fresh context |
+
+Phase 6 (Write Context) is the natural handoff boundary: shared context → isolated context.
+
 ---
 
-## Phase 7: Validate Plan — DELEGATE to ln-813
+## Phase 7: Validate Plan — DELEGATE to ln-813 (Isolated Context)
 
-**Do NOT validate the plan yourself. INVOKE the plan validator.**
+**Do NOT validate the plan yourself. INVOKE the plan validator via Agent for context isolation.**
 
-**Invoke:** `Skill(skill: "ln-813-optimization-plan-validator")`
+**Invoke:**
+```
+Agent(description: "Validate optimization plan",
+     prompt: "Execute worker.
+
+Step 1: Invoke worker:
+  Skill(skill: \"ln-813-optimization-plan-validator\")
+
+CONTEXT:
+{\"slug\": \"{slug}\", \"context_file\": \".optimization/{slug}/context.md\"}",
+     subagent_type: "general-purpose")
+```
+
+Update `state.json`: set phase `7_validate` status to `running` before launch.
 
 ln-813 will: agent review (Codex + Gemini) + own feasibility check → GO/GO_WITH_CONCERNS/NO_GO.
 
-**Receive:** verdict, corrections applied to context.md, agent feedback summary.
+**Receive (from Agent return):** verdict (GO/GO_WITH_CONCERNS/NO_GO), corrections_applied count, hypotheses_removed list, concerns.
+
+After Agent returns — re-read `.optimization/{slug}/context.md` for applied corrections. Update `state.json`: set phase `7_validate` to `done` or `failed`.
 
 | Verdict | Action |
 |---------|--------|
@@ -210,23 +248,47 @@ ln-813 will: agent review (Codex + Gemini) + own feasibility check → GO/GO_WIT
 
 ---
 
-## Phase 8: Execute — DELEGATE to ln-814
+## Phase 8: Execute — DELEGATE to ln-814 (Isolated Context)
 
 **In Plan Mode:** SKIP this phase. Context file from Phase 6 IS the plan. Call ExitPlanMode.
 
-**Do NOT implement optimizations yourself. INVOKE the executor skill.**
+**Do NOT implement optimizations yourself. INVOKE the executor via Agent for context isolation.**
 
-**Invoke:** `Skill(skill: "ln-814-optimization-executor")`
+**Invoke:**
+```
+Agent(description: "Execute optimization strike",
+     prompt: "Execute worker.
+
+Step 1: Invoke worker:
+  Skill(skill: \"ln-814-optimization-executor\")
+
+CONTEXT:
+{\"slug\": \"{slug}\", \"context_file\": \".optimization/{slug}/context.md\"}",
+     subagent_type: "general-purpose")
+```
+
+Update `state.json`: set phase `8_execute` status to `running` before launch.
 
 ln-814 will: read context → create worktree → strike-first (apply all) → test → measure → bisect if needed → report.
 
-**Receive:** branch, baseline, final, strike_result, hypotheses_applied/removed, contested_results, results_comparison.
+**Receive (from Agent return):** branch, baseline, final, total_improvement_pct, target_met, strike_result, hypotheses_applied, hypotheses_removed, files_modified.
+
+After Agent returns — read `.optimization/{slug}/ln-814-log.tsv` for experiment details. Update `state.json`: set phase `8_execute` to `done` or `failed`.
 
 ---
 
 ## Phase 9: Collect Execution Results
 
-**Receive from ln-814:**
+### Post-Agent Validation
+
+Before processing results, verify Agent workers completed successfully:
+
+| Worker | Check | On failure |
+|--------|-------|------------|
+| ln-813 | Agent returned text containing verdict keyword (GO/NO_GO/GO_WITH_CONCERNS) | Set phase `7_validate` to `failed`, report to user |
+| ln-814 | Agent returned text with baseline + final metrics | Set phase `8_execute` to `failed`, report partial results |
+
+### Receive from ln-814:
 
 | Field | Description |
 |-------|-------------|
@@ -322,8 +384,8 @@ GATE 2 — Plan research & execution
   → ExitPlanMode (user approves strike)
 
 EXECUTE 2 — Validate + Execute
-  Phase 7: Skill("ln-813") — agent-validated plan review (GO/NO_GO)
-  Phase 8: Skill("ln-814") — strike execution
+  Phase 7: Agent("ln-813") — plan review in ISOLATED context (GO/NO_GO)
+  Phase 8: Agent("ln-814") — strike execution in ISOLATED context
   Phase 9-11: Collect, report, meta-analysis
 ```
 

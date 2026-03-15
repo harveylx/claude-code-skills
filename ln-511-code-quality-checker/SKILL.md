@@ -87,6 +87,7 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
 | ARCH-AI-SEB | Side-Effect Breadth: 3+ side-effect categories in one **leaf** function. **Conflict Resolution:** orchestrator/coordinator functions (imports 3+ services AND delegates sequentially) are EXPECTED to have multiple categories — do NOT flag SEB | medium |
 | ARCH-AI-AH | Architectural Honesty: read-named function with write side-effects | medium |
 | ARCH-AI-FO | Flat Orchestration: **leaf** service imports 3+ other services. Orchestrator imports are expected — do NOT flag | medium |
+| ARCH-EVENT- | Event Channel Consistency: publisher/subscriber name mismatch (MISMATCH), orphaned channel with no counterpart (ORPHAN) | high (mismatch), medium (orphan) |
 
 **PERF- subcategories:**
 
@@ -179,6 +180,7 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
    - ARCH-AI-SEB: side-effect breadth (3+ categories in one **leaf** function; orchestrator functions exempt — see Conflict Resolution in table above)
    - ARCH-AI-AH: architectural honesty (read-named function with hidden writes)
    - ARCH-AI-FO: flat orchestration (**leaf** service importing 3+ services; orchestrator imports exempt)
+   - ARCH-EVENT-: event channel mismatch — Grep for `NOTIFY|pg_notify|\.publish\(|\.emit\(` (publishers) and `LISTEN|\.subscribe\(|\.on\(` (subscribers) in changed_files[]. Cross-reference channel name strings. <!-- Defense-in-depth: also checked by ln-652 Rule 6 -->
    - MNT-GOD-: god classes (>15 methods or >500 lines per class)
    - MNT-SIG-: method signature quality (boolean flags, unclear returns)
    - MNT-ERR-: error contract inconsistency (mixed raise/return patterns in same service)
@@ -204,7 +206,7 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
 - [ ] Story and Done implementation tasks loaded (test tasks excluded)
 - [ ] Code metrics calculated (Cyclomatic Complexity, function/file sizes)
 - [ ] MCP Ref validation completed (OPT-, BP-, PERF- categories)
-- [ ] ARCH- subcategories checked (LB, TX, DTO, DI, CEH, SES); MNT- subcategories checked (DC, DRY, GOD, SIG, ERR)
+- [ ] ARCH- subcategories checked (LB, TX, DTO, DI, CEH, SES, EVENT); MNT- subcategories checked (DC, DRY, GOD, SIG, ERR)
 - [ ] Issues identified with prefixes and severity, sources from MCP Ref/Context7
 - [ ] Code Quality Score calculated
 - [ ] Output formatted per `references/output_schema.md`
@@ -219,5 +221,5 @@ Formula: `Code Quality Score = 100 - metric_penalties - issue_penalties`
 - Research tool fallback: `shared/references/research_tool_fallback.md`
 
 ---
-**Version:** 5.0.0
-**Last Updated:** 2026-01-29
+**Version:** 5.1.0
+**Last Updated:** 2026-03-15

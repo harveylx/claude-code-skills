@@ -36,6 +36,11 @@ Validates optimization plan (performance_map + hypotheses + context) via paralle
 **MANDATORY READ:** Load `shared/references/agent_review_workflow.md`
 **MANDATORY READ:** Load `shared/references/agent_delegation_pattern.md`
 
+### Slug Resolution
+
+- If invoked via Agent with contextStore containing `slug` — use directly.
+- If invoked standalone — ask user for `.optimization/` target directory or scan for single slug.
+
 ### Step 1: Load Context
 
 Read `.optimization/{slug}/context.md` from project root. Verify required sections present:

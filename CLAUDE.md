@@ -10,7 +10,7 @@ Skills collection for Claude Code with config-driven Agile task management (Line
 
 | Rule | When to Apply | Details |
 |------|---------------|---------|
-| **Read Architecture Guide first** | Before working with skills | `cat docs/SKILL_ARCHITECTURE_GUIDE.md` — L0-L3 hierarchy, SRP, Token Efficiency, Red Flags |
+| **Read Architecture Guide first** | Before working with skills | `cat docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` — L0-L3 hierarchy, SRP, Token Efficiency, Red Flags |
 | **MANDATORY READ pattern** | File references in SKILL.md | Use `**MANDATORY READ:** Load {file}`. Passive refs (`See`, `Per`, `Follows`) are NOT followed by agents. Group multiple into ONE block at section start |
 | **Path Resolution** | File paths in SKILL.md | Relative to skills repo root, NOT target project. Every SKILL.md with file refs includes `> **Paths:**` note after frontmatter |
 | **Sequential Numbering** | Phases/Sections/Steps | 1, 2, 3, 4 (NOT 1, 1.5, 2). Exception: 4a (CREATE), 4b (REPLAN) |
@@ -29,14 +29,16 @@ Skills collection for Claude Code with config-driven Agile task management (Line
 |------|-----|
 | Project overview + full tree | `cat README.md` |
 | Skill count | `ls -d ln-*/SKILL.md \| wc -l` |
-| Architecture patterns (L0-L3) | `cat docs/SKILL_ARCHITECTURE_GUIDE.md` |
-| Agent Teams runtime (hooks, Windows) | `cat docs/AGENT_TEAMS_PLATFORM_GUIDE.md` |
+| Architecture patterns (L0-L3) | `cat docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` |
+| Agent Teams runtime (hooks, Windows) | `cat docs/architecture/AGENT_TEAMS_PLATFORM_GUIDE.md` |
+| Component selection (command/agent/skill) | `cat docs/best-practice/COMPONENT_SELECTION.md` |
+| Workflow tips | `cat docs/best-practice/WORKFLOW_TIPS.md` |
 | Tool configuration (Linear/File Mode) | `cat shared/references/tools_config_guide.md` |
 | Key workflow | `ln-700 → ln-100 → ln-200 → ln-1000` (or manually: `ln-400 → ln-500`) |
 | Skill metadata | `head -20 {ln-NNN}/SKILL.md` (frontmatter + type/category) |
 | Reference files for a skill | `ls {ln-NNN}/references/` |
 | Shared templates | `ls shared/templates/` |
-| Questions format | `cat docs/QUESTIONS_FORMAT.md` |
+| Questions format | `cat shared/references/questions_format.md` |
 
 ## Navigation
 
@@ -44,11 +46,13 @@ Skills collection for Claude Code with config-driven Agile task management (Line
 
 | Topic | File |
 |-------|------|
-| Writing Guidelines | `docs/SKILL_ARCHITECTURE_GUIDE.md` §Writing Guidelines |
+| Writing Guidelines | `docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` §Writing Guidelines |
 | Tool Configuration (Phase 0) | `shared/references/tools_config_guide.md` |
 | Task kanban + Team ID | `docs/tasks/kanban_board.md` |
 | Risk-Based Testing | `shared/references/risk_based_testing_guide.md` |
-| Questions format | `docs/QUESTIONS_FORMAT.md` |
+| Frontmatter fields | `shared/references/frontmatter_reference.md` |
+| Hooks reference | `shared/references/hooks_reference.md` |
+| Questions format | `shared/references/questions_format.md` |
 
 ## Maintenance
 

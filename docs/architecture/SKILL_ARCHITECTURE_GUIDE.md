@@ -2,9 +2,7 @@
 
 **Industry Best Practices for Claude Code Skills (2024-2026)**
 
-<!-- SCOPE: Skill architecture patterns and best practices ONLY. Contains Orchestrator-Worker Pattern, SRP, Token Efficiency, Task Decomposition, Red Flags. -->
-<!-- DO NOT add here: skill-specific workflows → individual SKILL.md files, project documentation → templates/, versioning → CLAUDE.md -->
-<!-- RELATED: For Agent Teams runtime patterns (hooks, heartbeat, crash recovery, Windows) → AGENT_TEAMS_PLATFORM_GUIDE.md -->
+<!-- SCOPE: Skill architecture patterns, writing guidelines, and design best practices. Contains Orchestrator-Worker Pattern, SRP, Token Efficiency, Task Decomposition, Red Flags. -->
 
 This document captures industry standards and best practices for designing Claude Code skills, based on research from Claude Skills Guidelines, Multi-Agent Orchestration patterns, Agile methodologies, and Anthropic's official documentation (2026).
 

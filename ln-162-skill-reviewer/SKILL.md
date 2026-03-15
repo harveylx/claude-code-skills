@@ -69,7 +69,7 @@ Run all bash checks for every SKILL.md in scope. Record failures -- they feed D7
 
 ### Phase 3: Nine-Dimension Review
 
-**MANDATORY READ:** Load `references/dimensions_d1_d9.md` and `docs/SKILL_ARCHITECTURE_GUIDE.md`
+**MANDATORY READ:** Load `references/dimensions_d1_d9.md` and `docs/architecture/SKILL_ARCHITECTURE_GUIDE.md`
 
 Read every SKILL.md in scope. Check ALL dimensions across ALL skills. Phase 2 failures are pre-verified -- include directly, do not re-check.
 

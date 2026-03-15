@@ -3,7 +3,6 @@
 **Operational best practices for Claude Code Agent Teams (2026)**
 
 <!-- SCOPE: Platform-level constraints, hooks, heartbeat, Windows compatibility, crash recovery, worker lifecycle. -->
-<!-- DO NOT add here: skill architecture patterns -> SKILL_ARCHITECTURE_GUIDE.md, skill-specific workflows -> individual SKILL.md files -->
 
 Based on: [Anthropic Agent Teams docs](https://code.claude.com/docs/en/agent-teams), [Multi-Agent Research System](https://www.anthropic.com/engineering/multi-agent-research-system), [Claude Agent SDK](https://claude.com/blog/building-agents-with-the-claude-agent-sdk), and production experience with ln-1000-pipeline-orchestrator.
 
@@ -229,6 +228,21 @@ Pipeline state persisted on **every heartbeat** to `.pipeline/state.json`. Recov
 | Checkpoint + resume | Avoids full restart on crash | Anthropic: "Avoid full restarts: expensive, frustrates users" |
 | Unique naming (no duplicate spawns) | Prevents wasted stage budget | Production learning: duplicate workers = doubled cost |
 | 60s heartbeat (not shorter) | ~1 heartbeat turn per minute | <30s doubles heartbeat token cost |
+| Auto-compact at 80% | Prevents "agent dumb zone" | Community best practice (shanraisshan) |
+
+### Context Degradation Prevention
+
+Set `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=80` in `settings.json` to trigger auto-compaction at 80% context usage instead of the default. Prevents degraded output quality when context fills up during long pipeline runs.
+
+```json
+{
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80"
+  }
+}
+```
+
+Additional context management: manual `/compact` when context exceeds 50%. Use `/clear` when switching between unrelated stories. See `docs/best-practice/WORKFLOW_TIPS.md` for more tips.
 
 ---
 

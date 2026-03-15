@@ -10,6 +10,7 @@
 - **Cross-service performance profiling** — optimization pipeline now traces bottlenecks across microservices (monorepo, git submodules, docker-compose). Profiles inside accessible services instead of treating them as black boxes
 - **Community Engagement plugin** — new plugin with 4 skills for automated GitHub community management: triage issues/PRs, compose announcements, launch RFC debates, respond to threads
 - **Runtime profiling replaces estimation** — profiler now runs real benchmarks with CPU/memory/I/O metrics instead of estimating from static analysis. Instrumentation persists for before/after comparison
+- **Event channel consistency audit** — new check in persistence auditor (ln-652) detects publisher/subscriber name mismatches, orphaned channels. Defense-in-depth: also in code quality (ln-511 ARCH-EVENT-) and task review (ln-402)
 
 ## 2026-03-14
 

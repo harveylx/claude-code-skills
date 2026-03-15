@@ -60,3 +60,46 @@ Conditional — included by task creators/replanners when destructive ops detect
 **Environment guard:** [env check or admin confirmation]
 **Preview / dry-run:** [what-if output, SQL diff, terraform plan — attach or reference]
 ```
+
+## Recommended Permission Patterns
+
+Claude Code `settings.json` permission wildcards for destructive operation control.
+
+### Allow (safe operations)
+
+```json
+"allow": [
+  "Edit(*)", "Write(*)", "NotebookEdit(*)",
+  "Bash", "WebFetch(domain:*)", "WebSearch",
+  "mcp__*"
+]
+```
+
+### Ask (destructive — require confirmation)
+
+```json
+"ask": [
+  "Bash(rm *)", "Bash(rmdir *)", "Bash(shred *)", "Bash(unlink *)",
+  "Bash(dd *)", "Bash(mkfs *)", "Bash(fdisk *)",
+  "Bash(chmod *)", "Bash(chown *)",
+  "Bash(git *)", "Bash(gh *)",
+  "Bash(npm *)", "Bash(pip *)", "Bash(pip3 *)",
+  "Bash(yarn *)", "Bash(pnpm *)",
+  "Bash(docker *)", "Bash(kubectl *)",
+  "Bash(curl *)", "Bash(wget *)",
+  "Bash(kill *)", "Bash(killall *)", "Bash(pkill *)"
+]
+```
+
+### Pattern syntax
+
+| Pattern | Matches |
+|---------|---------|
+| `Bash(rm *)` | Any Bash command starting with `rm` |
+| `Edit(*)` | Edit any file |
+| `Edit(/docs/**)` | Edit only files under `/docs/` |
+| `Bash(npm run *)` | Only `npm run` subcommands |
+| `mcp__memory__.*` | All tools from `memory` MCP server |
+| `WebFetch(domain:api.example.com)` | Fetch from specific domain only |
+
+Prefer wildcard syntax over `dangerously-skip-permissions`. Use `/permissions` to configure interactively.

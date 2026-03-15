@@ -9,9 +9,6 @@
 > **✨ ln-1000 Pipeline Orchestrator** — Autonomous multi-agent system that manages full development lifecycle. Orchestrates a team of specialized agents to execute complete development cycles: from task planning (ln-300) → validation (ln-310) → implementation (ln-400) → quality gate (ln-500) → user-confirmed merge to `develop`. One command, single Story per run.
 
 > [!IMPORTANT]
-> **✨ NEW: Optimization Suite v2** — Full-stack performance optimization: profile → research → **agent-validate** (Codex + Gemini) → strike-first execute with keep/discard. Inspired by [karpathy/autoresearch](https://github.com/karpathy/autoresearch). Diagnoses bottlenecks across modules, submodules, and external services — not just function-level benchmarking.
-
-> [!IMPORTANT]
 > **✨ Community Engagement (9XX)** — Automated GitHub community management: triage issues/PRs/discussions, compose announcements, launch RFC debates, respond to unanswered threads. Strategy-driven engagement with health metrics analysis.
 
 > [!TIP]
@@ -182,8 +179,10 @@ claude-code-skills/                      # MARKETPLACE
 |   |-- story-validator.py             # UserPromptSubmit: validates Story before execution
 |   |-- code-quality.py                # PostToolUse: DRY/KISS/YAGNI checks
 |
-|-- docs/SKILL_ARCHITECTURE_GUIDE.md   # Orchestrator-Worker Pattern (L0-L3)
-|-- docs/AGENT_TEAMS_PLATFORM_GUIDE.md # Agent Teams runtime patterns
+|-- docs/
+|   |-- architecture/                  # Skill patterns & Agent Teams runtime
+|   |-- best-practice/                 # Claude Code usage tips & component selection
+|   |-- standards/                     # Documentation & README standards
 |-- CLAUDE.md                          # Full documentation
 ```
 
@@ -521,14 +520,14 @@ Audit skills in 5 groups: documentation quality (structure, semantics, fact-chec
 <details>
 <summary><b>How is it different from custom prompts or slash commands?</b></summary>
 
-Custom prompts are ad-hoc and context-free. Claude Code Skills provides coordinated skills with an [Orchestrator-Worker architecture](docs/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
+Custom prompts are ad-hoc and context-free. Claude Code Skills provides coordinated skills with an [Orchestrator-Worker architecture](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
 
 </details>
 
 <details>
 <summary><b>What is the Orchestrator-Worker pattern?</b></summary>
 
-A 4-level hierarchy: L0 meta-orchestrator (`ln-1000-pipeline-orchestrator`) coordinates via Agent Teams (TeamCreate), L1 orchestrators (e.g., `ln-400-story-executor`) manage Story lifecycle, L2 coordinators (e.g., `ln-220-story-coordinator`) handle mid-level scope, and L3 workers (e.g., `ln-221-story-creator`) execute specific tasks. Each level has single responsibility and loads only the context it needs. See [SKILL_ARCHITECTURE_GUIDE.md](docs/SKILL_ARCHITECTURE_GUIDE.md).
+A 4-level hierarchy: L0 meta-orchestrator (`ln-1000-pipeline-orchestrator`) coordinates via Agent Teams (TeamCreate), L1 orchestrators (e.g., `ln-400-story-executor`) manage Story lifecycle, L2 coordinators (e.g., `ln-220-story-coordinator`) handle mid-level scope, and L3 workers (e.g., `ln-221-story-creator`) execute specific tasks. Each level has single responsibility and loads only the context it needs. See [SKILL_ARCHITECTURE_GUIDE.md](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md).
 
 </details>
 
@@ -560,8 +559,10 @@ Yes — create symlinks/junctions to the plugin directory, or use `ln-004-agent-
 | | |
 |---|---|
 | **Documentation** | [CLAUDE.md](CLAUDE.md) |
-| **Architecture** | [SKILL_ARCHITECTURE_GUIDE.md](docs/SKILL_ARCHITECTURE_GUIDE.md) |
-| **Agent Teams** | [AGENT_TEAMS_PLATFORM_GUIDE.md](docs/AGENT_TEAMS_PLATFORM_GUIDE.md) |
+| **Architecture** | [SKILL_ARCHITECTURE_GUIDE.md](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md) |
+| **Agent Teams** | [AGENT_TEAMS_PLATFORM_GUIDE.md](docs/architecture/AGENT_TEAMS_PLATFORM_GUIDE.md) |
+| **Component Selection** | [COMPONENT_SELECTION.md](docs/best-practice/COMPONENT_SELECTION.md) |
+| **Workflow Tips** | [WORKFLOW_TIPS.md](docs/best-practice/WORKFLOW_TIPS.md) |
 | **Discussions** | [GitHub Discussions](https://github.com/levnikolaevich/claude-code-skills/discussions) |
 | **Issues** | [GitHub Issues](https://github.com/levnikolaevich/claude-code-skills/issues) |
 | **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) |

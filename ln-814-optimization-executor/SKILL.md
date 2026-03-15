@@ -33,6 +33,11 @@ Executes optimization hypotheses from the researcher using keep/discard autorese
 
 ## Phase 0: Pre-flight Checks
 
+### Slug Resolution
+
+- If invoked via Agent with contextStore containing `slug` — use directly.
+- If invoked standalone — derive slug from context_file path or ask user.
+
 ### Step 1: Load Context
 
 Read `.optimization/{slug}/context.md` from project root. Contains problem statement, profiling results, research hypotheses, and target metric.

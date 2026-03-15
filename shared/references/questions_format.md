@@ -45,4 +45,4 @@ const question = section.match(qRegex)[1];
 
 ## Example
 
-[ln-111-root-docs-creator/references/questions_root.md](../ln-111-root-docs-creator/references/questions_root.md) uses this format for 4 root documents with 22 questions (split from original 48 across 5 L3 workers).
+Documentation creator skills use this format for structured question sets (e.g., 4 root documents with 22 questions split across specialized workers).
