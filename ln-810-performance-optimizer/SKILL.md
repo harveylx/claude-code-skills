@@ -28,7 +28,7 @@ Sequential diagnostic pipeline for performance optimization. Profiles the full r
 
 ## Workflow
 
-**Phases:** Pre-flight → Parse Input → Profile → Wrong Tool Gate → Research → Set Target → Execute → Report → Meta-Analysis
+**Phases:** Pre-flight → Parse Input → Profile → Wrong Tool Gate → Research → Set Target → Write Context → Execute → Report → Meta-Analysis
 
 ---
 
@@ -41,8 +41,25 @@ Sequential diagnostic pipeline for performance optimization. Profiles the full r
 | Git clean state | Yes | Block: "commit or stash changes first" |
 | Test infrastructure | Yes | Block: "tests required for safe optimization" |
 | Stack detection | Yes | Detect via ci_tool_detection.md |
+| State file | No | If `.optimization/state.json` exists → resume from last completed gate |
 
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` for test/build detection.
+
+### State Persistence
+
+Save `.optimization/state.json` after each gate completion. Enables resume on interruption.
+
+```json
+{
+  "target": "src/api/endpoint.py::handler",
+  "last_gate": "gate_1",
+  "profile_complete": true,
+  "research_complete": false,
+  "strike_complete": false
+}
+```
+
+On startup: if state file exists, ask user: "Resume from {last_gate}?" or "Start fresh?"
 
 ---
 
@@ -75,19 +92,27 @@ Skill(skill: "ln-811-performance-profiler")
 
 ---
 
-## Phase 3: Wrong Tool Gate
+## Phase 3: Wrong Tool Gate (4-Level Verdict)
 
-Evaluate profiler results. Exit early if optimization through code changes is not the right approach.
+Evaluate profiler results using structured verdict (adapted from ln-500 quality gate model).
 
-| Condition | Action |
-|-----------|--------|
-| `wrong_tool_indicators` contains `external_service_no_alternative` | EXIT: "Bottleneck is {service} latency ({X}ms). No code optimization path. Recommend: negotiate SLA / switch provider / add cache layer." |
-| `wrong_tool_indicators` contains `within_industry_norm` | EXIT: "Current performance ({X}ms) is within industry norm ({Y}ms) for {operation_type}. No optimization needed." |
-| `wrong_tool_indicators` contains `infrastructure_bound` | EXIT: "Bottleneck is infrastructure ({detail}). Recommend: scaling / caching / CDN." |
-| `wrong_tool_indicators` contains `already_optimized` | EXIT: "Code already uses optimal patterns. Consider infrastructure scaling." |
-| `wrong_tool_indicators` is empty | PROCEED to Phase 4 |
+| Verdict | Condition | Action |
+|---------|-----------|--------|
+| **PROCEED** | `wrong_tool_indicators` empty, measurements stable | Continue to Phase 4 (research) |
+| **CONCERNS** | Measurement variance > 20% OR baseline unstable OR partial metrics only | Continue with warning — note uncertainty in context file |
+| **BLOCK** | `external_service_no_alternative` OR `infrastructure_bound` OR `already_optimized` OR `within_industry_norm` | EXIT with diagnostic report. The profiling data itself is valuable |
+| **WAIVED** | User explicitly overrides BLOCK ("try anyway") | Continue despite indicators — log user override |
 
-**Exit format:** Provide diagnostic report with profiling results even when exiting — the analysis itself is valuable.
+### BLOCK Diagnostics
+
+| Indicator | Diagnostic Message |
+|-----------|-------------------|
+| `external_service_no_alternative` | "Bottleneck is {service} latency ({X}ms). Recommend: negotiate SLA / switch provider / add cache layer." |
+| `within_industry_norm` | "Current performance ({X}ms) is within industry norm ({Y}ms). No optimization needed." |
+| `infrastructure_bound` | "Bottleneck is infrastructure ({detail}). Recommend: scaling / caching / CDN." |
+| `already_optimized` | "Code already uses optimal patterns. Consider infrastructure scaling." |
+
+**Exit format:** Always provide diagnostic report with performance_map — the profiling data is valuable regardless of verdict.
 
 ---
 
@@ -115,30 +140,45 @@ Skill(skill: "ln-812-optimization-researcher")
 
 ---
 
-## Phase 6: Delegate to Executor (ln-813)
+## Phase 6: Write Optimization Context
 
-```
-Agent(description: "Optimize via ln-813",
-      prompt: "Execute optimization executor.
+Serialize diagnostic results from Phases 2-5 into structured context.
 
-Step 1: Invoke worker:
-  Skill(skill: \"ln-813-optimization-executor\")
+- **Normal mode:** write `.optimization/context.md` in project root — input for ln-813
+- **Plan mode:** write same structure to plan file (file writes restricted) → call ExitPlanMode
 
-CONTEXT:
-{full context: problem statement, profile results, research hypotheses, target metric}",
-      subagent_type: "general-purpose",
-      isolation: "worktree")
-```
+**Context file structure:**
 
-**Delegation pattern:** Agent tool with worktree isolation — executor modifies code.
-
-**MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use optimization rows.
-
-**Pass:** Problem statement + profile results + hypotheses + target metric.
+| Section | Source | Content |
+|---------|--------|---------|
+| Problem Statement | Phase 1 | target, observed_metric, target_metric |
+| Performance Map | ln-811 | Full performance_map (real measurements: baseline, per-step metrics, bottleneck classification) |
+| Suspicion Stack | ln-811 | Confirmed + dismissed suspicions with evidence |
+| Industry Benchmark | ln-812 | expected_range, source, recommended_target |
+| Hypotheses | ln-812 | Table: ID, description, bottleneck_addressed, expected_impact, complexity, risk, files_to_modify, conflicts_with |
+| Dependencies/Conflicts | ln-812 | H2 requires H1; H3 conflicts with H1 (used by ln-813 for contested vs uncontested triage) |
+| Local Codebase Findings | ln-812 | Batch APIs, cache infra, connection pools found in code |
+| Test Command | ln-811 | Command used for profiling (reused for post-optimization measurement) |
+| E2E Test | ln-811 | E2E safety test command + source (functional gate for executor) |
 
 ---
 
-## Phase 7: Collect Execution Results
+## Phase 7: Delegate to Executor (ln-813)
+
+**In Plan Mode:** SKIP this phase. Context file from Phase 6 IS the plan. Call ExitPlanMode.
+
+```
+Agent(description: "Optimize via ln-813",
+      prompt: "Run Skill(skill: 'ln-813-optimization-executor').
+             Context: .optimization/context.md",
+      subagent_type: "general-purpose")
+```
+
+**Delegation pattern:** Agent spawns subprocess → invokes ln-813 via Skill inside its context. ln-813 reads `.optimization/context.md` and creates its own worktree.
+
+---
+
+## Phase 8: Collect Execution Results
 
 **Receive from ln-813:**
 
@@ -149,13 +189,15 @@ CONTEXT:
 | final | Measurement after optimizations |
 | total_improvement_pct | Overall improvement |
 | target_met | Whether target metric was reached |
-| hypotheses_kept | List with details |
-| hypotheses_discarded | List with reasons |
+| strike_result | `clean` / `bisected` / `failed` |
+| hypotheses_applied | IDs applied in strike |
+| hypotheses_removed | IDs removed during bisect (with reasons) |
+| contested_results | Per-group: alternatives tested, winner, measurement |
 | files_modified | All changed files |
 
 ---
 
-## Phase 8: Final Report
+## Phase 9: Final Report
 
 | Section | Content |
 |---------|---------|
@@ -163,9 +205,10 @@ CONTEXT:
 | Diagnosis | Bottleneck type + detail from profiler |
 | Industry Benchmark | From researcher (if found) |
 | Target | User-provided or research-derived |
-| Result | Final metric + improvement % |
-| Optimizations Applied | Per-hypothesis: id, description, improvement % |
-| Optimizations Discarded | Per-hypothesis: id, reason |
+| Result | Final metric + improvement % + strike result (clean/bisected/failed) |
+| Optimizations Applied | Hypotheses applied in strike: id, description |
+| Optimizations Removed | Hypotheses removed during bisect: id, reason |
+| Contested Alternatives | Per-group: alternatives tested, winner, measurement delta |
 | Branch | Worker branch name for review/merge |
 | Recommendations | Further improvements if target not met |
 
@@ -178,7 +221,7 @@ Include gap analysis from ln-813:
 
 ---
 
-## Phase 9: Meta-Analysis
+## Phase 10: Meta-Analysis
 
 **MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
 
@@ -195,8 +238,8 @@ Skill type: `optimization-coordinator`.
 | 2 (Profile) | Cannot trace target | Report "cannot identify code path for {target}" |
 | 3 (Gate) | Wrong tool exit | Report diagnosis + recommendations, do NOT proceed |
 | 4 (Research) | No solutions found | Report bottleneck but "no known optimization pattern for {type}" |
-| 6 (Execute) | All hypotheses fail | Report profiling + research as diagnostic value |
-| 6 (Execute) | Worker timeout | Report partial results |
+| 7 (Execute) | All hypotheses fail | Report profiling + research as diagnostic value |
+| 7 (Execute) | Worker timeout | Report partial results |
 
 ### Fatal Errors
 
@@ -208,13 +251,42 @@ Skill type: `optimization-coordinator`.
 
 ---
 
+## Plan Mode Support: Phased Gate Pattern
+
+Alternates between plan mode (approval gates) and execution. Two gates total.
+
+```
+GATE 1 — Plan profiling
+  Plan Mode: Phase 0-1 (preflight, parse input)
+  → Present: what will be profiled, which test, which metrics
+  → ExitPlanMode (user approves profiling)
+
+EXECUTE 1 — Run profiling
+  Phase 2: Skill("ln-811") — runtime profiling (needs Bash)
+  Phase 3: Wrong Tool Gate (evaluate real measurements)
+  → If wrong tool → EXIT with diagnostic
+
+GATE 2 — Plan research & execution
+  EnterPlanMode: present performance_map to user
+  Phase 4: Skill("ln-812") — research (read-only, runs in plan mode)
+  Phase 5: Set target metric
+  Phase 6: Write context file
+  → Present: hypotheses, target, execution plan
+  → ExitPlanMode (user approves strike)
+
+EXECUTE 2 — Run optimization
+  Phase 7: Agent("ln-813") — strike execution
+  Phase 8-10: Collect, report, meta-analysis
+```
+
+---
+
 ## References
 
 - `../ln-811-performance-profiler/SKILL.md` (profiler worker)
 - `../ln-812-optimization-researcher/SKILL.md` (researcher worker)
 - `../ln-813-optimization-executor/SKILL.md` (executor worker)
 - `shared/references/ci_tool_detection.md` (tool detection)
-- `shared/references/git_worktree_fallback.md` (worktree isolation)
 - `shared/references/meta_analysis_protocol.md` (meta-analysis)
 
 ---
@@ -222,12 +294,13 @@ Skill type: `optimization-coordinator`.
 ## Definition of Done
 
 - [ ] Input parsed into structured problem statement
-- [ ] Full request path profiled by ln-811 (call graph, time map, bottleneck classification)
+- [ ] Full request path profiled by ln-811 (call graph, time map, suspicion stack)
 - [ ] Wrong tool gate evaluated — exit with diagnostic if optimization not feasible
-- [ ] Solutions researched by ln-812 (competitive benchmarks, hypotheses)
+- [ ] Solutions researched by ln-812 (benchmarks, hypotheses with conflicts_with)
 - [ ] Target metric established (user-provided or research-derived)
-- [ ] Hypotheses executed by ln-813 with keep/discard verification
-- [ ] Final report with before/after metrics, applied optimizations, recommendations
+- [ ] Context file written (.optimization/context.md)
+- [ ] Strike-first execution by ln-813 (applied/removed/contested)
+- [ ] Final report with before/after metrics, strike result, contested alternatives
 - [ ] Meta-analysis completed
 
 ---

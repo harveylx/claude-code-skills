@@ -12,7 +12,7 @@ Output to chat — visible to the user.
 | `review-coordinator` — with agents | Coverage, findings quality, blind spots, agent effectiveness |
 | `review-coordinator` — workers only | Coverage, findings quality, blind spots |
 | `execution-orchestrator` | Stage completion, failure points, quality score |
-| `optimization-coordinator` | Fixes applied/discarded, impact achieved |
+| `optimization-coordinator` | Hypotheses applied/removed, strike result, impact achieved |
 
 ## Universal Dimensions
 
@@ -44,6 +44,17 @@ Compare actual outcome against pre-execution expectations (Goal Articulation Gat
 - What surprised you — what wasn't anticipated in planning?
 - One sentence: what would you change knowing what you know now?
 
+### 6. Prediction Accuracy (where measurable)
+
+Compare what the skill predicted/planned with what actually happened. Not all types have quantitative predictions — use what's available.
+
+| Aspect | Question |
+|--------|----------|
+| Prediction vs Reality | What did the skill predict that can be verified against outcomes? |
+| Hit Rate | What fraction of predictions/recommendations were useful? |
+| Waste | What work was produced but never used (discarded findings, removed tasks, rejected hypotheses)? |
+| Blind Spots | What important things were NOT predicted but emerged during execution? |
+
 ## Output Format by Skill Type
 
 ### planning-coordinator
@@ -56,6 +67,13 @@ Compare actual outcome against pre-execution expectations (Goal Articulation Gat
 - Failure points: {list or "None"}
 - Improvement: {1-2 focus areas or "None"}
 - Assumptions: {what matched vs what surprised}
+### Prediction Accuracy
+| Metric | Value |
+|--------|-------|
+| Plan Stability | {tasks_unchanged}/{tasks_planned} |
+| Estimation Accuracy | {avg_actual_hours}/{avg_estimated_hours} |
+| Scope Creep | {tasks_added_during_execution} |
+| Unused Plans | {tasks_obsoleted} |
 ```
 
 ### review-coordinator — with agents
@@ -71,6 +89,13 @@ Compare actual outcome against pre-execution expectations (Goal Articulation Gat
 - Pipeline coverage gaps: see `shared/references/detection_efficacy_audit.md` §Pipeline Coverage Map
 - Improvement: {1-2 focus areas or "None"}
 - Assumptions: {what matched vs what surprised}
+### Prediction Accuracy
+| Metric | Value |
+|--------|-------|
+| Actionable Rate | {findings_applied}/{total_findings} |
+| False Positive Rate | {findings_dismissed}/{total_findings} |
+| Agent Agreement | {confirmed_by_both}/{total_unique} |
+| Missed Issues | {issues_found_later_not_by_reviewers} |
 ```
 
 ### review-coordinator — workers only
@@ -83,6 +108,12 @@ Compare actual outcome against pre-execution expectations (Goal Articulation Gat
 - Coverage gaps: {areas with 0 findings or "None"}
 - Improvement: {1-2 focus areas or "None"}
 - Assumptions: {what matched vs what surprised}
+### Prediction Accuracy
+| Metric | Value |
+|--------|-------|
+| Acceptance Rate | {accepted}/{total} per worker |
+| Cross-Worker Overlap | {duplicates}/{total_findings} |
+| Severity Accuracy | {high_confirmed}/{high_reported} |
 ```
 
 ### execution-orchestrator
@@ -98,18 +129,31 @@ Compare actual outcome against pre-execution expectations (Goal Articulation Gat
 {numbered list of focus areas or "None — ran clean."}
 ### Assumptions
 {what matched vs what surprised}
+### Prediction Accuracy
+| Metric | Value |
+|--------|-------|
+| First-Pass Success | {done_without_rework}/{tasks_total} |
+| Rework Rate | {tasks_reworked}/{tasks_total} |
+| Stage Prediction | {stages_first_try}/{total_stages} |
 ```
 
 ### optimization-coordinator
 
 ```
 ### Meta-Analysis: {Skill Name}
-| Worker | Applied | Discarded | Impact |
-|--------|---------|-----------|--------|
+| Worker | Applied | Removed | Impact |
+|--------|---------|---------|--------|
 | {name} | {N} | {M} | {description} |
 - Failure points: {list or "None"}
 - Improvement: {1-2 focus areas or "None"}
 - Assumptions: {what matched vs what surprised}
+### Prediction Accuracy
+| Metric | Value |
+|--------|-------|
+| Profiler Accuracy | {suspicions_applied}/{suspicions_confirmed} |
+| Research Hit Rate | {hypotheses_applied}/{hypotheses_total} |
+| Strike Efficiency | clean/bisected/failed |
+| Overall Gain | (baseline - final) / baseline |
 ```
 
 ## Issue Suggestion Triggers (patterns across 3+ runs)
@@ -121,6 +165,8 @@ Compare actual outcome against pre-execution expectations (Goal Articulation Gat
 | Failure points > 2 per run | Infra or config issue | Fix root cause |
 | Same improvement candidate repeated | Not actionable in current design | Create GitHub issue |
 | Improvement implemented but no trend change | Fix ineffective or measured wrong | Review metric validity |
+| Prediction accuracy < 50% consistently | Skill making wrong predictions | Review methodology, add validation step |
+| Waste > 50% (discarded/total) | Over-generation of findings/hypotheses | Tighten acceptance criteria, add pre-filter |
 
 If pattern is reproducible:
 > Consider creating issue: https://github.com/levnikolaevich/claude-code-skills/issues

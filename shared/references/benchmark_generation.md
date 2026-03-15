@@ -1,7 +1,6 @@
 # Benchmark Generation Guide
 
 <!-- SCOPE: Auto-generating benchmarks for target functions when no existing benchmark exists. -->
-<!-- DO NOT add here: optimization logic → ln-813-optimization-executor SKILL.md -->
 
 Templates for generating minimal benchmarks per stack when no existing benchmark is found.
 
@@ -145,8 +144,8 @@ public class {FunctionName}Benchmark
 
 | Situation | Action |
 |-----------|--------|
-| All hypotheses discarded | Delete generated benchmark file |
-| Any optimization kept | Keep benchmark as regression guard |
+| All hypotheses removed | Delete generated benchmark file |
+| Any optimization applied | Keep benchmark as regression guard |
 
 ---
 

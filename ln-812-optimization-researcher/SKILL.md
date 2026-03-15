@@ -19,7 +19,7 @@ Researches competitive benchmarks, industry standards, and solution approaches f
 
 | Aspect | Details |
 |--------|---------|
-| **Input** | Profile results from profiler (bottleneck classification, time map, optimization hints) |
+| **Input** | Performance map from profiler (real measurements: baseline metrics, per-step timing, bottleneck classification, optimization hints) |
 | **Output** | Industry benchmarks, solution candidates, prioritized hypotheses (H1..H7) |
 | **Pattern** | Research-first: competitors → industry → local codebase → solutions → hypotheses |
 
@@ -181,6 +181,12 @@ research_result:
   research_sources:
     - url, date, relevance
 ```
+
+---
+
+## Plan Mode
+
+Read-only worker — all phases use MCP research tools (Ref, Context7, WebSearch) and code analysis only. Executes normally in Plan Mode via Skill().
 
 ---
 

@@ -19,19 +19,27 @@ Executes optimization hypotheses from the researcher using keep/discard autorese
 
 | Aspect | Details |
 |--------|---------|
-| **Input** | Hypotheses (H1..H7) + profile results + problem statement |
+| **Input** | `.optimization/context.md` OR conversation context (standalone invocation) |
 | **Output** | Optimized code on isolated branch, per-hypothesis results, experiment log |
-| **Pattern** | Autoresearch: implement → test → measure → keep/discard (compound baselines) |
+| **Pattern** | Strike-first: apply all → test → measure. Bisect only on failure. A/B only for contested alternatives |
 
 ---
 
 ## Workflow
 
-**Phases:** Pre-flight → Baseline → Hypothesis Execution Loop → Report → Gap Analysis
+**Phases:** Pre-flight → Baseline → Strike-First Execution → Report → Gap Analysis
 
 ---
 
 ## Phase 0: Pre-flight Checks
+
+### Step 1: Load Context
+
+Read `.optimization/context.md` from project root. Contains problem statement, profiling results, research hypotheses, and target metric.
+
+If file not found: check conversation context for the same data (standalone invocation).
+
+### Step 2: Pre-flight Validation
 
 | Check | Required | Action if Missing |
 |-------|----------|-------------------|
@@ -39,122 +47,109 @@ Executes optimization hypotheses from the researcher using keep/discard autorese
 | Test infrastructure | Yes | Block (see ci_tool_detection.md) |
 | Git clean state | Yes | Block (need clean baseline for revert) |
 | Worktree isolation | Yes | Create per git_worktree_fallback.md |
-| E2E safety test | No (recommended) | WARN — full test suite as fallback gate |
+| E2E safety test | No (recommended) | Read from context; WARN if null — full test suite as fallback gate |
 
 **MANDATORY READ:** Load `shared/references/git_worktree_fallback.md` — use optimization rows.
 **MANDATORY READ:** Load `shared/references/ci_tool_detection.md` — use Test Frameworks + Benchmarks sections.
-**MANDATORY READ:** Load [benchmark_generation.md](references/benchmark_generation.md) for auto-generating benchmarks when none exist.
 
-### E2E Safety Test Discovery
+### E2E Safety Test
 
-Locate an existing e2e/integration test that exercises the optimization target's entry point. Do NOT generate new tests — only discover existing ones.
+Read `e2e_test_command` from context file (discovered by profiler during test discovery phase).
 
-**Discovery protocol** (stop at first match):
-
-| Priority | Method | How |
-|----------|--------|-----|
-| 1 | User-provided | User specifies e2e test command in problem statement |
-| 2 | Route-based search | Grep e2e/integration test files for `entry_point_info.route` |
-| 3 | Function-based search | Grep e2e/integration test files for `entry_point_info.function` |
-| 4 | Module-based search | Grep e2e/integration test files for import of entry point module |
-
-**Search locations** (per ci_tool_detection.md Test Frameworks):
-
-| Stack | Glob Patterns |
-|-------|--------------|
-| JS/TS | `tests/e2e/**/*.{js,ts}`, `**/*.e2e.{js,ts}`, `**/*.e2e-spec.{js,ts}` |
-| Python | `tests/e2e/**/*.py`, `tests/integration/**/*.py` |
-| Go | `**/*_test.go` (filter by entry point reference) |
-| .NET | `**/*.Tests/**/*.cs` (filter by entry point reference) |
-
-**Output:**
-
-| Field | Description |
-|-------|-------------|
-| e2e_test_command | Full command to run discovered test (e.g., `npx jest tests/e2e/alignment.test.ts`) |
-| e2e_test_source | Discovery method: user / route / function / module / none |
-
-**If not found:** Set `e2e_test_command = null`, log: `WARNING: No e2e test covers {entry_point}. Full test suite serves as functional gate.`
+| Source | Action |
+|--------|--------|
+| Context has `e2e_test_command` | Use as functional safety gate in Phase 2 |
+| Context has `e2e_test_command = null` | WARN: full test suite serves as fallback gate |
+| Standalone (no context) | User must provide test command; block if missing |
 
 ---
 
 ## Phase 1: Establish Baseline
 
-Unlike function-level benchmarks, measure the **actual user-facing metric** matching the observed metric type.
+Reuse baseline from performance map (already measured with real metrics).
 
-### Metric Type Detection
+### From Context File
 
-| Observed Metric Type | How to Measure |
-|---------------------|----------------|
-| API response time | `curl -w "%{time_total}" -o /dev/null -s {endpoint}` or test harness |
-| Function execution time | Generate benchmark per [benchmark_generation.md](references/benchmark_generation.md) |
-| Pipeline throughput | Time full pipeline execution |
-| Build time | `time {build_command}` |
-| Query count | Instrument or count DB calls in test |
+Read `performance_map.baseline` and `performance_map.test_command` from `.optimization/context.md`.
 
-### Baseline Protocol
+| Field | Source |
+|-------|--------|
+| `test_command` | Discovered/created test command |
+| `baseline` | Multi-metric snapshot: wall time, CPU, memory, I/O |
 
-| Parameter | Value |
-|-----------|-------|
-| Runs | 5 |
-| Metric | Median |
-| Warm-up | 1 discarded run |
-| Output | `baseline_median`, `baseline_p95` |
+### Verification Run
 
-If measurement is not automatable (e.g., external endpoint not available in dev), use test-based proxy:
-- Write/find integration test that exercises the same code path
-- Measure test execution time as proxy metric
-
-### E2E Baseline Verification
-
-If `e2e_test_command` is not null:
+Run `test_command` once to confirm baseline is still valid (code unchanged since profiling):
 
 | Step | Action |
 |------|--------|
-| 1 | Run `e2e_test_command` |
-| 2 | IF PASS → record `e2e_baseline = PASS` |
-| 3 | IF FAIL → BLOCK: "E2E test fails on unmodified code — cannot use as safety gate. Proceed without e2e gate." |
+| 1 | Run `test_command` |
+| 2 | IF result within 10% of `baseline.wall_time_ms` → baseline confirmed |
+| 3 | IF result diverges > 10% → re-measure (3 runs, median) as new baseline |
+| 4 | IF test FAILS → BLOCK: "test fails on unmodified code" |
 
 ---
 
-## Phase 2: Hypothesis Execution Loop
+## Phase 2: Strike-First Execution
 
 **MANDATORY READ:** Load [optimization_categories.md](references/optimization_categories.md) for pattern reference during implementation.
 
-### Per-Hypothesis Cycle
+Apply maximum changes at once. Only fall back to A/B testing where sources genuinely disagree on approach.
+
+### Step 1: Triage Hypotheses
+
+Split hypotheses from researcher into two groups:
+
+| Group | Criteria | Action |
+|-------|----------|--------|
+| **Uncontested** | Clear best approach, no conflicting alternatives | Apply directly in the strike |
+| **Contested** | Multiple approaches exist (e.g., source A says cache, source B says batch) OR `conflicts_with` another hypothesis | A/B test each alternative on top of full implementation |
+
+Most hypotheses should be uncontested — the researcher already ranked them by evidence.
+
+### Step 2: Strike (Apply All Uncontested)
 
 ```
-FOR each hypothesis (H1..H7, ordered by expected_impact DESC):
-  1. CHECK dependencies:
-     IF depends on a DISCARDED hypothesis → SKIP
-     IF conflicts with a KEPT hypothesis → SKIP
-  2. SCOPE: Identify all files to modify (may be multiple)
-  3. APPLY: Edit code
-  4. VERIFY: Run tests
-     IF tests FAIL (assertion) → DISCARD (revert all changes) → next
-     IF tests CRASH:
-       IF fixable (typo, missing import) → fix & re-run ONCE
-       IF fundamental → DISCARD + log "crash: {reason}"
-  4b. E2E GATE (if e2e_test_command not null):
-      Run e2e_test_command
-      IF FAIL → DISCARD (revert all changes) + log "e2e_regression: {details}" → next
-  5. MEASURE: Run baseline measurement (same method as Phase 1), 5 runs, median
-  6. COMPARE: improvement = (baseline - new) / baseline x 100
-     IF improvement >= threshold → KEEP:
-       git add {all_affected_files}
-       git commit -m "perf(H{N}): {description} (+{improvement}%)"
-       new baseline = new median
-     IF improvement < threshold → DISCARD (revert all changes)
-  7. LOG: Record result to experiment log
+1. APPLY all uncontested hypotheses at once (all file edits)
+2. VERIFY: Run full test suite
+   IF tests FAIL:
+     - IF fixable (typo, missing import) → fix & re-run ONCE
+     - IF fundamental → BISECT (see Step 4)
+3. E2E GATE (if e2e_test_command not null):
+   IF FAIL → BISECT
+4. MEASURE: 5 runs, median
+5. COMPARE: improvement vs baseline
+   IF improvement meets target → DONE. Commit all:
+     git add {all_files}
+     git commit -m "perf: apply optimizations H1,H2,H3,... (+{improvement}%)"
+   IF no improvement → BISECT
 ```
 
-### Improvement Thresholds
+### Step 3: Contested Alternatives (A/B on top of strike)
 
-| Bottleneck Type | Threshold | Rationale |
-|-----------------|-----------|-----------|
-| Architecture (batching, parallelism, caching) | 30% | Structural changes should yield large improvements |
-| I/O (connection pooling, async, streaming) | 20% | I/O improvements are measurable but variable |
-| CPU (algorithm, data structure, vectorization) | 10% | CPU gains tend to be smaller but reliable |
+For each contested pair/group, with ALL uncontested changes already applied:
+
+```
+FOR each contested hypothesis group:
+  1. Apply alternative A → test → measure (5 runs, median)
+  2. Revert alternative A, apply alternative B → test → measure
+  3. KEEP the winner. Commit.
+  4. Winner becomes part of the baseline for next contested group.
+```
+
+### Step 4: Bisect (only on strike failure)
+
+If strike fails tests or shows no improvement:
+
+```
+1. Revert all changes: git checkout -- . && git clean -fd
+2. Binary search: apply first half of hypotheses → test
+   - IF passes → problem in second half
+   - IF fails → problem in first half
+3. Narrow down to the breaking hypothesis
+4. Remove it from strike, re-apply remaining → test → measure
+5. Log removed hypothesis with reason
+```
 
 ### Scope Rules
 
@@ -164,26 +159,23 @@ FOR each hypothesis (H1..H7, ordered by expected_impact DESC):
 | Signature changes | Allowed if tests still pass |
 | New files | Allowed (cache wrapper, batch adapter, utility) |
 | New dependencies | Allowed if already in project ecosystem (e.g., using configured Redis) |
-| Time budget | 45 minutes total for all hypotheses |
+| Time budget | 45 minutes total |
 
 ### Revert Protocol
 
 | Scope | Command |
 |-------|---------|
-| Single file | `git checkout -- {file}` |
-| Multiple files | `git checkout -- {file1} {file2} ...` |
-| New files created | `git checkout -- . && git clean -fd` (safe in worktree) |
+| Full revert | `git checkout -- . && git clean -fd` (safe in worktree) |
+| Single hypothesis | `git checkout -- {files}` (only during bisect) |
 
 ### Safety Rules
 
 | Rule | Description |
 |------|-------------|
-| Compound baselines | Each KEEP becomes new baseline for next hypothesis |
-| Traceability | Each KEEP = separate git commit with hypothesis ID |
+| Traceability | Commit message lists all applied hypothesis IDs |
 | Isolation | All work in isolated worktree; never modify main worktree |
-| Simplicity criterion | Marginal gain (within 2x of threshold) + significant complexity increase → prefer DISCARD |
-| Dependency tracking | KEPT/DISCARDED hypotheses tracked; conflicting/dependent hypotheses auto-managed |
-| Crash triage | Runtime crash → fix once if trivial (typo, import), else DISCARD |
+| Bisect only on failure | Do NOT test hypotheses individually unless strike fails or alternatives genuinely conflict |
+| Crash triage | Runtime crash → fix once if trivial (typo, import), else bisect to find cause |
 
 ---
 
@@ -194,16 +186,33 @@ FOR each hypothesis (H1..H7, ordered by expected_impact DESC):
 | Field | Description |
 |-------|-------------|
 | baseline | Original measurement (metric + value) |
-| final | Final measurement after all kept optimizations |
+| final | Final measurement after optimizations |
 | total_improvement_pct | Overall percentage improvement |
 | target_met | Boolean — did we reach the target metric? |
-| hypotheses_tested | Count |
-| hypotheses_kept | Count with details (id, description, improvement%) |
-| hypotheses_discarded | Count with reasons |
-| hypotheses_skipped | Count (dependency/conflict skips) |
+| strike_result | `clean` (all applied) / `bisected` (some removed) / `failed` |
+| hypotheses_applied | List of hypothesis IDs applied in strike |
+| hypotheses_removed | List removed during bisect (with reasons) |
+| contested_results | Per-contested group: alternatives tested, winner, measurement |
 | branch | Worktree branch name |
-| files_modified | List of all modified files across kept hypotheses |
-| e2e_test | `{ command, source, baseline_passed, final_passed }` or null if unavailable |
+| files_modified | All changed files |
+| e2e_test | `{ command, source, baseline_passed, final_passed }` or null |
+
+### Results Comparison (mandatory)
+
+Show baseline vs final for EVERY metric from `performance_map.baseline`. Include both percentage and multiplier.
+
+```
+| Metric | Baseline | After Strike | Improvement |
+|--------|----------|-------------|-------------|
+| Wall time | 7280ms | 3800ms | 47.8% (1.9x) |
+| CPU time | 850ms | 720ms | 15.3% (1.2x) |
+| Memory peak | 256MB | 245MB | 4.3% |
+| HTTP round-trips | 13 | 2 | 84.6% (6.5x) |
+
+Target: 5000ms → Achieved: 3800ms ✓ TARGET MET
+```
+
+Present to user at end of execution. This is the primary deliverable — numbers the user sees first.
 
 ### Experiment Log
 
@@ -212,16 +221,15 @@ Write to `{project_root}/.optimization/ln-813-log.tsv`:
 | Column | Description |
 |--------|-------------|
 | timestamp | ISO 8601 |
-| hypothesis_id | H1..H7 |
-| description | What changed |
-| bottleneck_type | Classification from profiler |
-| baseline_ms | Baseline before this hypothesis |
-| result_ms | New measurement after change |
+| phase | `strike` / `bisect` / `contested` |
+| hypotheses | Comma-separated IDs applied in this round |
+| baseline_ms | Baseline before this round |
+| result_ms | Measurement after changes |
 | improvement_pct | Percentage change |
-| status | keep / discard / skip / crash |
-| commit | Git commit hash (if kept) |
-| files | Comma-separated list of modified files |
-| e2e_status | pass / fail / skipped (skipped when no e2e test available) |
+| status | `applied` / `removed` / `alternative_a` / `alternative_b` |
+| commit | Git commit hash |
+| files | Comma-separated modified files |
+| e2e_status | pass / fail / skipped |
 
 Append to existing file if present (enables tracking across multiple runs).
 
@@ -244,7 +252,8 @@ If target metric not reached after all hypotheses:
 
 | Error | Recovery |
 |-------|----------|
-| All hypotheses discarded | Report "no improvements achieved" — coordinator handles |
+| Strike fails all tests | Bisect to find breaking hypothesis, remove it, retry |
+| Strike shows no improvement | Bisect to identify ineffective hypotheses |
 | Measurement inconsistent (high variance) | Increase runs to 10, use median |
 | Worktree creation fails | Fall back to branch per git_worktree_fallback.md |
 | Time budget exceeded | Stop loop, report partial results with hypotheses remaining |
@@ -254,7 +263,6 @@ If target metric not reached after all hypotheses:
 
 ## References
 
-- [benchmark_generation.md](references/benchmark_generation.md) — benchmark templates per stack
 - [optimization_categories.md](references/optimization_categories.md) — optimization pattern checklist
 - `shared/references/ci_tool_detection.md` (test + benchmark detection)
 - `shared/references/git_worktree_fallback.md` (worktree isolation)
@@ -264,15 +272,14 @@ If target metric not reached after all hypotheses:
 ## Definition of Done
 
 - [ ] Baseline established using same metric type as observed problem
-- [ ] Each hypothesis executed: implement → test → measure → keep/discard
-- [ ] Compound baselines applied (each KEEP becomes new baseline)
-- [ ] Dependency/conflict tracking prevents invalid hypothesis combinations
-- [ ] Each kept optimization = separate git commit with hypothesis ID
-- [ ] Simplicity criterion applied (marginal gain + complexity = prefer discard)
-- [ ] Tests pass after all kept optimizations
-- [ ] E2E safety test passes after all kept optimizations (or documented as unavailable)
+- [ ] Hypotheses triaged: uncontested vs contested
+- [ ] Strike applied: all uncontested hypotheses implemented at once
+- [ ] Tests pass after strike
+- [ ] Contested alternatives A/B tested on top of full implementation
+- [ ] Bisect performed only if strike fails (not preemptively)
+- [ ] E2E safety test passes (or documented as unavailable)
 - [ ] Experiment log written to `.optimization/ln-813-log.tsv`
-- [ ] Report returned with baseline, final, improvement%, per-hypothesis results
+- [ ] Report returned with baseline, final, improvement%, strike result
 - [ ] All changes on isolated branch, pushed to remote
 - [ ] Gap analysis provided if target metric not met
 

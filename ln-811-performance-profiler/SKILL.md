@@ -1,6 +1,6 @@
 ---
 name: ln-811-performance-profiler
-description: "Full-stack request tracing, time map estimation, and bottleneck classification"
+description: "Runtime profiling with multi-metric measurement, instrumentation, and performance map generation"
 license: MIT
 ---
 
@@ -11,7 +11,7 @@ license: MIT
 **Type:** L3 Worker
 **Category:** 8XX Optimization
 
-Traces the full request path from entry point to response, estimates time spent at each step, classifies bottleneck types, and reports whether the problem is optimizable or requires a different approach.
+Runtime profiler that executes the optimization target, measures multiple metrics (CPU, memory, I/O, time), instruments code for per-function breakdown, and produces a standardized performance map from real data.
 
 ---
 
@@ -20,167 +20,278 @@ Traces the full request path from entry point to response, estimates time spent 
 | Aspect | Details |
 |--------|---------|
 | **Input** | Problem statement: target (file/endpoint/pipeline) + observed metric |
-| **Output** | Call graph, time map, bottleneck classification, optimization hints |
-| **Pattern** | Trace → Classify → Estimate → Report |
+| **Output** | Performance map (multi-metric, per-function), suspicion stack, bottleneck classification |
+| **Pattern** | Discover test → Baseline run → Static analysis → Deep profile → Performance map → Report |
 
 ---
 
 ## Workflow
 
-**Phases:** Trace Request Path → Classify Steps → Estimate Time Map → Bottleneck Report
+**Phases:** Test Discovery → Baseline Run → Static Analysis → Deep Profile → Performance Map → Report
 
 ---
 
-## Phase 1: Trace Request Path
+## Phase 0: Test Discovery/Creation
 
-Starting from the user-specified target, trace the full call chain using depth-first traversal.
+**MANDATORY READ:** Load `shared/references/ci_tool_detection.md` for test framework detection.
+**MANDATORY READ:** Load `shared/references/benchmark_generation.md` for auto-generating benchmarks when none exist.
 
-### Entry Point Resolution
+Find or create commands that exercise the optimization target. Two outputs: `test_command` (profiling/measurement) and `e2e_test_command` (functional safety gate).
 
-| Target Type | How to Find Entry Point |
-|-------------|------------------------|
-| API endpoint URL | Grep for route registration (`@app.route`, `router.get`, `[HttpGet]`), find handler function |
-| File path + function | Read file, locate function directly |
-| Pipeline name | Find pipeline entry (CLI command handler, queue consumer, cron job) |
+### Step 1: Discover test_command
 
-### Tracing Protocol
+| Priority | Method | Action |
+|----------|--------|--------|
+| 1 | User-provided | User specifies test command or API endpoint |
+| 2 | Discover existing E2E test | Grep test files for target entry point (stop at first match) |
+| 3 | Create test script | Generate per `shared/references/benchmark_generation.md` to `.optimization/profile_test.sh` |
 
-```
-FOR target entry point:
-  1. Read source code of entry point function
-  2. Follow function calls (depth-first, max depth 5)
-  3. Cross module boundaries (follow imports)
-  4. Cross git submodule boundaries (read submodule code)
-  5. For loops: note iteration count (from code context, variable names, or data shape)
-  6. External library calls: classify type but do NOT recurse into library internals
-  7. Record each step with location (file:line)
-```
+**E2E discovery protocol** (stop at first match):
 
-### What to Record per Step
+| Priority | Method | How |
+|----------|--------|-----|
+| 1 | Route-based search | Grep e2e/integration test files for entry point route |
+| 2 | Function-based search | Grep for entry point function name |
+| 3 | Module-based search | Grep for import of entry point module |
+
+**Test creation** (if no existing test found):
+
+| Target Type | Generated Script |
+|-------------|-----------------|
+| API endpoint | `curl -w "%{time_total}" -o /dev/null -s {endpoint}` |
+| Function | Stack-specific benchmark per `shared/references/benchmark_generation.md` |
+| Pipeline | Full pipeline invocation with test input |
+
+### Step 2: Discover e2e_test_command
+
+If `test_command` came from E2E discovery (Step 1 priority 2): `e2e_test_command = test_command`.
+
+Otherwise, run E2E discovery protocol again (same 3-priority table) to find a separate functional safety test.
+
+If not found: `e2e_test_command = null`, log: `WARNING: No e2e test covers {entry_point}. Full test suite serves as functional gate.`
+
+### Output
 
 | Field | Description |
 |-------|-------------|
-| step_id | Sequential number (1, 2, 3, 3.1 for nested) |
-| location | `file_path:line_number` |
-| function | Function/method name |
-| type | `function_call` / `loop` / `conditional` / `http_call` / `db_query` / `file_io` / `cache_op` / `queue_op` |
-| description | Brief description of what the step does |
-| loop_count | Number of iterations (if loop) |
-| data_dependency | Whether output feeds next step (for parallelism detection) |
-
-### Tracing Depth Limits
-
-| Boundary | Action |
-|----------|--------|
-| Max depth 5 | Stop recursion, note "analysis truncated at depth 5" |
-| External library | Classify type from method name/signature, do not recurse |
-| Compiled extension | Note "native code — classify by method name" |
-| Dynamic dispatch | Note "dynamic dispatch — classification may be imprecise" |
+| `test_command` | Command for profiling/measurement |
+| `e2e_test_command` | Command for functional safety gate (may equal test_command, or null) |
+| `e2e_test_source` | Discovery method: user / route / function / module / none |
 
 ---
 
-## Phase 2: Classify Each Step
+## Phase 1: Baseline Run (Multi-Metric)
+
+Run `test_command` with system-level profiling. Capture simultaneously:
+
+| Metric | How to Capture | When |
+|--------|---------------|------|
+| Wall time | `time` wrapper or test harness | Always |
+| CPU time (user+sys) | `/usr/bin/time -v` or language profiler | Always |
+| Memory peak (RSS) | `/usr/bin/time -v` (Max RSS) or `tracemalloc` / `process.memoryUsage()` | Always |
+| I/O bytes | `/usr/bin/time -v` or structured logs | If I/O suspected |
+| HTTP round-trips | Count from structured logs or application metrics | If network I/O in call graph |
+| GPU utilization | `nvidia-smi --query-gpu` | Only if CUDA/GPU detected in stack |
+
+### Baseline Protocol
+
+| Parameter | Value |
+|-----------|-------|
+| Runs | 3 |
+| Metric | Median |
+| Warm-up | 1 discarded run |
+| Output | `baseline` — multi-metric snapshot |
+
+---
+
+## Phase 2: Static Analysis → Instrumentation Points
 
 **MANDATORY READ:** Load [bottleneck_classification.md](references/bottleneck_classification.md)
 
-For each step in the call graph, apply classification from the taxonomy.
+Trace call chain from code + build suspicion stack. **Purpose:** guide WHERE to instrument in Phase 3.
 
-### Classification Table
+### Step 1: Trace Call Chain
 
-| Type | Code Indicators |
-|------|----------------|
-| CPU | Loops without I/O, sorting, regex, crypto, serialization, parsing |
-| I/O-DB | ORM queries, raw SQL, `cursor.execute()`, `session.query()` |
-| I/O-Network | `requests.*`, `httpx.*`, `fetch()`, `axios.*`, gRPC stubs, `HttpClient.*` |
-| I/O-File | `open()`, `fs.*`, `File.*`, file streams |
-| Architecture | Loop containing I/O (N+1), sequential I/O without data dependency, missing cache/batch |
-| External | Third-party API calls (non-internal domain) |
-| Cache | `redis.get/set`, `cache.get`, `@cached`, `lru_cache` |
+Starting from entry point, trace depth-first (max depth 5). At each step, READ the full function body.
 
-### Architecture Pattern Detection
+### Step 2: Classify & Suspicion Scan
 
-Check for structural patterns beyond individual step classification:
+For each step, classify by type (CPU, I/O-DB, I/O-Network, I/O-File, Architecture, External, Cache) and scan for performance concerns.
 
-| Pattern | Detection Rule |
-|---------|---------------|
-| N+1 I/O | Loop body contains any I/O step (DB, HTTP, File) |
-| Sequential-when-parallel | Multiple I/O steps with no data dependency between them |
-| Missing batch | Client class has batch/bulk method, but caller uses single-item method in loop |
-| Missing cache | Same function called with same args from multiple code paths |
-| Redundant fetch | Same entity loaded by ID multiple times across call chain |
+Suspicion checklist (**minimum, not limitation**):
 
----
+| Category | What to Look For |
+|----------|-----------------|
+| Connection management | Client created per-request? Missing pooling? Missing reuse? |
+| Data flow | Data read multiple times? Over-fetching? Unnecessary transforms? |
+| Async patterns | Sync I/O in async context? Sequential awaits without data dependency? |
+| Resource lifecycle | Unclosed connections? Temp files? Memory accumulation in loop? |
+| Configuration | Hardcoded timeouts? Default pool sizes? Missing batch size config? |
+| Redundant work | Same validation at multiple layers? Same data loaded twice? |
+| Architecture | N+1 in loop? Batch API unused? Cache infra unused? Sequential-when-parallel? |
+| *(open)* | Anything else spotted — checklist does not limit findings |
 
-## Phase 3: Estimate Time Map
+### Step 3: Verify & Map to Instrumentation Points
 
-**MANDATORY READ:** Load [latency_estimation.md](references/latency_estimation.md)
+```
+FOR each suspicion:
+  1. VERIFY: follow code to confirm or dismiss
+  2. VERDICT: CONFIRMED → map to instrumentation point | DISMISSED → log reason
+  3. For each CONFIRMED suspicion, identify:
+     - function to wrap with timing
+     - I/O call to count
+     - memory allocation to track
+```
 
-### Estimation Priority
+### Profiler Selection (per stack)
 
-| Priority | Method | Accuracy |
-|----------|--------|----------|
-| 1 | Existing logs/traces/APM data in project | HIGH |
-| 2 | Existing benchmarks | HIGH |
-| 3 | Code structure analysis + heuristics from latency_estimation.md | MEDIUM |
+| Stack | Non-invasive profiler | Invasive (if non-invasive insufficient) |
+|-------|----------------------|----------------------------------------|
+| Python | `py-spy`, `cProfile` | `time.perf_counter()` decorators |
+| Node.js | `clinic`, `--prof` | `console.time()` wrappers |
+| Go | `pprof` (built-in) | Usually not needed |
+| .NET | `dotnet-trace` | `Stopwatch` wrappers |
+| Rust | `cargo flamegraph` | `std::time::Instant` |
 
-### Time Map Construction
-
-For each step:
-1. Look up estimated latency from `latency_estimation.md` based on type
-2. Apply loop multiplier: `total = single_operation x iteration_count`
-3. Calculate time share: `share = step_time / total_time x 100`
-4. Flag as bottleneck if `share > 20%` or `step_time > 100ms`
-
-### Output Format
-
-| Field | Type | Description |
-|-------|------|-------------|
-| step_id | string | Step identifier |
-| location | string | file:line |
-| type | string | Classification type |
-| estimated_ms | number | Estimated time in milliseconds |
-| time_share_pct | number | Percentage of total estimated time |
-| is_bottleneck | boolean | True if significant time consumer |
-| confidence | string | HIGH / MEDIUM / LOW |
-| note | string | Additional context (e.g., "batch API available") |
+**Stack detection:** per `shared/references/ci_tool_detection.md`.
 
 ---
 
-## Phase 4: Bottleneck Report
+## Phase 3: Deep Profile
+
+### Profiler Hierarchy (escalate as needed)
+
+| Level | Tool Examples | What It Shows | When to Use |
+|-------|--------------|---------------|-------------|
+| 1 | `py-spy`, `cProfile`, `pprof`, `dotnet-trace` | Function-level hotspots | Always — first pass |
+| 2 | `line_profiler`, per-line timing | Line-level timing in hotspot function | Hotspot function found but cause unclear |
+| 3 | `tracemalloc`, `memory_profiler` | Per-line memory allocation | Memory metrics abnormal in baseline |
+
+### Step 1: Non-Invasive Profiling (preferred)
+
+Run `test_command` with Level 1 profiler to get per-function breakdown without code changes.
+
+### Step 2: Escalation Decision
+
+After Level 1 profiler run, evaluate result against suspicion stack from Phase 2:
+
+| Profiler Result | Action |
+|-----------------|--------|
+| Hotspot function identified, time breakdown confirms suspicions | DONE — proceed to Phase 4 |
+| Hotspot identified but internal cause unclear (CPU vs I/O inside one function) | Escalate to Level 2 (line-level timing) |
+| Memory baseline abnormal (peak or delta) | Escalate to Level 3 (memory profiler) |
+| Multiple suspicions unresolved — profiler granularity insufficient | Go to Step 3 (targeted instrumentation) |
+| Profiler unavailable or overhead > 20% of wall time | Go to Step 3 (targeted instrumentation) |
+
+### Step 3: Targeted Instrumentation (proactive)
+
+Add timing/logging along the call stack at instrumentation points identified in Phase 2 Step 3:
+
+```
+1. FOR each CONFIRMED suspicion without measured data:
+     Add timing wrapper around target function/I/O call
+     Add counter for I/O round-trips if network/DB suspected
+2. Re-run test_command (3 runs, median)
+3. Collect per-function measurements from logs
+4. REMOVE all instrumentation: git checkout -- {modified_files}
+```
+
+| Instrumentation Type | When | Example |
+|---------------------|------|---------|
+| Timing wrapper | Always for unresolved suspicions | `time.perf_counter()` around function call |
+| I/O call counter | Network or DB bottleneck suspected | Count HTTP requests, DB queries in loop |
+| Memory snapshot | Memory accumulation suspected | `tracemalloc.get_traced_memory()` before/after |
+
+**Rule:** all instrumentation is temporary. Code returns to original state after measurement.
+
+---
+
+## Phase 4: Build Performance Map
+
+Standardized format — feeds into `.optimization/context.md` for downstream consumption.
+
+```yaml
+performance_map:
+  test_command: "uv run pytest tests/e2e/test_example.py -s"
+  baseline:
+    wall_time_ms: 7280
+    cpu_time_ms: 850
+    memory_peak_mb: 256
+    memory_delta_mb: 45
+    io_read_bytes: 1200000
+    io_write_bytes: 500000
+    http_round_trips: 13
+  steps:
+    - id: "1"
+      function: "process_job"
+      location: "app/services/job_processor.py:45"
+      wall_time_ms: 7200
+      time_share_pct: 99
+      type: "function_call"
+      children:
+        - id: "1.1"
+          function: "translate_binary"
+          wall_time_ms: 7100
+          type: "function_call"
+          children:
+            - id: "1.1.1"
+              function: "tikal_extract"
+              wall_time_ms: 2800
+              type: "http_call"
+              http_round_trips: 1
+            - id: "1.1.2"
+              function: "mt_translate"
+              wall_time_ms: 3500
+              type: "http_call"
+              http_round_trips: 13
+  bottleneck_classification: "I/O-Network"
+  bottleneck_detail: "13 sequential HTTP calls to MT service (3500ms)"
+  top_bottlenecks:
+    - step: "1.1.2", type: "I/O-Network", share: 48%
+    - step: "1.1.1", type: "I/O-Network", share: 38%
+```
+
+---
+
+## Phase 5: Report
 
 ### Report Structure
 
 ```
 profile_result:
-  entry_point_info:                    # Entry point metadata from Phase 1
+  entry_point_info:
     type: <string>                     # "api_endpoint" | "function" | "pipeline"
-    location: <string>                 # file:line of entry point
-    route: <string|null>               # Route path if API endpoint (e.g., "/api/v1/align")
+    location: <string>                 # file:line
+    route: <string|null>               # API route (if endpoint)
     function: <string>                 # Entry point function name
-  call_graph: [...]                    # Full trace from Phase 1
-  time_map: [...]                      # Per-step estimates from Phase 3
-  total_estimated_ms: <number>         # Sum of all steps
+  performance_map: <object>            # Full map from Phase 4
   bottleneck_classification: <string>  # Primary bottleneck type
   bottleneck_detail: <string>          # Human-readable description
-  top_bottlenecks:                     # Top 3 by time share
+  top_bottlenecks:
     - step, type, share, description
-  optimization_hints:                  # Observations from tracing
-    - "Batch API exists: Client.batch_method()"
-    - "Cache infrastructure available: Redis configured"
-    - "No data dependency between steps 3 and 4 — parallelizable"
-  wrong_tool_indicators: []            # Empty = proceed, non-empty = coordinator should exit
+  optimization_hints:                  # CONFIRMED suspicions only (Phase 2)
+    - hint with evidence
+  suspicion_stack:                     # Full audit trail (confirmed + dismissed)
+    - category: <string>
+      location: <string>
+      description: <string>
+      verdict: <string>               # "confirmed" | "dismissed"
+      evidence: <string>
+      verification_note: <string>
+  e2e_test:
+    command: <string|null>             # E2E safety test command (from Phase 0)
+    source: <string>                   # user / route / function / module / none
+  wrong_tool_indicators: []            # Empty = proceed, non-empty = exit
 ```
 
 ### Wrong Tool Indicators
 
-Populated when optimization through code changes is not feasible:
-
 | Indicator | Condition |
 |-----------|-----------|
-| `external_service_no_alternative` | 90%+ time in external service, no batch/cache/parallel path |
-| `within_industry_norm` | Total time within expected range for operation type |
-| `infrastructure_bound` | Bottleneck is hardware (disk IOPS, network bandwidth, memory) |
-| `already_optimized` | Code already uses best patterns (batch, cache, parallel) |
+| `external_service_no_alternative` | 90%+ measured time in external service, no batch/cache/parallel path |
+| `within_industry_norm` | Measured time within expected range for operation type |
+| `infrastructure_bound` | Bottleneck is hardware (measured via system metrics) |
+| `already_optimized` | Code already uses best patterns (confirmed by suspicion scan) |
 
 ---
 
@@ -189,34 +300,40 @@ Populated when optimization through code changes is not feasible:
 | Error | Recovery |
 |-------|----------|
 | Cannot resolve entry point | Block: "file/function not found at {path}" |
-| Call chain too deep (> 5 levels) | Stop at depth 5, note truncation in report |
-| Cannot classify step type | Default to "Unknown", include raw code snippet |
-| No I/O detected (pure CPU) | Classify as CPU, note "function-level optimization appropriate" |
-| Submodule not checked out | Warn: "submodule {name} not available, trace incomplete" |
+| Test command fails on unmodified code | Block: "test fails before profiling — fix test first" |
+| Profiler not available for stack | Fall back to invasive instrumentation (Phase 3 Step 2) |
+| Instrumentation breaks tests | Revert immediately: `git checkout -- .` |
+| Call chain too deep (> 5 levels) | Stop at depth 5, note truncation |
+| Cannot classify step type | Default to "Unknown", use measured time |
+| No I/O detected (pure CPU) | Classify as CPU, focus on algorithm profiling |
 
 ---
 
 ## References
 
 - [bottleneck_classification.md](references/bottleneck_classification.md) — classification taxonomy
-- [latency_estimation.md](references/latency_estimation.md) — latency heuristics
-- `shared/references/ci_tool_detection.md` — tool/infra detection
+- [latency_estimation.md](references/latency_estimation.md) — latency heuristics (fallback for static-only mode)
+- `shared/references/ci_tool_detection.md` — stack/tool detection
+- `shared/references/benchmark_generation.md` — benchmark templates per stack
 
 ---
 
 ## Definition of Done
 
-- [ ] Entry point resolved from target specification
-- [ ] Full call graph traced (depth ≤ 5, cross-module, cross-submodule)
-- [ ] Each step classified by bottleneck type
-- [ ] Time map estimated with confidence levels
-- [ ] Top 3 bottlenecks identified with time share percentages
-- [ ] Architecture patterns detected (N+1, missing batch, missing cache, sequential-when-parallel)
-- [ ] Wrong tool indicators populated if optimization not feasible
-- [ ] Optimization hints provided from tracing observations
+- [ ] Test command discovered or created for optimization target
+- [ ] E2E safety test discovered (or documented as unavailable)
+- [ ] Baseline measured: wall time, CPU, memory (3 runs, median)
+- [ ] Call graph traced and function bodies read
+- [ ] Suspicion stack built: each suspicion verified and mapped to instrumentation point
+- [ ] Deep profile completed (non-invasive preferred, invasive if needed)
+- [ ] All instrumentation removed (code returned to original state)
+- [ ] Performance map built in standardized format (real measurements)
+- [ ] Top 3 bottlenecks identified from measured data
+- [ ] Wrong tool indicators evaluated from real metrics
+- [ ] optimization_hints contain only CONFIRMED suspicions with measurement evidence
 - [ ] Report returned to coordinator
 
 ---
 
-**Version:** 2.0.0
-**Last Updated:** 2026-03-14
+**Version:** 3.0.0
+**Last Updated:** 2026-03-15
