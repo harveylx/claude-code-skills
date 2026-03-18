@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-03-18
+
+- **Agent process tree kill** — agent_runner kills entire process tree (not just immediate child) on both timeout and normal completion; `--verify-dead` CLI flag for safety net checks
+- **Python advanced tools mandatory** — import-linter, deptry, vulture, pip-audit promoted from optional to required in linter configurator; new config templates added
+- **Multi-stack verification matrix** — quality setup coordinator now has tool matrix across TypeScript/Python/.NET for all verification checks
+
 ## 2026-03-16
 
 - **Codex Windows performance** — agent_runner auto-detects Windows and prepends prompt hint directing Codex to prefer built-in file read over PowerShell shell commands (5-15s overhead per call)

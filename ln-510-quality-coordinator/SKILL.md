@@ -272,6 +272,7 @@ issues:
 - [ ] ln-511 invoked (ALWAYS — full or `--skip-mcp-ref` in fast-track), code quality score returned
 - [ ] ln-512 invoked (or skipped if --fast-track), tech debt cleanup results returned
 - [ ] Agent review executed inline (or skipped if --fast-track), results merged in Phase 9
+- [ ] Agent process trees verified dead after results collection (Phase 9)
 - [ ] Criteria Validation completed (3 checks)
 - [ ] Linters executed
 - [ ] ln-513 invoked, regression results returned

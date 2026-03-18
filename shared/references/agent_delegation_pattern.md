@@ -119,7 +119,7 @@ External agents run in non-interactive mode (`exec` / `-p`) with tool access for
 
 ## Agent Timeout Policy
 
-**Hard timeout (15 min default).** `agent_runner.py` kills the agent process after `hard_timeout_seconds` (configurable per agent in registry, override via `--timeout` CLI flag). Agents are prompted to finish within 10 minutes; 15 min provides 50% headroom for long analyses. The runner writes process-level `heartbeat.json` every 30s and streams stdout to a log file for real-time visibility.
+**Hard timeout (15 min default).** `agent_runner.py` kills the agent process after `hard_timeout_seconds` (configurable per agent in registry, override via `--timeout` CLI flag). Agents are prompted to finish within 10 minutes; 15 min provides 50% headroom for long analyses. The runner writes process-level `heartbeat.json` every 30s and streams stdout to a log file for real-time visibility. On both timeout and normal completion, the runner kills the entire process tree (not just the immediate child) to prevent orphaned Codex/Gemini sub-processes. On Unix this uses `os.killpg()` (process group via `os.setsid`); on Windows — `taskkill /T /F /PID`.
 
 | Condition | Action |
 |-----------|--------|
@@ -353,6 +353,7 @@ Standard steps before launching agents (performed inside agent review workers):
 | Hard-depend on agent availability | Always have Opus fallback |
 | Run health check separately from agent launch | Health check is first step of inline agent review |
 | Kill agent tasks with TaskStop | Runner handles hard timeout internally; TaskStop is forbidden |
+| Assume `proc.kill()` kills child processes | Runner uses process tree kill (`taskkill /T` on Windows, `os.killpg` on Unix) |
 | Skip agent review phase | Agent review is MANDATORY in validator (after discovery) and quality coordinator (after cleanup) |
 | Start each review verification from scratch | Load review history for dedup + calibration |
 | Re-summarize agent findings in review log | Reference agent result files (self-documented reports) |

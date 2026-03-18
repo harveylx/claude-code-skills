@@ -183,6 +183,7 @@ Mark each `[x]` when verified. ALL must be checked. If ANY unchecked → go back
 - [ ] Prompt file saved to `.agent-review/` OR passed inline in Plan Mode (Phase 2)
 - [ ] Agent results read and parsed OR SKIPPED (Phase 5)
 - [ ] Critical Verification + Debate executed OR SKIPPED (Phase 5)
+- [ ] Agent process trees verified dead OR SKIPPED (Phase 5)
 - [ ] Review summary saved to `review_history.md` OR SKIPPED (Phase 5)
 
 **mode=story additional:**
@@ -203,6 +204,7 @@ Mark each `[x]` when verified. ALL must be checked. If ANY unchecked → go back
 - [ ] Tools config loaded, task_provider extracted (Phase 0)
 - [ ] Metadata loaded (Phase 1)
 - [ ] Agent health check executed, agents launched or SKIPPED (Phase 2)
+- [ ] Agent process trees verified dead after results collection (Phase 5)
 - [ ] Research/Audit completed per mode (Phase 3)
 - [ ] Auto-fix executed per mode (Phase 4, mode=story only)
 - [ ] Agent results merged, Critical Verification + Debate executed (Phase 5)

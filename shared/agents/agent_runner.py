@@ -26,6 +26,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -273,6 +274,44 @@ def _write_heartbeat(heartbeat_path, data):
         pass
 
 
+def _kill_process_tree(pid):
+    """Kill process and all its children. Best-effort, no exceptions raised."""
+    if IS_WINDOWS:
+        # taskkill /T = tree kill (all descendants), /F = force
+        try:
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                capture_output=True, timeout=10,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            pass
+    else:
+        # On Unix with setsid preexec, kill entire process group
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+
+
+def _is_process_alive(pid):
+    """Check if a process with given PID is still running."""
+    if IS_WINDOWS:
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", "PID eq %d" % pid, "/NH"],
+                capture_output=True, text=True, timeout=5,
+            )
+            return str(pid) in result.stdout
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return False
+    else:
+        try:
+            os.kill(pid, 0)  # signal 0 = existence check
+            return True
+        except (ProcessLookupError, PermissionError, OSError):
+            return False
+
+
 def _heartbeat_loop(proc, heartbeat_path, log_path, start_time,
                     interval, stop_event):
     """Write heartbeat.json every `interval` seconds until process exits."""
@@ -325,8 +364,7 @@ def _execute_agent(agent_cfg, cmd, stdin_prompt, hard_timeout,
             log_fh = open(log_path, "w", encoding="utf-8",
                           errors="replace")
 
-        proc = subprocess.Popen(
-            cmd,
+        popen_kwargs = dict(
             stdin=subprocess.PIPE if stdin_prompt else subprocess.DEVNULL,
             stdout=log_fh if log_fh else subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -335,6 +373,12 @@ def _execute_agent(agent_cfg, cmd, stdin_prompt, hard_timeout,
             encoding="utf-8",
             errors="replace",
         )
+        # Unix: new session so os.killpg() can kill the entire tree.
+        # Windows: not needed -- taskkill /T works without process groups.
+        if not IS_WINDOWS:
+            popen_kwargs["preexec_fn"] = os.setsid
+
+        proc = subprocess.Popen(cmd, **popen_kwargs)
 
         # Initial heartbeat
         _write_heartbeat(heartbeat_path, {
@@ -372,7 +416,7 @@ def _execute_agent(agent_cfg, cmd, stdin_prompt, hard_timeout,
                     raw_stdout = ""
         except subprocess.TimeoutExpired:
             timed_out = True
-            proc.kill()
+            _kill_process_tree(proc.pid)
             try:
                 if log_fh:
                     proc.wait(timeout=10)
@@ -381,12 +425,19 @@ def _execute_agent(agent_cfg, cmd, stdin_prompt, hard_timeout,
                     if raw_stdout is None:
                         raw_stdout = ""
             except subprocess.TimeoutExpired:
-                pass
+                # Last resort if tree kill missed the main process
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
 
         # Stop heartbeat
         stop_event.set()
         hb_thread.join(timeout=5)
         duration = round(time.time() - start, 2)
+
+        # Clean up any orphaned child processes after normal exit
+        _kill_process_tree(proc.pid)
 
     except FileNotFoundError:
         stop_event.set()
@@ -615,6 +666,9 @@ def main():
                         help="Check all agents availability")
     parser.add_argument("--list-agents", action="store_true",
                         help="List registered agents")
+    parser.add_argument("--verify-dead", type=int, metavar="PID",
+                        help="Check if PID (and children) are dead. "
+                             "Exit 0=dead, 1=alive")
     args = parser.parse_args()
 
     registry = load_registry()
@@ -624,6 +678,19 @@ def main():
             groups = ", ".join(cfg.get("skill_groups", [])) or "none"
             print("%s: %s (groups: %s)" % (name, cfg["name"], groups))
         sys.exit(0)
+
+    if args.verify_dead:
+        alive = _is_process_alive(args.verify_dead)
+        if alive:
+            sys.stderr.write(
+                "PID %d still alive, attempting tree kill\n"
+                % args.verify_dead)
+            _kill_process_tree(args.verify_dead)
+            time.sleep(1)
+            alive = _is_process_alive(args.verify_dead)
+        status = "ALIVE" if alive else "DEAD"
+        print(json.dumps({"pid": args.verify_dead, "status": status}))
+        sys.exit(1 if alive else 0)
 
     if args.health_check:
         all_ok = True

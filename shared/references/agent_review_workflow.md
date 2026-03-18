@@ -148,7 +148,7 @@ ELSE:
   → full debate for all areas (story/context/plan_review modes)
 ```
 
-Rationale: In code mode, only security/correctness findings affect the quality verdict (ln-510 normalization matrix). Debate rounds cost agent session resume + parsing — reserve for verdict-affecting findings. High-confidence high-impact findings in other areas still get debated as exception.
+Rationale: In code mode, only security/correctness findings affect the quality verdict (quality coordinator normalization matrix). Debate rounds cost agent session resume + parsing -- reserve for verdict-affecting findings. High-confidence high-impact findings in other areas still get debated as exception.
 
 d) **Challenge + Follow-Up (with session resume):** Follow Debate Protocol (Challenge Round 1 -> Follow-Up Round if not resolved). Resume agent's review session for full context continuity:
    - Read `session_id` from `.agent-review/{agent}/{identifier}_session.json`
@@ -164,6 +164,21 @@ e) **Persist:** all challenge and follow-up prompts/results in `.agent-review/{a
 - Collect ACCEPTED suggestions only (after verification + debate)
 - Deduplicate by `(area, issue)` -- keep higher confidence
 - **Return** JSON with suggestions + agent_stats + debate_log. **NO cleanup/deletion.**
+
+## Step: Verify Agent Cleanup
+
+After collecting results from all agents, verify no orphaned processes remain:
+
+1. Read `.agent-review/{agent}/heartbeat.json` for each completed agent — extract `pid`
+2. Run verification per agent:
+```
+python shared/agents/agent_runner.py --verify-dead {pid}
+```
+3. Expected: exit code 0, `{"pid": N, "status": "DEAD"}`
+4. If exit code 1 (process alive after cleanup attempt): log warning `"WARNING: Agent PID {pid} still alive after cleanup"` — continue, do not block workflow
+5. Display: `"Agent cleanup: codex-review PID {pid} DEAD, gemini-review PID {pid} DEAD"`
+
+**Note:** `agent_runner.py` kills process trees automatically on both completion and timeout. This step is a safety net — it should always find processes dead. If it doesn't, `--verify-dead` will attempt a second tree kill.
 
 ## Step: Save Review Summary
 
@@ -212,6 +227,7 @@ Entry format (per `shared/references/agent_review_memory.md`):
 - `.agent-review/.gitignore` exists (created only if `.agent-review/` was new)
 - Session files persisted in `.agent-review/{agent}/{identifier}_session.json` for debate resume
 - Review summary appended to `.agent-review/review_history.md`
+- Agent process trees verified dead after results collection (Step: Verify Agent Cleanup)
 
 ## Step: Meta-Analysis
 

@@ -155,14 +155,14 @@ commit_sha: "abc1234" | null
 
 ## Definition of Done
 
-- Audit report loaded and parsed
-- Findings filtered to auto-fixable categories
-- Each finding verified with confidence >=90%
-- Fixes applied bottom-up per file
-- Build integrity verified (lint + type check) or skipped with warning
-- Single commit created with structured message (or all reverted on build failure)
-- Audit report updated with "Last Automated Cleanup" section
-- Output YAML returned to caller
+- [ ] Audit report loaded and parsed
+- [ ] Findings filtered to auto-fixable categories
+- [ ] Each finding verified with confidence >=90%
+- [ ] Fixes applied bottom-up per file
+- [ ] Build integrity verified (lint + type check) or skipped with warning
+- [ ] Single commit created with structured message (or all reverted on build failure)
+- [ ] Audit report updated with "Last Automated Cleanup" section
+- [ ] Output YAML returned to caller
 
 ## Reference Files
 
