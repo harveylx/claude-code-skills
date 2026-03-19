@@ -42,13 +42,14 @@ node shared/agents/agent_runner.mjs --health-check
 ```
 
 - If 0 agents available (after disabled exclusions) -> return `{verdict: "SKIPPED", reason: "no agents available"}`
-- Display: `"Agent Health: codex-review OK, gemini-review OK"` (or `"disabled"` / `"unavailable"` per agent)
+- Display health-check output as-is (agent names come from registry dynamically)
 
 ## Step: Ensure .agent-review/
 
 - If `.agent-review/` exists -> reuse as-is, do NOT recreate `.gitignore`
 - If `.agent-review/` does NOT exist -> create it + `.agent-review/.gitignore` (content: `*` + `!.gitignore`)
 - Create `.agent-review/{agent}/` subdirs only if they don't exist
+- **Clean `.agent-review/context/`** before materializing new files: delete all files in `context/` (not the directory itself). Prevents agents from reading stale files from previous runs
 - Do NOT add `.agent-review/` to project root `.gitignore`
 
 ## Step: Build Prompt
@@ -76,9 +77,7 @@ Assemble the review prompt from base template + mode-specific content:
    - Architecture: from CLAUDE.md or docs/architecture.md (1 line)
    - Principles: from CLAUDE.md (1 line, key constraints)
    - Tech stack: from docs/tech_stack.md or CLAUDE.md (1 line)
-8. Assemble `{focus_hint}` — optional, per-agent differentiation:
-   - For codex-review: `"Primary focus: correctness bugs, schema feasibility, data integrity, error handling, code-level edge cases"`
-   - For gemini-review: `"Primary focus: performance at scale, security/isolation, resource management, architectural patterns"`
+8. Assemble `{focus_hint}` — read from `focus_hint` field in `agent_registry.json` for each agent.
    - If only 1 agent available: leave empty (agent covers everything)
    Note: `{focus_hint}` is a HINT, not a restriction. Agent may report findings outside focus.
 9. Save assembled prompt to `.agent-review/{agent}/{identifier}_{review_type}_prompt.md`
@@ -89,24 +88,18 @@ Assemble the review prompt from base template + mode-specific content:
 a) Launch BOTH agents as background Bash tasks (`run_in_background=true`):
 
 ```
-node shared/agents/agent_runner.mjs --agent codex-review \
-  --prompt-file .agent-review/codex/{identifier}_{review_type}_prompt.md \
-  --output-file .agent-review/codex/{identifier}_{review_type}_result.md \
-  --cwd {cwd}
-
-node shared/agents/agent_runner.mjs --agent gemini-review \
-  --prompt-file .agent-review/gemini/{identifier}_{review_type}_prompt.md \
-  --output-file .agent-review/gemini/{identifier}_{review_type}_result.md \
+node shared/agents/agent_runner.mjs --agent {agent_name} \
+  --prompt-file .agent-review/{agent}/{identifier}_{review_type}_prompt.md \
+  --output-file .agent-review/{agent}/{identifier}_{review_type}_result.md \
   --cwd {cwd}
 ```
+Repeat for each available agent (names from `--list-agents`).
 
-**Heartbeat monitoring (while agents work):**
-- After launching agents, output to chat: `"Agents launched: codex-review + gemini-review. Continuing with foreground work..."`
-- `agent_runner.mjs` writes process-level heartbeat to `.agent-review/{agent}/heartbeat.json` every 30s (independent of agent behavior). Fields: `pid`, `alive`, `elapsed_seconds`, `log_size_bytes`, `updated_at`.
-- Agent stdout streams to `.agent-review/{agent}/{identifier}_{review_type}.log` in real time. Read log tail for detailed progress.
-- Between foreground phases, Read `heartbeat.json` for each agent and output status: `"[Heartbeat] codex-review: alive, 63s, log 489KB"`
-- Agents may also write their own `heartbeat.json` with `step`/`detail` fields (per prompt instruction) — this supplements the runner's process-level heartbeat.
-- When foreground work completes and agents haven't returned yet, Read heartbeat files and output: `"Foreground complete. Waiting for agents... codex-review: {alive/elapsed}, gemini-review: {alive/elapsed}"`
+**Log-based monitoring (while agents work):**
+- After launching, output: `"Agents launched: {names}. Continuing with foreground work..."`
+- Agent stdout streams to `.agent-review/{agent}/{identifier}_{review_type}.log` in real time
+- Every ~2 min between foreground phases: `stat` log file (growing = alive), `tail -10` for current stage
+- If agent seems stuck (log unchanged for >3 min): read last 20 lines of log to diagnose
 - Do NOT poll in a sleep-loop — the framework sends background task notifications automatically
 - When each agent completes, immediately output: `"Agent {name} completed ({duration}s). {N} suggestions found."` Then proceed to parse results.
 
@@ -169,14 +162,14 @@ e) **Persist:** all challenge and follow-up prompts/results in `.agent-review/{a
 
 After collecting results from all agents, verify no orphaned processes remain:
 
-1. Read `.agent-review/{agent}/heartbeat.json` for each completed agent — extract `pid`
+1. Extract `pid` from runner's JSON output (returned when agent completes)
 2. Run verification per agent:
 ```
 node shared/agents/agent_runner.mjs --verify-dead {pid}
 ```
 3. Expected: exit code 0, `{"pid": N, "status": "DEAD"}`
 4. If exit code 1 (process alive after cleanup attempt): log warning `"WARNING: Agent PID {pid} still alive after cleanup"` — continue, do not block workflow
-5. Display: `"Agent cleanup: codex-review PID {pid} DEAD, gemini-review PID {pid} DEAD"`
+5. Display: `"Agent cleanup: {agent} PID {pid} DEAD"` for each agent
 
 **Note:** `agent_runner.mjs` kills process trees automatically on both completion and timeout. This step is a safety net — it should always find processes dead. If it doesn't, `--verify-dead` will attempt a second tree kill.
 
@@ -212,7 +205,7 @@ Entry format (per `shared/references/agent_review_memory.md`):
 - Log all attempts for user visibility (agent name, duration, suggestion count)
 - **Persist** per-agent prompts in `.agent-review/{agent}/`, results and challenge artifacts in `.agent-review/{agent}/` -- do NOT delete
 - Ensure `.agent-review/.gitignore` exists before creating files (only create if `.agent-review/` is new)
-- **HARD TIMEOUT (30 min default):** `agent_runner.mjs` kills the agent process after `hard_timeout_seconds` (configurable in registry, override via `--timeout`). Agents are prompted to finish within 25 minutes; 30 min provides headroom. On timeout, runner writes `timeout` heartbeat and returns `success: false`. **TaskStop is still FORBIDDEN** for agent background tasks — the runner handles timeout internally.
+- **HARD TIMEOUT (30 min default):** `agent_runner.mjs` kills the agent process after `hard_timeout_seconds` (configurable in registry, override via `--timeout`). On timeout, returns `success: false`. Monitor liveness via log file stat (growing = alive). **TaskStop is still FORBIDDEN** — the runner handles timeout internally.
 - **CRITICAL VERIFICATION:** Do NOT trust agent suggestions blindly. Claude MUST independently verify each suggestion and debate if disagreeing. Accept only after verification.
 
 ## Definition of Done
@@ -245,10 +238,10 @@ suggestions:
     suggestion: "Specific fix"
     confidence: 95
     impact_percent: 15
-    source: "codex-review"
+    source: "{agent}"
     resolution: "accepted | accepted_after_debate | accepted_after_followup | rejected"
 agent_stats:
-  - name: "codex-review"
+  - name: "{agent}"
     duration_s: 12.4
     suggestion_count: 3
     accepted_count: 2
@@ -257,7 +250,7 @@ agent_stats:
     status: "success | failed | timeout"
 debate_log:
   - suggestion_summary: "..."
-    agent: "codex-review"
+    agent: "{agent}"
     rounds:
       - round: 1
         claude_position: "..."

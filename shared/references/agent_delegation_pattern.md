@@ -15,8 +15,8 @@ Standard pattern for skills delegating work to external CLI AI agents (Codex, Ge
 | Decomposition | Gemini | gemini-3-flash-preview | Opus | Scope analysis, epic planning |
 | Task management | Codex | gpt-5.3-codex | Opus | Task decomposition, plan review |
 | Execution | Opus (native) | claude-opus-4-6 | -- | Direct code writing |
-| Validation | codex-review + gemini-review | parallel | Self-review (if both fail) | Story/Tasks + context validation |
-| Quality review | codex-review + gemini-review | parallel | Self-review (if both fail) | Code review |
+| Validation | codex + gemini | parallel | Self-review (if both fail) | Story/Tasks + context validation |
+| Quality review | codex + gemini | parallel | Self-review (if both fail) | Code review |
 
 ## Inline Agent Review
 
@@ -45,10 +45,10 @@ All modes assembled with `review_base.md` + mode file per "Step: Build Prompt" i
 node shared/agents/agent_runner.mjs --agent codex --prompt "Review this plan..."
 
 # Large context via file with output (recommended)
-node shared/agents/agent_runner.mjs --agent codex-review --prompt-file prompt.md --output-file result.md --cwd /project
+node shared/agents/agent_runner.mjs --agent codex --prompt-file prompt.md --output-file result.md --cwd /project
 
 # Resume session for debate (challenge/follow-up rounds only)
-node shared/agents/agent_runner.mjs --agent codex-review --resume-session abc-123 --prompt-file challenge.md --output-file result.md --cwd /project
+node shared/agents/agent_runner.mjs --agent codex --resume-session abc-123 --prompt-file challenge.md --output-file result.md --cwd /project
 
 # Health check
 node shared/agents/agent_runner.mjs --health-check
@@ -61,7 +61,7 @@ node shared/agents/agent_runner.mjs --health-check
 ```json
 {
   "success": true,
-  "agent": "codex-review",
+  "agent": "codex",
   "response": "...",
   "duration_seconds": 12.4,
   "error": null,
@@ -77,7 +77,7 @@ node shared/agents/agent_runner.mjs --health-check
 
 ```markdown
 <!-- AGENT_REVIEW_RESULT -->
-<!-- agent: codex-review -->
+<!-- agent: codex -->
 <!-- timestamp: 2026-02-11T14:30:00Z -->
 <!-- duration_seconds: 12.40 -->
 <!-- exit_code: 0 -->
@@ -119,12 +119,14 @@ External agents run in non-interactive mode (`exec` / `-p`) with tool access for
 
 ## Agent Timeout Policy
 
-**Hard timeout (30 min default).** `agent_runner.mjs` kills the agent process after `hard_timeout_seconds` (configurable per agent in registry, override via `--timeout` CLI flag). Agents are prompted to finish within 25 minutes; 30 min provides headroom for long analyses. The runner writes process-level `heartbeat.json` every 30s and streams stdout to a log file for real-time visibility. On both timeout and normal completion, the runner kills the entire process tree (not just the immediate child) to prevent orphaned Codex/Gemini sub-processes. On Windows — `taskkill /T /F /PID`; on Unix — process group kill.
+**Hard timeout (30 min default).** `agent_runner.mjs` kills the agent process after `hard_timeout_seconds` (configurable per agent in registry, override via `--timeout` CLI flag). Agents are prompted to finish within 25 minutes; 30 min provides headroom. Agent stdout streams to a `.log` file for real-time visibility. On both timeout and normal completion, the runner kills the entire process tree. On Windows — `taskkill /T /F /PID`; on Unix — process group kill.
+
+**Monitoring:** Check agent liveness via log file stat (mtime growing = alive). Read `tail -10` of log for current stage. No separate heartbeat file — the log IS the heartbeat.
 
 | Condition | Action |
 |-----------|--------|
-| Agent running, log file growing | Healthy — heartbeat shows `alive: true` with increasing `log_size_bytes` |
-| Agent running, log static for 5+ min | Possibly stuck — heartbeat still shows `alive: true`. Runner will kill at hard timeout. |
+| Log file growing (mtime changes) | Healthy — agent actively working |
+| Log static for 3+ min | Possibly stuck — read last 20 lines to diagnose |
 | Agent exceeds hard timeout | Runner kills process, returns `success: false, error: "Hard timeout"` |
 | Agent exited with error (non-zero) | Mark as FAILED, use other agent's results |
 | Agent process crashed/disappeared | Mark as FAILED |

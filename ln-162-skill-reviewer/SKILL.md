@@ -13,6 +13,8 @@ license: MIT
 
 Universal skill reviewer with two auto-detected modes. Invocable standalone or by ln-160 coordinator.
 
+> **Plan Mode behavior:** ln-162 is a review/analysis skill — Phases 1-4 and 6-7 ARE the research. Execute them fully in Plan Mode (read files, run checks, analyze dimensions, read diffs). Write the Phase 6 report + Phase 5 fix list into the plan file. After plan approval, apply Phase 5 edits.
+
 ---
 
 ## Mode Detection

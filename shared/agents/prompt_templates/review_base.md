@@ -13,11 +13,7 @@
 {project_context}
 
 ## Progress Reporting
-Before each major step, update a heartbeat file (`heartbeat.json` in the same directory as your `-o` output file):
-`{"step": "analyzing", "detail": "Checking security patterns in src/auth/"}`
-Steps: starting -> reading_files -> analyzing -> writing_report -> done
-This file is in `.agent-review/` (git-ignored) — writing it does NOT violate the read-only constraint.
-Note: The runner also writes process-level heartbeat (`pid`, `alive`, `elapsed_seconds`, `log_size_bytes`) independently every 30s. Your heartbeat updates add step-level detail on top of the runner's liveness signal.
+Your stdout streams to a log file in real time. The caller monitors your progress by reading the log tail. No explicit heartbeat needed — just work through the task and your output serves as the progress signal.
 
 {mode_body}
 

@@ -103,12 +103,16 @@ Skills use MCP servers for research, documentation lookup, and task tracking. Al
 
 | Server | Purpose | API Key | Used by |
 |--------|---------|---------|---------|
+| **[sharpline-mcp](mcp/sharpline-mcp/)** | Hash-verified file editing + AST outline | Bundled | ln-310, ln-401, ln-403, ln-510+ |
 | **[Context7](https://github.com/upstash/context7)** | Library docs, APIs, migration guides | Optional ([dashboard](https://context7.com/dashboard)) | ln-001, ln-002, ln-310, ln-511, ln-640+ |
 | **[Ref](https://docs.ref.tools/install)** | Standards, RFCs, best practices | Required ([ref.tools/keys](https://ref.tools/keys)) | ln-001, ln-002, ln-310, ln-511, ln-640+ |
 | **[Linear](https://linear.app/docs/mcp)** | Issue tracking (Agile workflow) | OAuth via browser | ln-300+, ln-400+, ln-500+ |
 
 **CLI setup:**
 ```bash
+# sharpline — hash-verified file editing (bundled, recommended)
+claude mcp add sharpline -- npx -y sharpline-mcp
+
 # Context7 — library documentation
 claude mcp add context7 -- npx -y @upstash/context7-mcp
 
@@ -127,6 +131,10 @@ Add to `~/.claude/settings.json`:
 ```json
 {
   "mcpServers": {
+    "sharpline": {
+      "command": "npx",
+      "args": ["-y", "sharpline-mcp"]
+    },
     "context7": {
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp"]

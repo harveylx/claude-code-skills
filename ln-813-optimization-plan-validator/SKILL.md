@@ -89,13 +89,13 @@ Launch BOTH agents as background Bash tasks:
 
 ```bash
 node shared/agents/agent_runner.mjs \
-  --agent codex-review \
+  --agent codex \
   --prompt-file .agent-review/codex/{id}_optimization_review_prompt.md \
   --output-file .agent-review/codex/{id}_optimization_review.md \
   --cwd {project_root}
 
 node shared/agents/agent_runner.mjs \
-  --agent gemini-review \
+  --agent gemini \
   --prompt-file .agent-review/gemini/{id}_optimization_review_prompt.md \
   --output-file .agent-review/gemini/{id}_optimization_review.md \
   --cwd {project_root}

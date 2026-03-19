@@ -1,42 +1,58 @@
 # Tool Preferences for Code Editing
 
-Hash-verified editing for code files via bundled `hashline.mjs`.
+Hash-verified file operations via `sharpline-mcp` MCP or `hashline.mjs` CLI.
 
-## hashline.mjs (bundled)
+## sharpline-mcp (MCP — preferred)
 
-**Detection:** Check if `shared/tools/hashline.mjs` exists relative to skills repo root.
+MCP server at `mcp/sharpline-mcp/`. 6 tools with FNV-1a hash verification:
 
-**Usage via Bash tool:**
+| Tool | Purpose | When to use |
+|------|---------|-------------|
+| `outline` | AST structural overview (10 lines vs 500) | Before reading large files |
+| `read_file` | Hash-annotated read with range checksums | Examining file contents |
+| `edit_file` | Hash-verified edits with diff output | Modifying code files |
+| `write_file` | Create new files | New files only |
+| `grep_search` | ripgrep with hash-annotated results | Finding code patterns |
+| `verify` | Check if held checksums still valid | Before editing after a pause |
+
+**Hash format:** `{tag}.{lineNum}\t{content}` where tag = 2-char FNV-1a.
+**Checksums:** `checksum: start-end:8hex` after each read range.
+
+## hashline.mjs (CLI fallback)
+
+CLI at `shared/tools/hashline.mjs`. Same core logic, invoked via Bash:
 
 ```bash
-# Read with hash anchors
 node shared/tools/hashline.mjs read <file> [--offset N] [--limit N]
-# Output: LINE:HASH|content (e.g., "42:b1c2|const x = 5;")
-
-# Edit with hash verification (rejects if file changed since read)
-node shared/tools/hashline.mjs edit <file> --edits-file <json-path>
-# Edits JSON: [{"anchor": "42:b1c2", "text": "const x = 10;"}]
-
-# Search with hash refs + context
-node shared/tools/hashline.mjs grep <pattern> [path] [--glob "*.ts"] [-B 2] [-A 2]
+node shared/tools/hashline.mjs edit <file> --edits '<JSON>'
+node shared/tools/hashline.mjs grep <pattern> [path] [--glob "*.ts"]
 ```
-
-**Workflow:** read -> note anchors -> edit by anchor -> hash mismatch = retry read.
-
-**Features:** fuzzy matching (+-5 lines), batch edits, range replace, insert-after, grep context.
 
 ## Detection Sequence
 
-At start of code-editing task (first match wins):
-1. **hashline.mjs** -- check `shared/tools/hashline.mjs` exists. If yes: use via Bash
-2. **Standard tools** -- fallback. Use built-in Read/Edit/Write/Grep. Always works.
+1. **sharpline-mcp MCP** — `read_file`/`outline` in tool list → use MCP
+2. **hashline.mjs CLI** — `shared/tools/hashline.mjs` exists → use via Bash
+3. **Standard tools** — fallback. Built-in Read/Edit/Write/Grep
 
 ## When to Use
 
-- **USE for CODE files** (.ts, .js, .py, .go, .rs, .java, etc.) -- precision matters
-- **DO NOT use for:** JSON configs, small YAML, markdown, .md files -- standard tools are fine
-- **Fallback:** If hashline.mjs not found, use standard tools. No error.
+- **USE for CODE files** (.ts, .js, .py, .go, .rs, .java, etc.)
+- **DO NOT use for:** small JSON configs, YAML, markdown
+- **Workflow:** outline → read (specific ranges) → edit by anchor → verify
+
+## Setup
+
+```bash
+cd mcp/sharpline-mcp && npm install
+```
+
+Agent config (ln-004 syncs automatically):
+```toml
+[mcp_servers.file-edit]
+command = "node"
+args = ["{skills_root}/mcp/sharpline-mcp/server.mjs"]
+```
 
 ---
-**Version:** 3.0.0
+**Version:** 4.0.0
 **Last Updated:** 2026-03-19

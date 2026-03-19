@@ -6,7 +6,6 @@
  * and returns structured JSON to stdout for Claude Code consumption.
  *
  * Streams agent stdout to a log file for real-time visibility.
- * Writes process-level heartbeat.json every 30s (independent of agent).
  *
  * Supports session resume for multi-turn debate (challenge/follow-up rounds).
  *
@@ -55,20 +54,16 @@ function buildEnv(agentCfg) {
 
 
 const WINDOWS_PERFORMANCE_HINT =
-    "\n## Platform Note (Windows)\n" +
-    "You are running on Windows where shell commands use PowerShell " +
-    "(5-15 seconds per invocation).\n" +
-    "- **PREFER your built-in file read tool** over shell commands " +
-    "(`cat`, `type`, `Get-Content`) for reading files. " +
-    "Your built-in file read is instant.\n" +
-    "- **BATCH shell operations**: combine related checks into one command " +
-    "(e.g., `git log --oneline -10 && git diff --stat` instead of " +
-    "separate calls).\n" +
-    "- **AVOID grep/rg via shell** -- PowerShell escaping differs from bash " +
-    "and often causes regex errors. Use your built-in file read to examine " +
-    "specific files directly.\n" +
-    "- **Shell budget**: each shell call costs 5-15 seconds. " +
-    "Prioritize wisely.\n\n";
+    "\n## Platform Note (Windows) — MANDATORY\n" +
+    "Shell commands use PowerShell (5-15 seconds EACH). You MUST minimize shell usage.\n" +
+    "- **USE MCP tools for file operations**: `read_file`, `edit_file`, `grep_search`, `outline` " +
+    "are instant. NEVER use shell for reading files (`cat`, `type`, `Get-Content`) " +
+    "or searching (`grep`, `rg`, `findstr`).\n" +
+    "- **`outline` first**: before reading large files, use `outline` to see structure (10 lines vs 500).\n" +
+    "- **USE your built-in file read/write tools** — they are instant, shell is not.\n" +
+    "- **BATCH unavoidable shell ops**: combine into ONE command " +
+    "(e.g., `git log --oneline -10 && git diff --stat`).\n" +
+    "- **Shell budget**: MAX 3-5 shell calls for the entire task.\n\n";
 
 
 function preparePrompt(prompt) {
@@ -97,14 +92,13 @@ function whichSync(cmd) {
         const pathDirs = (process.env.PATH || "").split(path.delimiter);
         const pathExts = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";");
         for (const dir of pathDirs) {
-            // Try exact name first
-            const full = path.join(dir, cmd);
-            if (fs.existsSync(full)) return full;
-            // Try with each extension
+            // PATHEXT extensions first — bare name may be a POSIX shell shim
             for (const ext of pathExts) {
                 const fullExt = path.join(dir, cmd + ext);
                 if (fs.existsSync(fullExt)) return fullExt;
             }
+            const full = path.join(dir, cmd);
+            if (fs.existsSync(full)) return full;
         }
         return null;
     }
@@ -336,7 +330,7 @@ function writeResultFile(outputFile, agentName, response, duration, exitCode,
 
 
 // ---------------------------------------------------------------------------
-// Streaming execution with heartbeat
+// Streaming execution
 // ---------------------------------------------------------------------------
 
 function getLogPath(outputFile) {
@@ -346,19 +340,6 @@ function getLogPath(outputFile) {
     }
     const parsed = path.parse(outputFile);
     return path.join(parsed.dir, parsed.name + ".log");
-}
-
-
-function writeHeartbeat(heartbeatPath, data) {
-    if (!heartbeatPath) return;
-    const tmpPath = heartbeatPath + ".tmp";
-    try {
-        fs.mkdirSync(path.dirname(heartbeatPath), { recursive: true });
-        fs.writeFileSync(tmpPath, JSON.stringify(data), "utf-8");
-        fs.renameSync(tmpPath, heartbeatPath);
-    } catch {
-        // best-effort
-    }
 }
 
 
@@ -410,35 +391,25 @@ function utcTimestamp() {
 
 
 /**
- * Run agent subprocess with streaming stdout and process heartbeat.
+ * Run agent subprocess with streaming stdout to log file.
  *
  * Returns a Promise that resolves to the result object.
+ * Monitor agent progress via log file: stat for liveness, tail for stage.
  */
 function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
-                      heartbeatInterval, subprocessCwd, env,
+                      subprocessCwd, env,
                       outputFile, logPath, agentName) {
     return new Promise((resolve) => {
-        let heartbeatPath = null;
-        if (logPath) {
-            heartbeatPath = path.join(
-                path.dirname(path.resolve(logPath)), "heartbeat.json");
-        }
-
         const startTime = Date.now();
         let logFh = null;
         let timedOut = false;
         let rawStdout = "";
         let childExited = false;
         let childExitCode = null;
-        let heartbeatTimer = null;
         let hardTimeoutTimer = null;
 
         // Cleanup helper
         function cleanup() {
-            if (heartbeatTimer) {
-                clearInterval(heartbeatTimer);
-                heartbeatTimer = null;
-            }
             if (hardTimeoutTimer) {
                 clearTimeout(hardTimeoutTimer);
                 hardTimeoutTimer = null;
@@ -505,15 +476,6 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
             });
         });
 
-        // Initial heartbeat
-        writeHeartbeat(heartbeatPath, {
-            pid: child.pid,
-            alive: true,
-            elapsed_seconds: 0,
-            log_size_bytes: 0,
-            updated_at: utcTimestamp(),
-        });
-
         // Send prompt via stdin
         if (stdinPrompt && child.stdin) {
             try {
@@ -545,26 +507,6 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
                 });
             }
         }
-
-        // Heartbeat interval
-        heartbeatTimer = setInterval(() => {
-            const elapsed = Math.round((Date.now() - startTime) / 100) / 10;
-            let logSize = 0;
-            if (logPath) {
-                try {
-                    logSize = fs.statSync(logPath).size;
-                } catch {
-                    // ignore
-                }
-            }
-            writeHeartbeat(heartbeatPath, {
-                pid: child.pid,
-                alive: !childExited,
-                elapsed_seconds: elapsed,
-                log_size_bytes: logSize,
-                updated_at: utcTimestamp(),
-            });
-        }, heartbeatInterval * 1000);
 
         // Hard timeout
         hardTimeoutTimer = setTimeout(() => {
@@ -615,19 +557,6 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
             if (logFh && !rawStdout) {
                 rawStdout = logContent;
             }
-
-            // Final heartbeat
-            const finalStatus = timedOut ? "timeout" : (code === 0 ? "done" : "error");
-            const logSize = logContent ? Buffer.byteLength(logContent, "utf-8") : 0;
-            writeHeartbeat(heartbeatPath, {
-                pid: child.pid,
-                alive: false,
-                elapsed_seconds: duration,
-                log_size_bytes: logSize,
-                status: finalStatus,
-                exit_code: code,
-                updated_at: utcTimestamp(),
-            });
 
             if (timedOut) {
                 resolve({
@@ -740,7 +669,6 @@ async function runAgent(agentName, prompt, cwd, timeout, registry,
         hardTimeout = cfgTimeout;
     }
 
-    const heartbeatInterval = agentCfg.heartbeat_interval_seconds || 30;
     const logPath = logFile || getLogPath(outputFile);
     const env = buildEnv(agentCfg);
 
@@ -766,7 +694,7 @@ async function runAgent(agentName, prompt, cwd, timeout, registry,
 
         let result = await executeAgent(
             agentCfg, cmd, stdinPrompt, hardTimeout,
-            heartbeatInterval, subprocessCwd, env,
+            subprocessCwd, env,
             outputFile, logPath, agentName
         );
 
@@ -814,7 +742,7 @@ async function runAgent(agentName, prompt, cwd, timeout, registry,
 
     const result = await executeAgent(
         agentCfg, cmd, prompt, hardTimeout,
-        heartbeatInterval, subprocessCwd, env,
+        subprocessCwd, env,
         outputFile, logPath, agentName
     );
     result.session_resumed = false;
