@@ -19,7 +19,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: cd mcp/sharpline-mcp && npm ci
+        run: cd mcp/sharpline-mcp && npm install
 
       - name: Publish to npm
         run: cd mcp/sharpline-mcp && npm publish --provenance --access public
