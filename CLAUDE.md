@@ -30,7 +30,7 @@ Skills collection for Claude Code with config-driven Agile task management (Line
 | Project overview + full tree | `cat README.md` |
 | Skill count | `ls -d ln-*/SKILL.md \| wc -l` |
 | Architecture patterns (L0-L3) | `cat docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` |
-| Agent Teams runtime (hooks, Windows) | `cat docs/architecture/AGENT_TEAMS_PLATFORM_GUIDE.md` |
+| Agent Delegation runtime (hooks, Windows) | `cat docs/architecture/AGENT_TEAMS_PLATFORM_GUIDE.md` |
 | Component selection (command/agent/skill) | `cat docs/best-practice/COMPONENT_SELECTION.md` |
 | Workflow tips | `cat docs/best-practice/WORKFLOW_TIPS.md` |
 | Tool configuration (Linear/File Mode) | `cat shared/references/tools_config_guide.md` |

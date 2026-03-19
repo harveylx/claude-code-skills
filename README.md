@@ -58,7 +58,13 @@ ln-100-documents-pipeline  # Generate documentation
 **Full Agile workflow** (Linear or File Mode — auto-detected):
 ```bash
 ln-200-scope-decomposer    # Scope -> Epics -> Stories
-ln-400-story-executor      # Execute Story to Done (fully automated)
+ln-1000-pipeline-orchestrator  # Full pipeline: tasks → validation → execution → quality gate
+```
+
+**Manual step-by-step** (if you prefer control over each stage):
+```bash
+ln-400-story-executor      # Execute Story tasks
+ln-500-story-quality-gate  # Quality gate + test planning
 ```
 
 ---
@@ -66,13 +72,13 @@ ln-400-story-executor      # Execute Story to Done (fully automated)
 ## Workflow
 
 ```
-ln-700-project-bootstrap   # 0. CREATE or TRANSFORM to production
+ln-700-project-bootstrap        # 0. CREATE or TRANSFORM to production
          ↓
-ln-100-documents-pipeline  # 1. Documentation
+ln-100-documents-pipeline       # 1. Documentation
          ↓
-ln-200-scope-decomposer    # 2. Scope -> Epics -> Stories
+ln-200-scope-decomposer         # 2. Scope -> Epics -> Stories
          ↓
-ln-400-story-executor      # 3. Tasks -> Review -> Quality -> Done
+ln-1000-pipeline-orchestrator   # 3. Full pipeline: 300 → 310 → 400 → 500 → Done
 ```
 
 ---
@@ -100,7 +106,7 @@ Skills use MCP servers for research, documentation lookup, and task tracking. Al
 | **[Context7](https://github.com/upstash/context7)** | Library docs, APIs, migration guides | Optional ([dashboard](https://context7.com/dashboard)) | ln-001, ln-002, ln-310, ln-511, ln-640+ |
 | **[Ref](https://docs.ref.tools/install)** | Standards, RFCs, best practices | Required ([ref.tools/keys](https://ref.tools/keys)) | ln-001, ln-002, ln-310, ln-511, ln-640+ |
 | **[Linear](https://linear.app/docs/mcp)** | Issue tracking (Agile workflow) | OAuth via browser | ln-300+, ln-400+, ln-500+ |
-| **[hashline-edit](https://github.com/Submersible/mcp-hashline-edit-server)** | Hash-based file editing with integrity verification | — | ln-1000 workers, all skills¹ |
+| **[hashline-edit](https://github.com/Submersible/mcp-hashline-edit-server)** | Hash-based file editing with integrity verification | — | ln-400 executors, all code-writing skills¹ |
 
 ¹ Requires [Bun](https://bun.sh) runtime: `npm install -g bun` (or `curl -fsSL https://bun.sh/install | bash` on macOS/Linux). Also requires [ripgrep](https://github.com/BurntSushi/ripgrep) for `grep` tool.
 
@@ -346,14 +352,14 @@ Audit skills in 5 groups: documentation quality (structure, semantics, fact-chec
 <details>
 <summary><b>How is it different from custom prompts or slash commands?</b></summary>
 
-Custom prompts are ad-hoc and context-free. Claude Code Skills provides coordinated skills with an [Orchestrator-Worker architecture](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator (Agent Teams) coordinates L1 orchestrators, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
+Custom prompts are ad-hoc and context-free. Claude Code Skills provides coordinated skills with an [Orchestrator-Worker architecture](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md) — L0 meta-orchestrator drives L1 coordinators via sequential Skill() calls, which delegate to L2 coordinators and L3 workers, each with single responsibility and token-efficient context loading. Skills build on each other's outputs across the full lifecycle.
 
 </details>
 
 <details>
 <summary><b>What is the Orchestrator-Worker pattern?</b></summary>
 
-A 4-level hierarchy: L0 meta-orchestrator (`ln-1000-pipeline-orchestrator`) coordinates via Agent Teams (TeamCreate), L1 orchestrators (e.g., `ln-400-story-executor`) manage Story lifecycle, L2 coordinators (e.g., `ln-220-story-coordinator`) handle mid-level scope, and L3 workers (e.g., `ln-221-story-creator`) execute specific tasks. Each level has single responsibility and loads only the context it needs. See [SKILL_ARCHITECTURE_GUIDE.md](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md).
+A 4-level hierarchy: L0 meta-orchestrator (`ln-1000-pipeline-orchestrator`) drives the pipeline via sequential Skill() calls, L1 orchestrators (e.g., `ln-400-story-executor`) manage Story lifecycle, L2 coordinators (e.g., `ln-220-story-coordinator`) handle mid-level scope, and L3 workers (e.g., `ln-221-story-creator`) execute specific tasks. Each level has single responsibility and loads only the context it needs. See [SKILL_ARCHITECTURE_GUIDE.md](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md).
 
 </details>
 
@@ -430,7 +436,7 @@ claude-code-skills/                      # MARKETPLACE
 |   |   |-- ln-523-auto-test-planner/  # Plan E2E/Integration/Unit tests
 |
 |-- ln-10XX-*/                           # ORCHESTRATION
-|   |-- ln-1000-pipeline-orchestrator/   # L0 Meta: kanban → 4-stage pipeline (300→310→400→500) via TeamCreate
+|   |-- ln-1000-pipeline-orchestrator/   # L0 Meta: kanban → 4-stage pipeline (300→310→400→500) via Skill()
 |
 |  └──────────────────────────────────────────────┘
 |  ┌─ Plugin: documentation-pipeline ──────────────┐
@@ -543,7 +549,7 @@ claude-code-skills/                      # MARKETPLACE
 |   |-- code-quality.py                # PostToolUse: DRY/KISS/YAGNI checks
 |
 |-- docs/
-|   |-- architecture/                  # Skill patterns & Agent Teams runtime
+|   |-- architecture/                  # Skill patterns & delegation runtime
 |   |-- best-practice/                 # Claude Code usage tips & component selection
 |   |-- standards/                     # Documentation & README standards
 |-- CLAUDE.md                          # Full documentation
@@ -559,7 +565,7 @@ claude-code-skills/                      # MARKETPLACE
 |---|---|
 | **Documentation** | [CLAUDE.md](CLAUDE.md) |
 | **Architecture** | [SKILL_ARCHITECTURE_GUIDE.md](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md) |
-| **Agent Teams** | [AGENT_TEAMS_PLATFORM_GUIDE.md](docs/architecture/AGENT_TEAMS_PLATFORM_GUIDE.md) |
+| **Agent Delegation** | [AGENT_TEAMS_PLATFORM_GUIDE.md](docs/architecture/AGENT_TEAMS_PLATFORM_GUIDE.md) |
 | **Component Selection** | [COMPONENT_SELECTION.md](docs/best-practice/COMPONENT_SELECTION.md) |
 | **Workflow Tips** | [WORKFLOW_TIPS.md](docs/best-practice/WORKFLOW_TIPS.md) |
 | **Discussions** | [GitHub Discussions](https://github.com/levnikolaevich/claude-code-skills/discussions) |

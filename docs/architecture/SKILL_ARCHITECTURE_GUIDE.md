@@ -172,7 +172,7 @@ Target: 400-600 lines for core principles, 600-800 lines with advanced documenta
 7. [When to Combine Skills](#when-to-combine-skills)
 8. [Skill Architecture Patterns](#skill-architecture-patterns)
 9. [Token Efficiency](#token-efficiency)
-10. [Execution Patterns: Subagents vs Agent Teams (2026)](#execution-patterns-subagents-vs-agent-teams-2026)
+10. [Execution Patterns: Delegation (2026)](#execution-patterns-delegation-2026)
 11. [Task Decomposition (Agile)](#task-decomposition-agile)
 12. [Red Flags](#red-flags)
 13. [Best Practices Checklist](#best-practices-checklist)
@@ -325,7 +325,7 @@ This architecture follows industry-proven pattern where:
 
 | Level | Role | Responsibilities | Data Loading | Delegation | Examples |
 |-------|------|------------------|--------------|------------|----------|
-| **Level 0** | Meta-Orchestrator | Coordinate multiple Stories via Agent Teams (TeamCreate) | Metadata only | Agent Teams (TeamCreate + SendMessage) | `ln-1000-pipeline-orchestrator` |
+| **Level 0** | Meta-Orchestrator | Drive Story through pipeline via sequential Skill() calls | Metadata only | Skill tool (sequential calls) | `ln-1000-pipeline-orchestrator` |
 | **Level 1** | Top Orchestrator | Coordinate full lifecycle workflows | Metadata only | Skill tool (shared context) | `ln-400-story-executor` |
 | **Level 2** | Domain Orchestrator | Coordinate specific domain workflows | Metadata only | Skill tool or Agent tool | `ln-310-multi-agent-validator`, `ln-510-quality-coordinator`, `ln-300-task-coordinator`, `ln-520-test-planner` |
 | **Level 3** | Worker | Execute atomic work | FULL descriptions when needed | None (leaf) | `ln-401-task-executor`, `ln-404-test-executor`, `ln-402-task-reviewer`, `ln-301-task-creator`, etc. |
@@ -660,9 +660,9 @@ Phase 3: Orchestration Loop - Delegate to worker → Worker loads FULL descripti
 
 ---
 
-## Execution Patterns: Subagents vs Agent Teams (2026)
+## Execution Patterns: Delegation (2026)
 
-**Source:** [Anthropic Agent Teams docs](https://code.claude.com/docs/en/agent-teams), [Custom subagents docs](https://code.claude.com/docs/en/sub-agents), [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents)
+**Source:** [Custom subagents docs](https://code.claude.com/docs/en/sub-agents), [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents)
 
 ### Complexity Ladder (from Anthropic)
 
@@ -674,24 +674,21 @@ Phase 3: Orchestration Loop - Delegate to worker → Worker loads FULL descripti
 | 2 | Prompt chaining (sequential) | Fixed subtasks, needs validation gates |
 | 3 | Routing (classification) | Distinct categories needing different handling |
 | 4 | Subagents (Agent tool) | Parallel independent tasks, only result matters |
-| 5 | Agent Teams (TeamCreate) | Complex work requiring inter-agent coordination |
 
 **Key insight (Anthropic):** "Deploy agents only when flexibility and model-driven decision-making become essential at scale. Agents demand higher costs and risk compounding errors."
 
-### Subagents vs Agent Teams Decision
+### Delegation Decision
 
-| Dimension | Subagents (Agent tool) | Agent Teams (TeamCreate) |
-|-----------|----------------------|--------------------------|
-| Context | Own window, results return to caller | Own window, fully independent |
-| Communication | Report back to parent only | Teammates message each other directly |
-| Coordination | Parent manages all work | Shared task list + self-coordination |
-| Token cost | Lower (results summarized) | Higher (each teammate = separate instance) |
-| Nesting | Cannot spawn subagents | Cannot spawn nested teams |
-| Best for | Focused tasks, only result matters | Multi-stage lifecycle, coordination needed |
+| Dimension | Skill (inline) | Agent (isolated) |
+|-----------|---------------|-----------------|
+| Context | Shares caller's context | Own window, result returns |
+| Communication | Inline return | Blocking return |
+| Token cost | Adds to caller context | Only result summary |
+| Best for | Coordination, review | Code writing, heavy I/O |
 
 **In this repository:**
-- **L1-L3 hierarchy** uses Subagents (Skill tool / Agent tool) — orchestrators delegate to workers within single session
-- **L0 (ln-1000)** uses Agent Teams (TeamCreate) — lead coordinates independent Story workers across sessions
+- **L1-L3 hierarchy** uses Skill tool (coordinators) and Agent tool (code-writing workers)
+- **L0 (ln-1000)** calls L1 coordinators via Skill() — all stages in single context
 
 ### Custom Subagent Configuration (2026)
 
@@ -707,7 +704,7 @@ Subagents are `.md` files with YAML frontmatter in `.claude/agents/`:
 | `memory` | Persistent memory scope | `user` (global), `project` (repo-specific) |
 | `hooks` | Lifecycle hooks | `PreToolUse` for validation, `Stop` for cleanup |
 
-**For Agent Teams runtime patterns** (hooks, heartbeat, crash detection, Windows compatibility): see [AGENT_TEAMS_PLATFORM_GUIDE.md](AGENT_TEAMS_PLATFORM_GUIDE.md).
+**For delegation runtime patterns** (hooks, crash detection, Windows compatibility): see [AGENT_TEAMS_PLATFORM_GUIDE.md](AGENT_TEAMS_PLATFORM_GUIDE.md).
 
 ---
 
@@ -907,7 +904,7 @@ Every User Story should be:
 
 2. **[Multi-Agent Research System](https://www.anthropic.com/engineering/multi-agent-research-system)** - Production multi-agent orchestration. Key Insight: "90.2% performance improvement. Minor issues cascade unpredictably — one step failing causes entirely different trajectories"
 
-3. **[Agent Teams docs](https://code.claude.com/docs/en/agent-teams)** - TeamCreate, shared task lists, delegate mode, hooks. Key Insight: "Agent teams add coordination overhead — best when teammates operate independently"
+3. **[Custom subagents docs](https://code.claude.com/docs/en/sub-agents)** - Agent tool, Skill tool, delegate mode, hooks. Key Insight: "Use delegation when tasks benefit from isolated context"
 
 4. **[Custom Subagents docs](https://code.claude.com/docs/en/sub-agents)** - Subagent configuration (tools, model, memory, hooks, skills). Key Insight: "Subagents cannot spawn subagents — prevents infinite nesting"
 
@@ -925,11 +922,11 @@ Every User Story should be:
 
 ### Related Documents
 
-- **[AGENT_TEAMS_PLATFORM_GUIDE.md](AGENT_TEAMS_PLATFORM_GUIDE.md)** - Runtime patterns: hooks, heartbeat, crash detection, Windows compatibility, state persistence
+- **[AGENT_TEAMS_PLATFORM_GUIDE.md](AGENT_TEAMS_PLATFORM_GUIDE.md)** - Runtime patterns: hooks, crash detection, Windows compatibility, state persistence
 
 ### Repository-Specific Examples
 
-**L0 Meta-Orchestrator:** `ln-1000-pipeline-orchestrator` (778 lines — complex but justified: 4-stage state machine + crash recovery + Agent Teams coordination)
+**L0 Meta-Orchestrator:** `ln-1000-pipeline-orchestrator` (~550 lines — sequential Skill-based pipeline, no TeamCreate)
 
 **Good L1 Orchestrators:** `ln-400-story-executor` (280 lines), `ln-300-task-coordinator` v6.0.0 (150 lines)
 
@@ -945,7 +942,7 @@ Every User Story should be:
 
 1. **Simplicity First** - Start with single LLM call, add complexity only when needed (Anthropic: "agents demand higher costs and risk compounding errors")
 
-2. **Orchestrator-Worker Pattern** - Industry standard 2024-2026 (90%+ performance improvement). 4-level hierarchy: L0 (Agent Teams) → L1 (Top Orchestrator) → L2 (Domain) → L3 (Worker)
+2. **Orchestrator-Worker Pattern** - Industry standard 2024-2026 (90%+ performance improvement). 4-level hierarchy: L0 (Sequential Skill pipeline) → L1 (Top Orchestrator) → L2 (Domain) → L3 (Worker)
 
 3. **Single Responsibility** - One skill = one job (< 800 lines, < 200 char description, ≤ 3-4 major workflow steps)
 
@@ -953,9 +950,9 @@ Every User Story should be:
 
 5. **Token Efficiency** - Lazy loading (orchestrators: metadata only, workers: full descriptions when needed)
 
-6. **Subagents for isolation, Agent Teams for coordination** - Use Subagents (Agent tool) when only result matters. Use Agent Teams (TeamCreate) when workers need inter-agent communication
+6. **Skill for coordination, Agent for isolation** - Use Skill tool when context sharing matters. Use Agent tool when only result matters (code writing, heavy I/O)
 
-**When in doubt:** Simple > complex, narrow specialization > monoliths, Subagents > Agent Teams (unless coordination needed).
+**When in doubt:** Simple > complex, narrow specialization > monoliths, Skill > Agent (unless isolation needed).
 
 ---
 

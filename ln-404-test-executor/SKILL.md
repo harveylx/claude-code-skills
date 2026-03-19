@@ -40,6 +40,12 @@ Extract: `task_provider` = Task Management → Provider (`linear` | `file`).
 
 **File Mode transitions:** Todo → In Progress → To Review
 
+## MCP Tool Preferences
+
+**MANDATORY READ:** Load `shared/references/mcp_tool_preferences.md`
+
+When hashline-edit MCP available, prefer for code files. Detection: `ToolSearch("+hashline-edit")`. Fallback: standard tools.
+
 ## Workflow (concise)
 1) **Resolve taskId:** Run Task Resolution Chain per guide (status filter: [Todo, label: tests]).
 2) **Load task:** Fetch full test task description (Linear: get_issue; File: Read task file); read linked guides/manuals/ADRs/research; review parent Story and manual test results if provided.

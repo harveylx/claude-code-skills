@@ -31,7 +31,7 @@ Skills collection for Codex with config-driven Agile task management (Linear or 
 | Project overview + full tree | `cat README.md` |
 | Skill count | `ls -d ln-*/SKILL.md \| wc -l` |
 | Architecture patterns (L0-L3) | `cat docs/SKILL_ARCHITECTURE_GUIDE.md` |
-| Agent Teams runtime (hooks, Windows) | `cat docs/AGENT_TEAMS_PLATFORM_GUIDE.md` |
+| Agent Delegation runtime (hooks, Windows) | `cat docs/AGENT_TEAMS_PLATFORM_GUIDE.md` |
 | Tool configuration (Linear/File Mode) | `cat shared/references/tools_config_guide.md` |
 | Key workflow | `ln-700 → ln-100 → ln-200 → ln-1000` (or manually: `ln-400 → ln-500`) |
 | Skill metadata | `head -20 {ln-NNN}/SKILL.md` (frontmatter + type/category) |
