@@ -223,4 +223,4 @@ server.registerTool("watch_project", {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-void checkForUpdates("@levnikolaevich/hex-graph-mcp", "0.1.0");
+void checkForUpdates("@levnikolaevich/hex-graph-mcp", "0.2.0");

@@ -91,19 +91,19 @@ Step B — read new version:
 node -e "console.log(require('./mcp/${PKG}/package.json').version)"
 ```
 
-Step C — auto-sync server.mjs:
-Use Edit tool to replace the old version string in the McpServer constructor:
+Step C — auto-sync server.mjs (two locations):
+1. Replace version in McpServer constructor: search for `new McpServer(` in `mcp/${PKG}/server.mjs`
+2. Replace version in checkForUpdates call: search for `checkForUpdates(` in `mcp/${PKG}/server.mjs`
 ```
-old: version: "OLD_VERSION"
-new: version: "NEW_VERSION"
+old: version: "OLD_VERSION"  /  , "OLD_VERSION")
+new: version: "NEW_VERSION"  /  , "NEW_VERSION")
 ```
-Search for `new McpServer(` in `mcp/${PKG}/server.mjs` to find the exact line.
 
 Step D — verify sync:
 ```bash
-grep -n 'version:' mcp/${PKG}/server.mjs | head -3
+grep -n 'version:\|checkForUpdates' mcp/${PKG}/server.mjs | head -5
 ```
-Confirm package.json and server.mjs show the same version.
+Confirm package.json, McpServer version, and checkForUpdates version all match.
 
 ### 6. Commit + tag + push
 

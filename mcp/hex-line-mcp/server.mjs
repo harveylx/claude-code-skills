@@ -364,4 +364,4 @@ server.registerTool("bulk_replace", {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-void checkForUpdates("@levnikolaevich/hex-line-mcp", "1.0.0");
+void checkForUpdates("@levnikolaevich/hex-line-mcp", "1.1.1");
