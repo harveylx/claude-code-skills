@@ -1,6 +1,6 @@
 {
   "name": "@levnikolaevich/hex-ssh-mcp",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Token-efficient SSH MCP server with hash-verified file operations. 6 tools: remote-ssh, ssh-read-lines, ssh-edit-block, ssh-search-code, ssh-write-chunk, ssh-verify.",
   "type": "module",
   "main": "server.mjs",
@@ -27,7 +27,11 @@
     "diff": "^8.0.3",
     "ssh2": "^1.16.0"
   },
+  "author": "Lev Nikolaevich <https://github.com/levnikolaevich>",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/levnikolaevich/claude-code-skills/issues"
+  },
   "keywords": [
     "mcp",
     "ssh",
@@ -35,7 +39,12 @@
     "hash-verified",
     "token-efficient",
     "model-context-protocol",
-    "hex-ssh"
+    "hex-ssh",
+    "claude",
+    "ai",
+    "llm",
+    "coding-agent",
+    "remote-editing"
   ],
   "repository": {
     "type": "git",

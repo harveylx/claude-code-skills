@@ -3,7 +3,7 @@
  * hex-line-mcp — MCP server for hash-verified file operations.
  *
  * 11 tools: read_file, edit_file, write_file, grep_search, outline, verify, directory_tree, get_file_info, setup_hooks, changes, bulk_replace
- * FNV-1a 2-char tags + range checksums (trueline-compatible)
+ * FNV-1a 2-char tags + range checksums
  * Security: root policy, path validation, binary/size rejection
  * Transport: stdio
  */
@@ -54,7 +54,7 @@ try {
     process.exit(1);
 }
 
-const server = new McpServer({ name: "hex-line-mcp", version: "1.2.0" });
+const server = new McpServer({ name: "hex-line-mcp", version: "1.3.0" });
 
 
 // ==================== read_file ====================
@@ -287,19 +287,19 @@ server.registerTool("get_file_info", {
 server.registerTool("setup_hooks", {
     title: "Setup Hooks",
     description:
-        "Configure hex-line hooks in CLI agent settings. " +
-        "Claude: writes hooks to ~/.claude/settings.json (global) with absolute path, " +
-        "removes old hooks from per-project settings.local.json. " +
-        "Gemini/Codex: returns guidance (no hook support). " +
-        "Idempotent: re-running produces no changes if already configured.",
+        "Install or uninstall hex-line hooks in CLI agent settings. " +
+        "install: writes hooks to ~/.claude/settings.json, removes old per-project hooks. " +
+        "uninstall: removes hex-line hooks from global settings. " +
+        "Idempotent: re-running produces no changes if already in desired state.",
     inputSchema: z.object({
         agent: z.string().optional().describe('Target agent: "claude", "gemini", "codex", or "all" (default: "all")'),
+        action: z.string().optional().describe('"install" (default) or "uninstall"'),
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 }, async (rawParams) => {
-    const { agent } = coerceParams(rawParams);
+    const { agent, action } = coerceParams(rawParams);
     try {
-        return { content: [{ type: "text", text: setupHooks(agent) }] };
+        return { content: [{ type: "text", text: setupHooks(agent, action) }] };
     } catch (e) {
         return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -365,4 +365,4 @@ server.registerTool("bulk_replace", {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-void checkForUpdates("@levnikolaevich/hex-line-mcp", "1.2.0");
+void checkForUpdates("@levnikolaevich/hex-line-mcp", "1.3.0");

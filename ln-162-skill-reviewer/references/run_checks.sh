@@ -183,6 +183,24 @@ done
 echo "DONE"
 echo ""
 
+# ── CHECK 17: Worker invocation enforcement (D8b) ───────────────
+echo "=== CHECK 17: Worker invocation enforcement (D8b) ==="
+for f in $SCOPE; do
+  level=$(grep '\*\*Type:\*\*' "$f" | grep -oE 'L[12]' | head -1 || true)
+  [ -z "$level" ] && continue
+  self=$(basename $(dirname "$f") | grep -oE 'ln-[0-9]+-[a-z-]+')
+  worker_count=$(grep -oE 'ln-[0-9]+-[a-z-]+' "$f" | sort -u | while read w; do
+    [ "$w" != "$self" ] && echo "$w"
+  done | sort -u | wc -l)
+  [ "$worker_count" -eq 0 ] && continue
+  skill_calls=$(grep -c 'Skill(skill:' "$f" || true)
+  [ "$skill_calls" -eq 0 ] && fail "$level skill delegates to $worker_count workers but has no Skill() invocation code blocks: $f"
+  grep -q 'Worker Invocation (MANDATORY)' "$f" || fail "$level skill missing Worker Invocation (MANDATORY) section: $f"
+  grep -q 'TodoWrite format (mandatory)' "$f" || warn "$level skill missing TodoWrite format section: $f"
+done
+echo "DONE"
+echo ""
+
 # ── SUMMARY ─────────────────────────────────────────────────────────
 echo "================================"
 if [ "$FAILS" -eq 0 ]; then

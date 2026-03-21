@@ -121,8 +121,10 @@ grep -n 'version:\|checkForUpdates' mcp/${PKG}/server.mjs | head -5
 
 ### 8. Commit + tag + push
 
+**CRITICAL:** Commit ALL repo changes (`git add -A`), not just the package directory. Other pending changes (skills, commands, docs) ride along with the release commit. Never scope `git add` to a subdirectory.
+
 ```bash
-git add mcp/${PKG}/package.json mcp/${PKG}/server.mjs
+git add -A
 git commit -m "release: ${PKG_NAME} v${NEW_VERSION}"
 git tag ${TAG_PREFIX}${NEW_VERSION}
 git push origin master --tags
@@ -139,3 +141,11 @@ npm view ${PKG_NAME} version
 ### 10. Report
 
 Display: package name, old → new version, npm URL (`https://www.npmjs.com/package/${PKG_NAME}`), GitHub Actions run status.
+
+---
+
+### 11. Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Analyze this session per protocol §7. Output per protocol format.

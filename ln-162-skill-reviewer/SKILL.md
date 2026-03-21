@@ -127,6 +127,7 @@ After all fixes applied:
 | Resource lifecycle (D11) | {PASS/FAIL} | {list or --} |
 | Execution proximity (D2b) | {PASS/WARN} | {list or --} |
 | Platform API compat (#13) | {PASS/FAIL} | {list or --} |
+| Worker invocation (D8b) | {PASS/FAIL/WARN} | {list or --} |
 
 ### Fixed ({count})
 | # | Skill | Dim | Issue | Fix Applied |

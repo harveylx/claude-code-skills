@@ -46,7 +46,7 @@ try {
     process.exit(1);
 }
 
-const server = new McpServer({ name: "hex-ssh-mcp", version: "1.1.1" });
+const server = new McpServer({ name: "hex-ssh-mcp", version: "1.1.2" });
 
 // --- Common connection args for reuse ---
 
@@ -800,4 +800,4 @@ server.registerTool("ssh-verify", {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-void checkForUpdates("@levnikolaevich/hex-ssh-mcp", "1.1.1");
+void checkForUpdates("@levnikolaevich/hex-ssh-mcp", "1.1.2");

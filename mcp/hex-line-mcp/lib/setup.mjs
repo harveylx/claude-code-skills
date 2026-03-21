@@ -36,7 +36,7 @@ const CLAUDE_HOOKS = {
         hooks: [{ type: "command", command: HOOK_COMMAND, timeout: 5 }],
     },
     PreToolUse: {
-        matcher: "Read|Edit|Write|Grep|Bash",
+        matcher: "Read|Edit|Write|Grep|Bash|mcp__hex-line__.*",
         hooks: [{ type: "command", command: HOOK_COMMAND, timeout: 5 }],
     },
     PostToolUse: {
@@ -230,18 +230,54 @@ function setupCodex() {
     return "Codex: Not supported (Codex CLI does not support hooks. Add MCP Tool Preferences to AGENTS.md instead)";
 }
 
+// ---- Uninstall: remove hex-line hooks ----
+
+function uninstallClaude() {
+    const globalPath = resolve(homedir(), ".claude/settings.json");
+    const config = readJson(globalPath);
+    if (!config || !config.hooks || typeof config.hooks !== "object") {
+        return "Claude: no hooks to remove";
+    }
+
+    let changed = false;
+    for (const event of Object.keys(CLAUDE_HOOKS)) {
+        if (!Array.isArray(config.hooks[event])) continue;
+        const idx = findEntryByCommand(config.hooks[event]);
+        if (idx >= 0) {
+            config.hooks[event].splice(idx, 1);
+            if (config.hooks[event].length === 0) delete config.hooks[event];
+            changed = true;
+        }
+    }
+
+    if (Object.keys(config.hooks).length === 0) delete config.hooks;
+
+    if (!changed) return "Claude: no hex-line hooks found";
+
+    writeJson(globalPath, config);
+    return "Claude: hex-line hooks removed from global settings";
+}
+
 // ---- Public API ----
 
 const AGENTS = { claude: setupClaude, gemini: setupGemini, codex: setupCodex };
+const UNINSTALL_AGENTS = { claude: uninstallClaude };
 
 /**
  * Configure hex-line hooks for one or all supported agents.
  * Claude: writes to ~/.claude/settings.json (global), cleans per-project hooks.
  * @param {string} [agent="all"] - "claude", "gemini", "codex", or "all"
+ * @param {string} [action="install"] - "install" or "uninstall"
  * @returns {string} Status report
  */
-export function setupHooks(agent = "all") {
+export function setupHooks(agent = "all", action = "install") {
     const target = (agent || "all").toLowerCase();
+    const act = (action || "install").toLowerCase();
+
+    if (act === "uninstall") {
+        const result = uninstallClaude();
+        return `Hooks uninstalled:\n  ${result}\n\nRestart Claude Code to apply changes.`;
+    }
 
     if (target !== "all" && !AGENTS[target]) {
         throw new Error(`UNKNOWN_AGENT: '${agent}'. Supported: claude, gemini, codex, all`);

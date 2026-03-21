@@ -23,7 +23,7 @@ Skills collection for Claude Code with config-driven Agile task management (Line
 
 ## MCP Tool Preferences
 
-When `hex-line` MCP is available, **always prefer it** over built-in file tools:
+**MANDATORY:** NEVER use built-in Read, Edit, Write, Grep. Use hex-line MCP equivalents:
 
 | Instead of | Use | Why |
 |-----------|-----|-----|
@@ -62,6 +62,7 @@ When `hex-line` MCP is available, **always prefer it** over built-in file tools:
 | MCP Tool Design | `docs/best-practice/MCP_TOOL_DESIGN_GUIDE.md` |
 | Token Efficiency | `docs/standards/TOKEN_EFFICIENCY_PATTERNS.md` |
 | Prompt Caching | `docs/best-practice/PROMPT_CACHING_GUIDE.md` |
+| npm Packages | `docs/standards/NPM_PACKAGE_BEST_PRACTICES.md` |
 
 ## Maintenance
 

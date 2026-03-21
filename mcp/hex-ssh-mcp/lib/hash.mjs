@@ -1,7 +1,7 @@
 /**
  * FNV-1a hashing for hash-verified remote file editing.
  *
- * Trueline-compatible: 2-char tags from 32-symbol alphabet,
+ * 2-char tags from 32-symbol alphabet,
  * range checksums as FNV-1a accumulator over line hashes.
  *
  * Line format: {tag}.{lineNum}\t{content}

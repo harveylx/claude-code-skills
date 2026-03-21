@@ -36,7 +36,7 @@ try {
     process.exit(1);
 }
 
-const server = new McpServer({ name: "hex-graph-mcp", version: "0.2.2" });
+const server = new McpServer({ name: "hex-graph-mcp", version: "0.2.3" });
 
 // --- Error helper (MCP_TOOL_DESIGN_GUIDE Rule 3) ---
 function graphError(code, message, recovery) {
@@ -228,4 +228,4 @@ server.registerTool("watch_project", {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-void checkForUpdates("@levnikolaevich/hex-graph-mcp", "0.2.2");
+void checkForUpdates("@levnikolaevich/hex-graph-mcp", "0.2.3");

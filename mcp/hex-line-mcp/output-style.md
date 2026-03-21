@@ -6,7 +6,7 @@ keep-coding-instructions: true
 
 # MCP Tool Preferences
 
-When `hex-line` MCP is available, **always prefer it** over built-in file tools:
+**MANDATORY:** NEVER use built-in Read, Edit, Write, Grep. Use hex-line MCP equivalents:
 
 | Instead of | Use | Why |
 |-----------|-----|-----|

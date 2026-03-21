@@ -4,6 +4,9 @@ Universal post-completion protocol for all coordinators and orchestrators.
 Run as the LAST step after all delegated work completes and results are aggregated.
 Output to chat — visible to the user.
 
+**Scope:** Self-audit for the skill that just ran. Evaluates deliverable quality + execution efficiency.
+For standalone session analysis: `ln-002-session-analyzer`. For multi-day patterns: `/audit-sessions`.
+
 ## Skill Types
 
 | Type | Key Metrics |
@@ -55,109 +58,105 @@ Compare what the skill predicted/planned with what actually happened. Not all ty
 | Waste | What work was produced but never used (discarded findings, removed tasks, rejected hypotheses)? |
 | Blind Spots | What important things were NOT predicted but emerged during execution? |
 
-## Output Format by Skill Type
+### 7. Execution Trace (self-audit)
 
-### planning-coordinator
+Scan your conversation context for ALL errors and inefficiencies during THIS skill's execution.
 
-```
-### Meta-Analysis: {Skill Name}
-| Deliverable | Status | Coverage |
-|------------|--------|----------|
-| {plan/tasks/epics} | ✓/⚠/✗ | {N}/{total} items |
-- Failure points: {list or "None"}
-- Improvement: {1-2 focus areas or "None"}
-- Assumptions: {what matched vs what surprised}
-### Prediction Accuracy
-| Metric | Value |
-|--------|-------|
-| Plan Stability | {tasks_unchanged}/{tasks_planned} |
-| Estimation Accuracy | {avg_actual_hours}/{avg_estimated_hours} |
-| Scope Creep | {tasks_added_during_execution} |
-| Unused Plans | {tasks_obsoleted} |
-```
+#### 7a. Skill Improvement Analysis
 
-### review-coordinator — with agents
+For each problem found, propose a specific fix to the skill/command file:
 
-```
-### Meta-Analysis: {Skill Name}
-| Agent/Worker | Applied | Total | Focus |
-|-------------|---------|-------|-------|
-| {name} | {A} | {M} | {areas found} |
-- Applied: findings that led to code changes (primary value metric)
-- Overlap: {N} duplicate findings
-- Blind spots: {areas with 0 findings}
-- Pipeline coverage gaps: see `shared/references/detection_efficacy_audit.md` §Pipeline Coverage Map
-- Improvement: {1-2 focus areas or "None"}
-- Assumptions: {what matched vs what surprised}
-### Prediction Accuracy
-| Metric | Value |
-|--------|-------|
-| Actionable Rate | {findings_applied}/{total_findings} |
-| False Positive Rate | {findings_dismissed}/{total_findings} |
-| Agent Agreement | {confirmed_by_both}/{total_unique} |
-| Missed Issues | {issues_found_later_not_by_reviewers} |
-```
+| Category | What to look for | Typical Fix |
+|----------|-----------------|-------------|
+| Unclear steps | Edit failures, wrong file targeted, content mismatch | Add file path, expected content hint to step |
+| Missing scripts | Bash/Python scripts written ad-hoc each run | Move to `references/scripts/` — load instead of generate |
+| Vague phases | Tool loops (3+ same tool without progress), trial-and-error | Decompose into explicit sub-steps |
+| Missing tools | Permission denials, hook blocks | Update `allowed-tools` in frontmatter |
+| Wasted reads | Full-file reads (>100 lines) without outline | Add "outline first" to step |
+| Bash fallbacks | `cat`, `grep`, `head` in Bash when MCP exists | Name explicit MCP tool in step |
+| Agent issues | Subagent timeouts, empty results | Narrow agent prompt, add essential context |
+| Repeated work | Same file read multiple times, same info re-gathered | Add "cache this" note, reuse across steps |
 
-### review-coordinator — workers only
+#### 7b. Session Error Log
 
-```
-### Meta-Analysis: {Skill Name}
-| Worker | Findings | Accepted | Rate |
-|--------|----------|----------|------|
-| {name} | {N} | {M} | {%} |
-- Coverage gaps: {areas with 0 findings or "None"}
-- Improvement: {1-2 focus areas or "None"}
-- Assumptions: {what matched vs what surprised}
-### Prediction Accuracy
-| Metric | Value |
-|--------|-------|
-| Acceptance Rate | {accepted}/{total} per worker |
-| Cross-Worker Overlap | {duplicates}/{total_findings} |
-| Severity Accuracy | {high_confirmed}/{high_reported} |
-```
+Group ALL failed/wasted tool calls by problem type. Raw facts:
 
-### execution-orchestrator
+| Problem Type | Count | Examples |
+|-------------|-------|---------|
+| Wrong target | {N} | Looked at file X when needed Y (Step 3) |
+| Retry storm | {N} | 3 attempts at edit before correct anchor (Step 5) |
+| Hash mismatch | {N} | Stale hash after prior edit (Step 4) |
+| Text not found | {N} | old_text didn't match content (Step 2) |
+| Permission denied | {N} | Hook blocked built-in Read (Step 1) |
+| Unnecessary work | {N} | Read 500-line file without outline, re-read same file 3x |
+| Dead end | {N} | Explored approach X, abandoned, switched to Y (Step 6) |
+
+Skip table if 0 errors.
+
+#### 7c. Subagent Session Analysis
+
+If subagents were launched during execution (Agent tool, Codex, Gemini), analyze each separately.
+
+Session locations:
+
+| Agent | Path | Format |
+|-------|------|--------|
+| Claude (Agent tool) | Results visible in conversation context | Direct |
+| Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | JSONL |
+| Gemini | `~/.gemini/tmp/*/chats/session-*.json` | JSON |
+
+For each agent that participated, produce a **separate** error table flagged with agent name:
 
 ```
-### Meta-Analysis: {Skill Name}
-| Stage/Step | Skill | Duration | Status | Result |
-|-----------|-------|----------|--------|--------|
-| {stage} | {ln-NNN} | {time} | ✓/⚠/✗ | {brief} |
-### Problems & Limitations
-{infra issues table or "None detected."}
-### Improvement Candidates
-{numbered list of focus areas or "None — ran clean."}
-### Assumptions
-{what matched vs what surprised}
-### Prediction Accuracy
-| Metric | Value |
-|--------|-------|
-| First-Pass Success | {done_without_rework}/{tasks_total} |
-| Rework Rate | {tasks_reworked}/{tasks_total} |
-| Stage Prediction | {stages_first_try}/{total_stages} |
+#### Subagent Errors: {Agent Name}
+| Problem Type | Count | Examples |
+|-------------|-------|---------|
+| {type} | {N} | {brief} |
 ```
 
-### optimization-coordinator
+Analyze by same categories as §7b. Skip agent section if agent had 0 errors.
+If no subagents were used, skip §7c entirely.
+
+For deeper session analysis beyond self-audit, use `ln-002-session-analyzer`.
+
+## Output Format
+
+Output to chat. **Show ONLY items with findings.** Goal: actionable improvements to THIS skill/command.
 
 ```
 ### Meta-Analysis: {Skill Name}
-| Worker | Applied | Removed | Impact |
-|--------|---------|---------|--------|
-| {name} | {N} | {M} | {description} |
-- Failure points: {list or "None"}
-- Improvement: {1-2 focus areas or "None"}
-- Assumptions: {what matched vs what surprised}
-### Prediction Accuracy
-| Metric | Value |
-|--------|-------|
-| Profiler Accuracy | {suspicions_applied}/{suspicions_confirmed} |
-| Research Hit Rate | {hypotheses_applied}/{hypotheses_total} |
-| Strike Efficiency | clean/bisected/failed |
-| Overall Gain | (baseline - final) / baseline |
-| Cycles Used | {used}/{max} (multi-cycle only) |
-| Per-Cycle Gains | [{pct1}%, {pct2}%, ...] (multi-cycle only) |
-| Diminishing Returns | {trend: increasing/stable/decreasing} (multi-cycle only) |
+
+#### Improvements
+| # | Dim | Finding | Target | Fix |
+|---|-----|---------|--------|-----|
+| 1 | §7a | 3 edit failures in Phase 4 | ln-400 Step 2 | Add file path |
+| 2 | §7a | test.sh written ad-hoc (2 retries) | ln-520 | Move to `references/scripts/` |
+| 3 | §1 | Security section skipped | ln-400 Phase 1 | Add to scope checklist |
+
+#### Session Errors
+| Problem Type | Count | Examples |
+|-------------|-------|---------|
+| Retry storm | 4 | 3x edit_file on config.ts (Step 5) |
+| Wrong target | 2 | Read utils.ts instead of helpers.ts (Step 3) |
+
+#### Subagent Errors: Codex
+| Problem Type | Count | Examples |
+|-------------|-------|---------|
+| Text not found | 3 | edit_file mismatch on utils.ts |
+
+IF no findings AND no errors: "Meta-analysis: clean run."
 ```
+
+Section tags (§1-§7) may be used in Dim column for traceability but are optional.
+Type-specific metrics (Plan Stability, Rework Rate, etc.) remain in §Universal Dimensions as evaluation criteria — appear in output only when they reveal a problem.
+
+## DRY Rule
+
+All output templates live ONLY in this file. SKILL.md and command files MUST NOT define their own output format — they reference this protocol via MANDATORY READ.
+
+**Related tools:**
+- Session analysis: `ln-002-session-analyzer` (standalone, any session)
+- Multi-day audit: `/audit-sessions` command (3-day retrospective)
 
 ## Issue Suggestion Triggers (patterns across 3+ runs)
 
@@ -170,10 +169,15 @@ Compare what the skill predicted/planned with what actually happened. Not all ty
 | Improvement implemented but no trend change | Fix ineffective or measured wrong | Review metric validity |
 | Prediction accuracy < 50% consistently | Skill making wrong predictions | Review methodology, add validation step |
 | Waste > 50% (discarded/total) | Over-generation of findings/hypotheses | Tighten acceptance criteria, add pre-filter |
+| Edit failures > 3 per run | Step instructions lack file paths or content hints | Add explicit paths and anchors to affected steps |
+| Tool loops repeated across runs | Phase too vague for reliable execution | Decompose phase into explicit sub-steps |
+| Read waste > 30% of reads | Missing outline-first guidance | Add "outline before read" to affected phases |
+| Bash fallbacks persistent | Instructions don't name MCP tools | Replace prose with explicit tool names in steps |
+| Same script recreated across runs | Skill missing pre-built script | Add to `references/scripts/` and reference from step |
 
 If pattern is reproducible:
 > Consider creating issue: https://github.com/levnikolaevich/claude-code-skills/issues
 
 ---
-**Version:** 3.0.0
-**Last Updated:** 2026-03-12
+**Version:** 4.2.0
+**Last Updated:** 2026-03-21

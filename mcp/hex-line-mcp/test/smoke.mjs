@@ -126,6 +126,62 @@ describe("edit business logic", () => {
         }
     });
 
+    it("replace_lines accepts wider checksum range than anchor range", async () => {
+        const { editFile } = await import("../lib/edit.mjs");
+        const { fnv1a, lineTag, rangeChecksum } = await import("../lib/hash.mjs");
+        const tmp = "d:/tmp/hex-test-wider-cs.js";
+        const content = "line1\nline2\nline3\nline4\nline5\n";
+        fs.writeFileSync(tmp, content);
+        try {
+            const lines = content.split("\n");
+            const hashes = lines.slice(0, 5).map(l => fnv1a(l));
+            const rc = rangeChecksum(hashes, 1, 5);
+            const startTag = lineTag(fnv1a(lines[1]));
+            const endTag = lineTag(fnv1a(lines[2]));
+            editFile(tmp, [{
+                replace_lines: {
+                    start_anchor: `${startTag}.2`,
+                    end_anchor: `${endTag}.3`,
+                    new_text: "replaced2\nreplaced3",
+                    range_checksum: rc
+                }
+            }]);
+            const written = fs.readFileSync(tmp, "utf-8");
+            assert.ok(written.includes("replaced2"), "Edit applied with wider checksum");
+            assert.ok(written.includes("line1"), "Untouched line preserved");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("replace_lines detects stale content outside anchor range but inside checksum", async () => {
+        const { editFile } = await import("../lib/edit.mjs");
+        const { fnv1a, lineTag, rangeChecksum } = await import("../lib/hash.mjs");
+        const tmp = "d:/tmp/hex-test-stale-outside.js";
+        const content = "line1\nline2\nline3\nline4\nline5\n";
+        fs.writeFileSync(tmp, content);
+        try {
+            const lines = content.split("\n");
+            const hashes = lines.slice(0, 5).map(l => fnv1a(l));
+            const rc = rangeChecksum(hashes, 1, 5);
+            const startTag = lineTag(fnv1a(lines[1]));
+            const endTag = lineTag(fnv1a(lines[2]));
+            fs.writeFileSync(tmp, "line1\nline2\nline3\nMODIFIED\nline5\n");
+            assert.throws(() => {
+                editFile(tmp, [{
+                    replace_lines: {
+                        start_anchor: `${startTag}.2`,
+                        end_anchor: `${endTag}.3`,
+                        new_text: "replaced",
+                        range_checksum: rc
+                    }
+                }]);
+            }, /mismatch/i, "Stale content outside anchors detected");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
     it("set_line preserves verbatim indent (no auto-fix)", async () => {
         const { editFile } = await import("../lib/edit.mjs");
         const { fnv1a, lineTag } = await import("../lib/hash.mjs");
@@ -303,5 +359,55 @@ describe("grep_search case modes", () => {
         const lowerCount = lower.split("\n").filter(l => l.trim()).length;
         const upperCount = upper.split("\n").filter(l => l.trim()).length;
         assert.ok(lowerCount > upperCount, `lowercase (${lowerCount}) should find more than uppercase (${upperCount})`);
+    });
+});
+
+// ==================== isHexLineDisabled ====================
+
+describe("isHexLineDisabled", () => {
+    it("returns true when hex-line is in disabledMcpServers for cwd project", async () => {
+        const { isHexLineDisabled, _resetHexLineDisabledCache } = await import("../hook.mjs");
+        _resetHexLineDisabledCache();
+
+        const tmp = "d:/tmp/hex-test-claude.json";
+        const cwd = process.cwd().replace(/\\/g, "/");
+        const config = {
+            projects: {
+                [cwd]: {
+                    disabledMcpServers: ["hex-line", "hex-graph"],
+                },
+            },
+        };
+        fs.writeFileSync(tmp, JSON.stringify(config));
+        try {
+            const result = isHexLineDisabled(tmp);
+            assert.equal(result, true, "hex-line is disabled for current project");
+        } finally {
+            _resetHexLineDisabledCache();
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("returns false when hex-line is NOT in disabledMcpServers", async () => {
+        const { isHexLineDisabled, _resetHexLineDisabledCache } = await import("../hook.mjs");
+        _resetHexLineDisabledCache();
+
+        const tmp = "d:/tmp/hex-test-claude2.json";
+        const cwd = process.cwd().replace(/\\/g, "/");
+        const config = {
+            projects: {
+                [cwd]: {
+                    disabledMcpServers: ["hex-graph"],
+                },
+            },
+        };
+        fs.writeFileSync(tmp, JSON.stringify(config));
+        try {
+            const result = isHexLineDisabled(tmp);
+            assert.equal(result, false, "hex-line is not disabled");
+        } finally {
+            _resetHexLineDisabledCache();
+            fs.unlinkSync(tmp);
+        }
     });
 });

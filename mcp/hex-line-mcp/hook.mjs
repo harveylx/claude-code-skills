@@ -39,6 +39,20 @@ const BINARY_EXT = new Set([
     ".ttf", ".otf", ".woff", ".woff2",
 ]);
 
+const REVERSE_TOOL_HINTS = {
+    "mcp__hex-line__read_file":      "Read (file_path, offset, limit)",
+    "mcp__hex-line__edit_file":      "Edit (file_path, old_string, new_string)",
+    "mcp__hex-line__write_file":     "Write (file_path, content)",
+    "mcp__hex-line__grep_search":    "Grep (pattern, path)",
+    "mcp__hex-line__directory_tree": "Glob (pattern) or Bash(ls)",
+    "mcp__hex-line__get_file_info":  "Bash(stat/wc)",
+    "mcp__hex-line__outline":        "Read with offset/limit",
+    "mcp__hex-line__verify":         "Read the file again with Read",
+    "mcp__hex-line__changes":        "Bash(git diff)",
+    "mcp__hex-line__bulk_replace":   "Edit for each file",
+    "mcp__hex-line__setup_hooks":    "Not available (hex-line disabled)",
+};
+
 const TOOL_HINTS = {
     Read:  "mcp__hex-line__read_file (not Read). For writing: write_file (no prior Read needed)",
     Edit:  "mcp__hex-line__edit_file (not Edit, not sed -i). read_file first for hashes",
@@ -138,6 +152,39 @@ function detectCommandType(cmd) {
     return "generic";
 }
 
+/** Cache: null = not computed yet */
+let _hexLineDisabled = null;
+
+/**
+ * Check if hex-line MCP is disabled for the current project.
+ * Reads ~/.claude.json → projects.{cwd}.disabledMcpServers.
+ * Fail-open: returns false on any error.
+ */
+function isHexLineDisabled(configPath) {
+    if (_hexLineDisabled !== null) return _hexLineDisabled;
+    _hexLineDisabled = false;
+    try {
+        const p = configPath || resolve(homedir(), ".claude.json");
+        const claudeJson = JSON.parse(readFileSync(p, "utf-8"));
+        const projects = claudeJson.projects;
+        if (!projects || typeof projects !== "object") return _hexLineDisabled;
+        const cwd = process.cwd().replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
+        for (const [path, config] of Object.entries(projects)) {
+            if (path.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase() === cwd) {
+                const disabled = config.disabledMcpServers;
+                if (Array.isArray(disabled) && disabled.includes("hex-line")) {
+                    _hexLineDisabled = true;
+                }
+                break;
+            }
+        }
+    } catch { /* fail open */ }
+    return _hexLineDisabled;
+}
+
+/** Reset cache (for testing). */
+function _resetHexLineDisabledCache() { _hexLineDisabled = null; }
+
 function block(reason, context) {
     const output = {
         hookSpecificOutput: {
@@ -234,6 +281,28 @@ function handlePreToolUse(data) {
     }
 
     // Everything else - approve
+    process.exit(0);
+}
+
+// ---- PreToolUse REVERSE handler (hex-line disabled) ----
+
+function handlePreToolUseReverse(data) {
+    const toolName = data.tool_name || "";
+
+    // Agent tries hex-line tool that's disabled → redirect to built-in
+    if (toolName.startsWith("mcp__hex-line__")) {
+        const builtIn = REVERSE_TOOL_HINTS[toolName];
+        if (builtIn) {
+            const target = builtIn.split(" ")[0];
+            block(
+                `hex-line is disabled in this project. Use ${target}`,
+                `hex-line disabled. Use built-in: ${builtIn}`
+            );
+        }
+        block("hex-line is disabled in this project", "Disabled via project settings");
+    }
+
+    // All built-in tools — approve silently
     process.exit(0);
 }
 
@@ -341,6 +410,13 @@ process.stdin.on("end", () => {
         const data = JSON.parse(input);
         const event = data.hook_event_name || "";
 
+        if (isHexLineDisabled()) {
+            // REVERSE MODE: block hex-line calls, approve everything else
+            if (event === "PreToolUse") handlePreToolUseReverse(data);
+            process.exit(0); // SessionStart, PostToolUse — silent exit
+        }
+
+        // NORMAL MODE
         if (event === "SessionStart") handleSessionStart();
         else if (event === "PreToolUse") handlePreToolUse(data);
         else if (event === "PostToolUse") handlePostToolUse(data);
@@ -349,3 +425,6 @@ process.stdin.on("end", () => {
         process.exit(0);
     }
 });
+
+// ---- Exports for testing ----
+export { isHexLineDisabled, _resetHexLineDisabledCache };

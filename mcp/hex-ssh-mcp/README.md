@@ -3,7 +3,9 @@
 Token-efficient SSH MCP server with hash-verified remote file editing.
 
 [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-ssh-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-ssh-mcp)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![downloads](https://img.shields.io/npm/dm/@levnikolaevich/hex-ssh-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-ssh-mcp)
+[![license](https://img.shields.io/npm/l/@levnikolaevich/hex-ssh-mcp)](./LICENSE)
+![node](https://img.shields.io/node/v/@levnikolaevich/hex-ssh-mcp)
 
 Every remote file read returns FNV-1a hash-annotated lines and range checksums. Edits verify those checksums before applying changes -- preventing stale-context corruption across SSH boundaries. Command output is normalized and deduplicated for minimal token usage.
 
@@ -213,17 +215,6 @@ hex-ssh-mcp/
 
 Both servers share the same FNV-1a hash format and line annotation convention (`tag.lineNum\tcontent`). Checksums from `ssh-read-lines` are structurally identical to those from hex-line's `read_file`.
 
-Key differences:
-
-| Aspect | hex-ssh-mcp | hex-line-mcp |
-|--------|---------------|---------------|
-| Target | Remote servers via SSH | Local filesystem |
-| Security model | `ALLOWED_HOSTS` + `ALLOWED_DIRS` (explicit allowlists for remote trust boundary) | Claude Code sandbox (local trust) |
-| Output normalization | Built into `remote-ssh` tool | Separate PostToolUse hook |
-| Outline tool | Not available (no tree-sitter on remote) | AST-based via tree-sitter WASM |
-| Hook | None (hex-line hook handles reminders) | Unified `hook.mjs` (reminder + RTK filter) |
-| SSH library | `ssh2` (key-only auth) | N/A (direct filesystem access) |
-
 ### Hash Format
 
 ```
@@ -272,6 +263,14 @@ Same concept, different trigger. hex-ssh normalizes inside the `remote-ssh` tool
 All hosts are permitted. Setting `ALLOWED_HOSTS` is recommended for production use -- it restricts which remote servers the agent can connect to, preventing lateral movement if prompts are manipulated.
 
 </details>
+
+## Hex Family
+
+| Package | Purpose | npm |
+|---------|---------|-----|
+| [hex-line-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-line-mcp) | Local file editing with hash verification + hooks | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-line-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-line-mcp) |
+| [hex-ssh-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-ssh-mcp) | Remote file editing over SSH | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-ssh-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-ssh-mcp) |
+| [hex-graph-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-graph-mcp) | Code knowledge graph with AST indexing | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-graph-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-graph-mcp) |
 
 ## License
 

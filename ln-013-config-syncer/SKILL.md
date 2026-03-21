@@ -135,6 +135,7 @@ Hook scripts must support both tool name formats. Tool name mapping in scripts:
 
 Codex does NOT support hooks. SKIP hook sync for Codex. Report "hooks not supported by Codex CLI".
 
+
 ### Phase 5: Report
 
 ```

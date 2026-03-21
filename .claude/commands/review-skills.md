@@ -7,160 +7,184 @@ allowed-tools: Skill, Bash, Grep, Glob, Read, AskUserQuestion
 
 Universal review (ln-162) + repo-specific checks for claude-code-skills repository.
 
-## Step 1: Universal Review
+## Execution Strategy
+
+**Step 1 FIRST** — invoke ln-162 via Skill tool (MANDATORY, visible to user). **Step 2** — run repo-specific bash script (can overlap with ln-162 phases). Combine in Step 3.
+
+## Step 1: Universal Review (MANDATORY Skill invocation)
+
+> **NON-NEGOTIABLE:** You MUST call `Skill(skill: "ln-162-skill-reviewer", args: "$ARGUMENTS")` via the Skill tool. Do NOT skip this or execute ln-162 phases manually without the Skill call. The Skill tool loads the full skill content which you then follow.
 
 Invoke `Skill("ln-162-skill-reviewer")` with `$ARGUMENTS` (pass through scope — skill dirs or empty for auto-detect).
 
-Wait for ln-162 to complete. Record its verdict.
-
 ## Step 2: Repo-Specific Checks
 
-Run these bash checks against the repo. Report each as PASS/FAIL.
-
-### Check R1: Marketplace paths
+Run this single combined script. It outputs a ready-to-use report table.
 
 ```bash
+#!/usr/bin/env bash
+
+RESULTS=()
+add_result() { RESULTS+=("$1|$2|$3"); }
+
+# === R1: Marketplace paths ===
 if [ -f .claude-plugin/marketplace.json ]; then
-  FAILS=0
+  R1_FAILS=0
   while read -r path; do
-    if [ ! -d "$path" ]; then echo "FAIL: marketplace.json references missing dir: $path"; FAILS=$((FAILS + 1)); fi
-  done < <(grep -oE '"\.\/ln-[^"]+' .claude-plugin/marketplace.json | tr -d '"')
-  [ "$FAILS" -eq 0 ] && echo "PASS"
+    [ -d "$path" ] || R1_FAILS=$((R1_FAILS + 1))
+  done < <(grep -oE '"\./ln-[^"]+' .claude-plugin/marketplace.json | tr -d '"')
+  [ "$R1_FAILS" -eq 0 ] && add_result R1 "Marketplace paths" PASS || add_result R1 "Marketplace paths" "FAIL ($R1_FAILS missing dirs)"
 else
-  echo "SKIP: no marketplace.json"
+  add_result R1 "Marketplace paths" SKIP
 fi
-```
 
-### Check R2: Root docs stale skill names
-
-```bash
-FAILS=0
+# === R2: Root docs stale skill names ===
+R2_FAILS=0
 for doc in README.md AGENTS.md .claude-plugin/marketplace.json; do
-  if [ -f "$doc" ]; then
-    while read -r skill; do
-      ls -d ${skill}*/ >/dev/null 2>&1 || { echo "FAIL: $doc references missing skill: $skill"; FAILS=$((FAILS + 1)); }
-    done < <(grep -oE 'ln-[0-9]+-[a-z-]+' "$doc" | sort -u)
-  fi
+  [ -f "$doc" ] || continue
+  while read -r skill; do
+    ls -d ${skill}*/ >/dev/null 2>&1 || R2_FAILS=$((R2_FAILS + 1))
+  done < <(grep -oE 'ln-[0-9]+-[a-z-]+' "$doc" | sort -u)
 done
-[ "$FAILS" -eq 0 ] && echo "PASS"
-```
+[ "$R2_FAILS" -eq 0 ] && add_result R2 "Root docs stale names" PASS || add_result R2 "Root docs stale names" "FAIL ($R2_FAILS stale refs)"
 
-### Check R3: Skill count accuracy (badge + marketplace)
-
-```bash
+# === R3: Skill count accuracy ===
 actual=$(ls -d ln-*/SKILL.md 2>/dev/null | wc -l)
-FAILS=0
+R3_FAILS=0
 if [ -f README.md ]; then
   badge=$(grep -oE 'skills-[0-9]+' README.md | grep -oE '[0-9]+' || true)
-  if [ -n "$badge" ] && [ "$badge" != "$actual" ]; then
-    echo "FAIL: README badge says $badge, actual $actual"
-    FAILS=$((FAILS + 1))
-  fi
+  [ -n "$badge" ] && [ "$badge" != "$actual" ] && R3_FAILS=$((R3_FAILS + 1))
 fi
 if [ -f .claude-plugin/marketplace.json ]; then
-  market=$(grep -oE '"\.\/ln-[^"]+' .claude-plugin/marketplace.json | wc -l)
-  if [ "$market" != "$actual" ]; then
-    echo "FAIL: marketplace.json has $market entries, actual $actual"
-    FAILS=$((FAILS + 1))
-  fi
+  market=$(grep -oE '"\./ln-[^"]+' .claude-plugin/marketplace.json | wc -l)
+  [ "$market" != "$actual" ] && R3_FAILS=$((R3_FAILS + 1))
 fi
-[ "$FAILS" -eq 0 ] && echo "PASS: $actual skills"
-```
+[ "$R3_FAILS" -eq 0 ] && add_result R3 "Skill count accuracy" "PASS ($actual skills)" || add_result R3 "Skill count accuracy" "FAIL (badge/marketplace mismatch, actual=$actual)"
 
-### Check R4: Plugin completeness
-
-Every `ln-*/SKILL.md` must appear in exactly one plugin's marketplace.json skills array.
-
-```bash
-FAILS=0
+# === R4: Plugin completeness ===
+R4_FAILS=0
 for skill_dir in ln-*/; do
   skill_name="./${skill_dir%/}"
-  if ! grep -q "\"$skill_name\"" .claude-plugin/marketplace.json 2>/dev/null; then
-    echo "FAIL: $skill_name not in marketplace.json"
-    FAILS=$((FAILS + 1))
-  fi
+  grep -q "\"$skill_name\"" .claude-plugin/marketplace.json 2>/dev/null || R4_FAILS=$((R4_FAILS + 1))
 done
-[ "$FAILS" -eq 0 ] && echo "PASS"
-```
+[ "$R4_FAILS" -eq 0 ] && add_result R4 "Plugin completeness" PASS || add_result R4 "Plugin completeness" "FAIL ($R4_FAILS orphan skills)"
 
-### Check R5: Pipeline data-flow (manual review)
-
-For each skill in documentation-pipeline (1XX) that CREATES output files for the target project (e.g., `design_guidelines.md`, `kanban_board.md`, `testing_strategy.md`):
-- Verify at least one downstream skill (2XX-5XX) references or loads the created document
-- If orphan output found → WARN (some outputs are for humans, not agents)
-
-This check requires reading SKILL.md content — run it as a review step, not a bash script.
-
-### Check R6: Site fact-check (conditional — skip if `site/` unchanged)
-
-R6a: Plugin page skill counts match marketplace.
-
-```bash
-FAILS=0
-for page in site/plugins/*.html; do
-  plugin=$(basename "$page" .html)
-  site_skills=$(grep -oP 'skill-id">ln-[0-9]+' "$page" | wc -l)
-  market_skills=$(grep -A999 "\"$plugin\"" .claude-plugin/marketplace.json | grep -oE '"\./ln-' | wc -l)
-  if [ "$site_skills" -gt 0 ] && [ "$site_skills" != "$market_skills" ]; then
-    echo "FAIL: $plugin site=$site_skills marketplace=$market_skills"
-    FAILS=$((FAILS + 1))
-  fi
-done
-[ "$FAILS" -eq 0 ] && echo "PASS"
-```
-
-R6b (manual): Verify `site/index.html` claims match code:
-- Quality gate levels match ln-500 SKILL.md description (PASS/CONCERNS/FAIL/WAIVED)
-- Auditor count matches `ls -d ln-6*/SKILL.md | wc -l`
-- Plugin names/count match marketplace.json
-
-### Check R7: MCP README fact-check (conditional — skip if no `mcp/*.mjs` changed)
-
-```bash
-FAILS=0
-for mcp_dir in mcp/*/; do
-  if git diff --name-only HEAD -- "$mcp_dir" | grep -q '\.mjs$'; then
-    readme="${mcp_dir}README.md"
-    [ ! -f "$readme" ] && { echo "FAIL: $mcp_dir has no README"; FAILS=$((FAILS + 1)); continue; }
-    actual=$(grep -c 'registerTool' "${mcp_dir}server.mjs")
-    claimed=$(grep -oP '\d+(?= MCP Tools)' "$readme" || echo "0")
-    if [ -n "$claimed" ] && [ "$actual" != "$claimed" ]; then
-      echo "FAIL: $readme claims $claimed tools, actual $actual"
-      FAILS=$((FAILS + 1))
+# === R5: Pipeline data-flow (semi-automated) ===
+R5_WARNS=0
+for creator in ln-11[1-5]-*/SKILL.md; do
+  [ -f "$creator" ] || continue
+  # Extract output filenames from creator skills
+  while read -r output_file; do
+    # Check if any downstream skill (2XX-5XX) references this file
+    if ! grep -rlq "$output_file" ln-{2,3,4,5}*/SKILL.md 2>/dev/null; then
+      R5_WARNS=$((R5_WARNS + 1))
     fi
-  fi
+  done < <(grep -oP '(?<=`)\w+\.md(?=`)' "$creator" | grep -vE '(SKILL|README|CLAUDE|AGENTS)' | sort -u | head -5)
 done
-[ "$FAILS" -eq 0 ] && echo "PASS"
+[ "$R5_WARNS" -eq 0 ] && add_result R5 "Pipeline data-flow" PASS || add_result R5 "Pipeline data-flow" "WARN ($R5_WARNS possibly orphan outputs)"
+
+# === R6: Site fact-check (conditional) ===
+if git diff --name-only HEAD -- site/ 2>/dev/null | grep -q .; then
+  # R6a: Plugin page skill counts
+  R6_FAILS=0
+  for page in site/plugins/*.html; do
+    [ -f "$page" ] || continue
+    plugin=$(basename "$page" .html)
+    site_skills=$(grep -oP 'skill-id">ln-[0-9]+' "$page" | wc -l)
+    market_skills=$(node -e "const m=JSON.parse(require('fs').readFileSync('.claude-plugin/marketplace.json','utf8'));const p=m.plugins.find(x=>x.name==='$plugin');console.log(p?p.skills.length:0)")
+    [ "$site_skills" -gt 0 ] && [ "$site_skills" != "$market_skills" ] && { echo "  R6a: $plugin site=$site_skills marketplace=$market_skills" >&2; R6_FAILS=$((R6_FAILS + 1)); }
+  done
+  # R6b: Auditor count
+  auditor_count=$(ls -d ln-6*/SKILL.md 2>/dev/null | wc -l)
+  site_auditor=$(grep -oP '[0-9]+(?= parallel auditors)' site/index.html 2>/dev/null || echo "0")
+  [ -n "$site_auditor" ] && [ "$site_auditor" != "$auditor_count" ] && { echo "  R6b: site says $site_auditor auditors, actual $auditor_count" >&2; R6_FAILS=$((R6_FAILS + 1)); }
+  [ "$R6_FAILS" -eq 0 ] && add_result R6 "Site fact-check" PASS || add_result R6 "Site fact-check" "FAIL ($R6_FAILS mismatches)"
+else
+  add_result R6 "Site fact-check" "SKIP (no site/ changes)"
+fi
+
+# === R7: MCP README fact-check (conditional) ===
+if git diff --name-only HEAD -- mcp/ 2>/dev/null | grep -q '\.mjs$'; then
+  R7_FAILS=0
+  for mcp_dir in mcp/*/; do
+    git diff --name-only HEAD -- "$mcp_dir" 2>/dev/null | grep -q '\.mjs$' || continue
+    readme="${mcp_dir}README.md"
+    [ ! -f "$readme" ] && { R7_FAILS=$((R7_FAILS + 1)); continue; }
+    actual_tools=$(grep -c 'registerTool' "${mcp_dir}server.mjs" 2>/dev/null || echo 0)
+    claimed=$(grep -oP '\d+(?= MCP Tools)' "$readme" || echo "0")
+    [ -n "$claimed" ] && [ "$actual_tools" != "$claimed" ] && { echo "  R7: $readme claims $claimed, actual $actual_tools" >&2; R7_FAILS=$((R7_FAILS + 1)); }
+  done
+  [ "$R7_FAILS" -eq 0 ] && add_result R7 "MCP README fact-check" PASS || add_result R7 "MCP README fact-check" "FAIL ($R7_FAILS mismatches)"
+else
+  add_result R7 "MCP README fact-check" "SKIP (no mcp/*.mjs changes)"
+fi
+
+# === R8: Volatile numbers in site/ ===
+R8_WARNS=$(grep -rnE '[0-9]+ (skills|auditors|parallel auditors)' site/ 2>/dev/null | grep -vcE '(WCAG|2\.1|AA|0 API)' || true)
+[ "$R8_WARNS" -eq 0 ] && add_result R8 "Volatile numbers in site" PASS || add_result R8 "Volatile numbers in site" "WARN ($R8_WARNS found)"
+
+# === R9: Check sync (automated_checks.md <-> run_checks.sh) ===
+CHECKS_DOC=$(grep -oE 'Check [0-9]+' ln-162-skill-reviewer/references/automated_checks.md | grep -oE '[0-9]+' | sort -n | uniq)
+CHECKS_SCRIPT=$(grep -oE 'CHECK [0-9]+' ln-162-skill-reviewer/references/run_checks.sh | grep -oE '[0-9]+' | sort -n | uniq)
+MISSING=$(comm -23 <(echo "$CHECKS_DOC") <(echo "$CHECKS_SCRIPT"))
+[ -z "$MISSING" ] && add_result R9 "Check sync (docs<->script)" PASS || add_result R9 "Check sync (docs<->script)" "FAIL (missing in script: $(echo $MISSING | tr '\n' ','))"
+
+# === R10: Worker invocation (full-repo D8b) ===
+R10_FAILS=0
+for f in ln-*/SKILL.md; do
+  level=$(grep -oP '(?<=\*\*Type:\*\* )L[12]' "$f" | head -1)
+  [ -z "$level" ] && continue
+  self=$(basename $(dirname "$f") | grep -oE 'ln-[0-9]+-[a-z-]+')
+  worker_count=$(grep -oE 'ln-[0-9]+-[a-z-]+' "$f" | sort -u | grep -v "$self" | wc -l)
+  [ "$worker_count" -eq 0 ] && continue
+  skill_calls=$(grep -c 'Skill(skill:' "$f" || true)
+  [ "$skill_calls" -eq 0 ] && R10_FAILS=$((R10_FAILS + 1))
+  grep -q 'Worker Invocation (MANDATORY)' "$f" || R10_FAILS=$((R10_FAILS + 1))
+done
+[ "$R10_FAILS" -eq 0 ] && add_result R10 "Worker invocation (full-repo D8b)" PASS || add_result R10 "Worker invocation (full-repo D8b)" "FAIL ($R10_FAILS issues)"
+
+# === Output report table ===
+echo ""
+echo "## Repo-Specific Review -- claude-code-skills"
+echo ""
+echo "| # | Check | Result |"
+echo "|---|-------|--------|"
+for r in "${RESULTS[@]}"; do
+  IFS='|' read -r num check result <<< "$r"
+  echo "| $num | $check | $result |"
+done
+
+# Count failures
+total_fails=$(printf '%s\n' "${RESULTS[@]}" | grep -c 'FAIL' || true)
+total_warns=$(printf '%s\n' "${RESULTS[@]}" | grep -c 'WARN' || true)
+echo ""
+if [ "$total_fails" -gt 0 ]; then
+  echo "Repo verdict: FAIL ($total_fails failures, $total_warns warnings)"
+elif [ "$total_warns" -gt 0 ]; then
+  echo "Repo verdict: PASS with WARNINGS ($total_warns)"
+else
+  echo "Repo verdict: PASS"
+fi
 ```
 
-### Check R8: Volatile numbers in site/
+## Step 3: Combined Report
 
-```bash
-FAILS=0
-while IFS= read -r match; do
-  echo "WARN: $match"
-  FAILS=$((FAILS + 1))
-done < <(grep -rnE '[0-9]+ (skills|auditors|parallel auditors)' site/ | grep -vE '(WCAG|2\.1|AA|0 API)')
-[ "$FAILS" -eq 0 ] && echo "PASS" || echo "WARN: $FAILS volatile numbers found"
-```
-
-## Step 3: Report
-
-Combine results:
+Merge results into:
 
 ```
-## Repo-Specific Review -- claude-code-skills
-
-| # | Check | Result |
-|---|-------|--------|
-| R1 | Marketplace paths | {PASS/FAIL/SKIP} |
-| R2 | Root docs stale names | {PASS/FAIL} |
-| R3 | Skill count accuracy | {PASS/FAIL} |
-| R4 | Plugin completeness | {PASS/FAIL} |
-| R5 | Pipeline data-flow | {PASS/WARN} |
-| R6 | Site fact-check | {PASS/FAIL/SKIP} |
-| R7 | MCP README fact-check | {PASS/FAIL/SKIP} |
-| R8 | Volatile numbers in site | {PASS/WARN} |
-
-Combined verdict: {ln-162 verdict} + {repo checks}
+| Source | Verdict | Details |
+|--------|---------|---------||
+| ln-162 (universal) | {PASS/FAIL} | {N findings, M fixed} |
+| Repo-specific | {PASS/FAIL} | {N failures, M warnings} |
+| **Combined** | **{worst of both}** | |
 ```
+
+Then list all FAIL/WARN items grouped by severity, with file paths and fix descriptions.
+
+---
+
+## Step 4: Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Analyze this session per protocol §7. Output per protocol format.

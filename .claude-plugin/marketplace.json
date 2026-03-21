@@ -188,6 +188,7 @@
       "strict": false,
       "skills": [
         "./ln-001-push-all",
+        "./ln-002-session-analyzer",
         "./ln-010-dev-environment-setup",
         "./ln-011-agent-installer",
         "./ln-012-mcp-configurator",

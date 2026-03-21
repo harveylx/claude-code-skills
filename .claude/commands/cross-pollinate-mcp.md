@@ -15,30 +15,11 @@ Audit hex-line-mcp, hex-ssh-mcp, and hex-graph-mcp for feature parity. Report ga
 
 ---
 
-### 1. Session Investigation
-
-Mine real-world tool errors from agent sessions (last 7 days).
-
-| Agent | Path | Format |
-|-------|------|--------|
-| Claude | `~/.claude/projects/{project-hash}/{uuid}.jsonl` | JSONL |
-| Codex | `~/.codex/archived_sessions/rollout-*.jsonl` | JSONL |
-| Gemini | `~/.gemini/antigravity/conversations/` | Protobuf/JSON |
-
-```bash
-CLAUDE_DIR="$HOME/.claude/projects/d--Development-LevNikolaevich-claude-code-skills"
-for f in $(ls -t "$CLAUDE_DIR"/*.jsonl 2>/dev/null | head -10); do
-  grep -c 'tool_use_error\|NOOP_EDIT\|out of range\|mismatch\|TEXT_NOT_FOUND\|FILE_NOT_FOUND\|HASH_HINT\|DANGEROUS\|Obligatory use\|cancelled.*parallel' "$f" && echo "$f"
-done
-```
-
-Output: table of Agent / Sessions / Errors / Top Pattern / Self-Healing. Feed into step 3.
-
-### 2. Read all servers
+### 1. Read all servers
 
 Read all three `server.mjs` files and `lib/` directories. Map features per server.
 
-### 3. Feature Checklist
+### 2. Feature Checklist
 
 | Feature | Check |
 |---------|-------|
@@ -53,7 +34,7 @@ Read all three `server.mjs` files and `lib/` directories. Map features per serve
 
 Output: gap table per server. Fix any gaps found.
 
-### 4. Description Audit
+### 3. Description Audit
 
 For each tool in each server, verify description against actual code:
 
@@ -67,7 +48,7 @@ Output:
 | Tool | Issue | Severity | Fix |
 |------|-------|----------|-----|
 
-### 5. Hook Hints Audit
+### 4. Hook Hints Audit
 
 For each entry in `TOOL_HINTS` in `hook.mjs`:
 
@@ -82,7 +63,7 @@ Output:
 | Hint Key | Tool Pointed To | Accurate? | Cross-refs? | Fix |
 |----------|----------------|-----------|-------------|-----|
 
-### 6. Tool Value Audit (hex-line only)
+### 5. Tool Value Audit (hex-line only)
 
 For each tool, compare with the built-in it replaces. Only tools with REAL VALUE should exist.
 
@@ -108,7 +89,7 @@ Output:
 
 Verdicts: KEEP / DELETE / RESTRICT / MERGE.
 
-### 7. Benchmark Validation (hex-line only)
+### 6. Benchmark Validation (hex-line only)
 
 Run benchmarks to validate tool value with real numbers:
 
@@ -124,7 +105,7 @@ Focus on **Workflow Scenarios (W1-W4)**, not atomic operations. Atomic savings (
 | 20-49% | REVIEW — check if pattern is common enough |
 | <20% | DELETE candidate — no workflow value over built-in |
 
-Cross-reference with step 6 theoretical analysis. If workflow shows <20% but step 6 identified safety value (e.g. hash mismatch prevention, edit rejection) → KEEP with justification.
+Cross-reference with step 5 theoretical analysis. If workflow shows <20% but step 5 identified safety value (e.g. hash mismatch prevention, edit rejection) → KEEP with justification.
 
 Output:
 
@@ -133,7 +114,7 @@ Output:
 
 **Gate:** Any tool not covered by a workflow with ≥50% savings and no safety justification → remove from server.mjs.
 
-### 8. Hook Redirect Correctness Audit (hex-line only)
+### 7. Hook Redirect Correctness Audit (hex-line only)
 
 For each entry in `BASH_REDIRECTS` in `hook.mjs`, verify the redirect is correct:
 
@@ -172,7 +153,7 @@ Output:
 | Command Pattern | hex-line Tool | Can Replace? | Hook Status | Verdict |
 |----------------|--------------|-------------|-------------|---------|
 
-### 9. README Audit
+### 8. README Audit
 
 For each server's README.md:
 
@@ -184,7 +165,7 @@ For each server's README.md:
 
 Output findings as a table, fix discrepancies.
 
-### 10. Lint + check + test
+### 9. Lint + check + test
 
 ```bash
 for pkg in hex-line-mcp hex-ssh-mcp hex-graph-mcp; do
@@ -195,7 +176,7 @@ done
 
 **Gate:** 0 errors on all 3 servers.
 
-### 11. Cross-Pollination Report
+### 10. Cross-Pollination Report
 
 Output:
 
@@ -208,3 +189,11 @@ Output:
 ```
 
 After the table, list all files created or modified.
+
+---
+
+### 11. Meta-Analysis
+
+**MANDATORY READ:** Load `shared/references/meta_analysis_protocol.md`
+
+Analyze this session per protocol §7. Output per protocol format.

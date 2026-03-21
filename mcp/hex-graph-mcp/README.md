@@ -3,7 +3,9 @@
 Code knowledge graph MCP server. Indexes codebases into a SQLite graph via tree-sitter AST parsing.
 
 [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-graph-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-graph-mcp)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![downloads](https://img.shields.io/npm/dm/@levnikolaevich/hex-graph-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-graph-mcp)
+[![license](https://img.shields.io/npm/l/@levnikolaevich/hex-graph-mcp)](./LICENSE)
+![node](https://img.shields.io/node/v/@levnikolaevich/hex-graph-mcp)
 
 ## Features
 
@@ -207,6 +209,14 @@ A single `.hex-graph.db` file is created in the project root (next to package.js
 No. The file watcher runs in-process and stops when the MCP server stops. Call `watch_project` again after restart -- it is idempotent (singleton per project path).
 
 </details>
+
+## Hex Family
+
+| Package | Purpose | npm |
+|---------|---------|-----|
+| [hex-line-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-line-mcp) | Local file editing with hash verification + hooks | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-line-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-line-mcp) |
+| [hex-ssh-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-ssh-mcp) | Remote file editing over SSH | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-ssh-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-ssh-mcp) |
+| [hex-graph-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-graph-mcp) | Code knowledge graph with AST indexing | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-graph-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-graph-mcp) |
 
 ## License
 

@@ -10,7 +10,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { diffLines } from "diff";
-import { fnv1a, lineTag, rangeChecksum } from "./hash.mjs";
+import { fnv1a, lineTag, rangeChecksum, parseChecksum } from "./hash.mjs";
 import { validatePath } from "./security.mjs";
 import { getGraphDB, blastRadius, getRelativePath } from "./graph-enrich.mjs";
 
@@ -348,12 +348,33 @@ export function editFile(filePath, edits, opts = {}) {
             // Range checksum verification (mandatory)
             const rc = e.replace_lines.range_checksum;
             if (!rc) throw new Error("range_checksum required for replace_lines. Read the range first via read_file, then pass its checksum.");
-            const rcHex = rc.includes(":") ? rc.split(":")[1] : rc;
+
+            // Checksum's range is authoritative (from read_file), not anchor range
+            const { start: csStart, end: csEnd, hex: csHex } = parseChecksum(rc);
+
+            // Coverage check: checksum range must contain ACTUAL edit range (after relocation)
+            const actualStart = si + 1;
+            const actualEnd = ei + 1;
+            if (csStart > actualStart || csEnd < actualEnd) {
+                throw new Error(
+                    `Checksum range ${csStart}-${csEnd} does not cover edit range ${actualStart}-${actualEnd}. ` +
+                    `Re-read lines ${actualStart}-${actualEnd} first.`
+                );
+            }
+
+            // Verify freshness over checksum's own range using origLines snapshot
+            const csStartIdx = csStart - 1;
+            const csEndIdx = csEnd - 1;
+            if (csStartIdx < 0 || csEndIdx >= origLines.length) {
+                throw new Error(`Checksum range ${csStart}-${csEnd} out of bounds (file has ${origLines.length} lines). Re-read the file.`);
+            }
             const lineHashes = [];
-            for (let i = si; i <= ei; i++) lineHashes.push(fnv1a(lines[i]));
-            const actual = rangeChecksum(lineHashes, s.line, en.line);
+            for (let i = csStartIdx; i <= csEndIdx; i++) lineHashes.push(fnv1a(origLines[i]));
+            const actual = rangeChecksum(lineHashes, csStart, csEnd);
             const actualHex = actual.split(":")[1];
-            if (rcHex !== actualHex) throw new Error(`Range checksum mismatch: expected ${rc}, got ${actual}. File changed \u2014 re-read lines ${s.line}-${en.line}.`);
+            if (csHex !== actualHex) {
+                throw new Error(`Range checksum mismatch: expected ${rc}, got ${actual}. File changed \u2014 re-read lines ${csStart}-${csEnd}.`);
+            }
 
             const txt = e.replace_lines.new_text;
             if (!txt && txt !== 0) {

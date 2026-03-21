@@ -63,6 +63,28 @@ function formatSize(bytes) {
     return `${bytes}B`;
 }
 
+function countFileLines(filePath, size) {
+    if (size === 0 || size > 1_000_000) return null;
+    try {
+        const buf = readFileSync(filePath);
+        const checkLen = Math.min(buf.length, 8192);
+        for (let i = 0; i < checkLen; i++) if (buf[i] === 0) return null; // binary
+        let count = 1;
+        for (let i = 0; i < buf.length; i++) if (buf[i] === 0x0A) count++;
+        return count;
+    } catch { return null; }
+}
+
+function relativeTime(mtime) {
+    const sec = (Date.now() - mtime.getTime()) / 1000;
+    if (sec < 60) return "now";
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
+    if (sec < 2592000) return `${Math.floor(sec / 604800)}w ago`;
+    return `${Math.floor(sec / 2592000)}mo ago`;
+}
+
 /**
  * Find files/dirs by glob pattern. Returns flat list of relative paths.
  * @param {string} dirPath - Root directory to search
@@ -199,14 +221,19 @@ export function directoryTree(dirPath, opts = {}) {
                 if (compact) {
                     lines.push(`${prefix}${name}`);
                 } else {
-                    let size = 0;
-                    try { size = statSync(full).size; } catch { /* skip */ }
+                    let size = 0, mtime = null, lineCount = null;
+                    try {
+                        const st = statSync(full);
+                        size = st.size;
+                        mtime = st.mtime;
+                    } catch { /* skip */ }
                     totalSize += size;
-                    if (size >= 1024) {
-                        lines.push(`${prefix}${name} (${formatSize(size)})`);
-                    } else {
-                        lines.push(`${prefix}${name}`);
-                    }
+                    lineCount = countFileLines(full, size);
+                    const parts = [];
+                    if (lineCount !== null) parts.push(`${lineCount}L`);
+                    parts.push(formatSize(size));
+                    if (mtime) parts.push(relativeTime(mtime));
+                    lines.push(`${prefix}${name} (${parts.join(", ")})`);
                 }
             }
         }

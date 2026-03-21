@@ -1,6 +1,6 @@
 {
   "name": "@levnikolaevich/hex-graph-mcp",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "Code knowledge graph MCP server. Indexes codebases into SQLite graph via tree-sitter AST. 7 tools: index_project, search_symbols, get_impact, trace_calls, get_context, get_architecture, watch_project.",
   "main": "server.mjs",
@@ -31,7 +31,11 @@
     "web-tree-sitter": "^0.25.0",
     "zod": "^3.25.0"
   },
+  "author": "Lev Nikolaevich <https://github.com/levnikolaevich>",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/levnikolaevich/claude-code-skills/issues"
+  },
   "keywords": [
     "mcp",
     "codegraph",
@@ -40,7 +44,12 @@
     "code-intelligence",
     "blast-radius",
     "dependency-graph",
-    "model-context-protocol"
+    "model-context-protocol",
+    "claude",
+    "ai",
+    "llm",
+    "coding-agent",
+    "code-analysis"
   ],
   "repository": {
     "type": "git",

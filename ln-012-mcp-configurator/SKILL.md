@@ -43,7 +43,7 @@ Two transport types: **stdio** (local process) and **HTTP** (cloud endpoint).
 
 ## Workflow
 
-Audit  -->  Configure  -->  Register  -->  Permissions  -->  Budget  -->  Report
+Audit  -->  Update  -->  Configure  -->  Register  -->  Permissions  -->  Budget  -->  Report
 
 ### Phase 1: Audit Current MCP State
 
@@ -61,7 +61,37 @@ Audit  -->  Configure  -->  Register  -->  Permissions  -->  Budget  -->  Report
 | playwright | Remove if found |
 | browsermcp | Remove if found |
 
-### Phase 2: Configure Missing Servers
+### Phase 2: Update Outdated npm Packages
+
+For each hex MCP package (`@levnikolaevich/hex-line-mcp`, `hex-ssh-mcp`, `hex-graph-mcp`):
+
+1. Check if globally installed: `npm ls -g @levnikolaevich/hex-line-mcp --json 2>/dev/null`
+2. If installed, check for updates: `npm outdated -g @levnikolaevich/hex-line-mcp`
+3. If outdated → run `npm i -g @levnikolaevich/hex-line-mcp@latest`
+4. Report: `"hex-line: 1.1.0 → 1.1.2 (updated)"` or `"hex-line: 1.1.2 (current)"`
+
+```bash
+# Check and update all hex MCP packages:
+for pkg in @levnikolaevich/hex-line-mcp @levnikolaevich/hex-ssh-mcp @levnikolaevich/hex-graph-mcp; do
+  current=$(npm ls -g "$pkg" --json 2>/dev/null | node -e "try{console.log(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).dependencies['${pkg}'].version)}catch{console.log('')}")
+  if [ -n "$current" ]; then
+    latest=$(npm view "$pkg" version 2>/dev/null)
+    if [ "$current" != "$latest" ]; then
+      npm i -g "${pkg}@latest"
+      echo "$pkg: $current → $latest (updated)"
+    else
+      echo "$pkg: $current (current)"
+    fi
+  fi
+done
+```
+
+**Skip conditions:**
+- Package not installed globally → skip (Phase 3 handles fresh installs)
+- `dry_run: true` → show planned update, do not execute
+- Dev mode servers (local `node {repo}/mcp/*/server.mjs`) → skip npm update
+
+### Phase 3: Configure Missing Servers
 
 For each server in registry not yet configured:
 
@@ -69,7 +99,7 @@ For each server in registry not yet configured:
 2. IF `dry_run: true` → show planned `claude mcp add` command, do not execute
 3. IF **linear** → ask user: "Do you use Linear for task management?" → no → SKIP
 
-### Phase 3: Register via `claude mcp add`
+### Phase 4: Register via `claude mcp add`
 
 Registration commands by server and source:
 
@@ -96,14 +126,14 @@ Registration commands by server and source:
 | Connection failed after add | WARN, report detail from `claude mcp list` |
 | API key missing (Ref) | Prompt user for key, skip if declined |
 
-### Phase 3b: Install Output Style
+### Phase 4b: Install Output Style
 
 After hex-line registration, install Output Style via `mcp__hex-line__setup_hooks(agent="claude")`. This:
 1. Copies `output-style.md` to `~/.claude/output-styles/hex-line.md`
 2. Sets `outputStyle: "hex-line"` in `~/.claude/settings.json` if no style is active
 3. If another style is active — preserves it, reports to user
 
-### Phase 3c: Graph Indexing
+### Phase 4c: Graph Indexing
 
 After hex-graph registration + connected status:
 1. `mcp__hex-graph__index_project({ path: "{project_path}" })` — build initial code knowledge graph
@@ -111,7 +141,48 @@ After hex-graph registration + connected status:
 
 Skip if hex-graph not registered or not connected.
 
-### Phase 4: Grant Permissions
+### Phase 4d: Migrate Project allowed-tools
+
+After hex-line is configured, scan project commands and skills to add hex-line tool equivalents to `allowed-tools` frontmatter.
+
+**Tool mapping:**
+
+| Built-in | Hex equivalent |
+|----------|---------------|
+| `Read` | `mcp__hex-line__read_file` |
+| `Edit` | `mcp__hex-line__edit_file` |
+| `Write` | `mcp__hex-line__write_file` |
+| `Grep` | `mcp__hex-line__grep_search` |
+
+**Steps:**
+
+1. Glob `.claude/commands/*.md` + `.claude/skills/*/SKILL.md` in current project
+2. For each file: parse YAML frontmatter, extract `allowed-tools`
+3. For each mapping entry: if built-in present AND hex equivalent absent → append hex equivalent
+4. Write back updated frontmatter (preserve quoting style)
+5. Report:
+
+```
+allowed-tools Migration:
+| File                        | Tools Added                    | Status           |
+|-----------------------------|--------------------------------|------------------|
+| commands/deploy.md          | read_file, edit_file           | migrated         |
+| commands/run-tests.md       | —                              | already migrated |
+| commands/review.md          | —                              | no allowed-tools |
+```
+
+**Skip conditions:**
+
+| Condition | Action |
+|-----------|--------|
+| No `.claude/` directory | Skip entire phase |
+| File has no `allowed-tools` | Skip file, report "no allowed-tools" |
+| All hex equivalents already present | Skip file, report "already migrated" |
+| `dry_run: true` | Show planned changes, don't write |
+
+**Strategy:** ADD hex equivalents alongside built-ins (don't remove built-ins — commands stay functional without hex-line).
+
+### Phase 5: Grant Permissions
 
 For each **configured** MCP server, add `mcp__{name}` to `~/.claude/settings.json` → `permissions.allow[]`.
 
@@ -132,7 +203,7 @@ For each **configured** MCP server, add `mcp__{name}` to `~/.claude/settings.jso
 
 **Idempotent:** existing entries skipped.
 
-### Phase 5: Budget Analysis
+### Phase 6: Budget Analysis
 
 | Metric | Formula | Threshold |
 |--------|---------|-----------|
@@ -148,7 +219,7 @@ Budget warnings:
 | 6-8 | WARN | "Consider disabling unused MCP servers to reduce context overhead" |
 | >8 | WARN | "Significant context impact — review which servers are actively used" |
 
-### Phase 6: Report
+### Phase 7: Report
 
 ```
 MCP Configuration:
@@ -165,12 +236,12 @@ Budget: 4 servers ~ 20K tokens (10.0% of context) — OK
 
 ---
 
-### Phase 7: Token Efficiency Benchmark
+### Phase 8: Token Efficiency Benchmark
 
 After hex-line is configured, run benchmark on user's repo:
 
 ```bash
-node mcp/hex-line-mcp/benchmark.mjs
+node "$(npm root -g)/@levnikolaevich/hex-line-mcp/benchmark.mjs"
 ```
 
 Display results to user — demonstrates value of the MCP setup just completed.
@@ -215,6 +286,7 @@ If benchmark shows >50% savings on outline+read → recommend adding hex-line ho
 - [ ] Token budget calculated and warnings shown if applicable
 - [ ] Final status table displayed with all servers
 - [ ] Permissions granted for all configured servers in user settings
+- [ ] Project allowed-tools migrated to include hex-line equivalents (or skipped if no `.claude/`)
 - [ ] Token efficiency benchmark run and results shown
 
 ---

@@ -3,7 +3,9 @@
 Hash-verified file editing MCP + token efficiency hook for AI coding agents.
 
 [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-line-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-line-mcp)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![downloads](https://img.shields.io/npm/dm/@levnikolaevich/hex-line-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-line-mcp)
+[![license](https://img.shields.io/npm/l/@levnikolaevich/hex-line-mcp)](./LICENSE)
+![node](https://img.shields.io/node/v/@levnikolaevich/hex-line-mcp)
 
 Every line carries an FNV-1a content hash. Every edit must present those hashes back -- proving the agent is editing what it thinks it's editing. No stale context, no silent corruption.
 
@@ -106,6 +108,7 @@ Read a file with FNV-1a hash-annotated lines and range checksums. Supports direc
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `path` | string | yes | File or directory path |
+| `paths` | string[] | no | Array of file paths to read (batch mode) |
 | `offset` | number | no | Start line, 1-indexed (default: 1) |
 | `limit` | number | no | Max lines to return (default: 2000, 0 = all) |
 | `plain` | boolean | no | Omit hashes, output `lineNum\|content` instead |
@@ -161,8 +164,10 @@ Search file contents using ripgrep with hash-annotated results.
 | `glob` | string | no | Glob filter, e.g. `"*.ts"` |
 | `type` | string | no | File type filter, e.g. `"js"`, `"py"` |
 | `case_insensitive` | boolean | no | Ignore case |
+| `smart_case` | boolean | no | Case-insensitive when pattern is all lowercase, case-sensitive if it has uppercase (`-S`) |
 | `context` | number | no | Context lines around matches |
 | `limit` | number | no | Max matches per file (default: 100) |
+| `plain` | boolean | no | Omit hash tags, return `file:line:content` |
 
 ### outline
 
@@ -194,8 +199,11 @@ Compact directory tree with .gitignore support and file sizes.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `path` | string | yes | Directory path |
-| `max_depth` | number | no | Max recursion depth (default: 3) |
+| `pattern` | string | no | Glob filter on names (e.g. `"*-mcp"`, `"*.mjs"`). Returns flat match list instead of tree |
+| `type` | string | no | `"file"`, `"dir"`, or `"all"` (default). Like `find -type f/d` |
+| `max_depth` | number | no | Max recursion depth (default: 3, or 20 in pattern mode) |
 | `gitignore` | boolean | no | Respect .gitignore patterns (default: true) |
+| `format` | string | no | `"compact"` = names only, no sizes, depth 1. `"full"` = default with sizes |
 
 Skips `node_modules`, `.git`, `dist`, `build`, `__pycache__`, `.next`, `coverage` by default.
 
@@ -283,16 +291,6 @@ FNV-1a accumulator over all line hashes in the range (little-endian byte feed). 
 - Write path validation (ancestor directory must exist)
 - Directory restrictions delegated to Claude Code sandbox
 
-## Differences from trueline-mcp
-
-| Aspect | hex-line-mcp | trueline-mcp |
-|--------|---------------|--------------|
-| Hash algorithm | FNV-1a (pure JS, zero dependencies) | xxHash (native addon) |
-| Diff output | Compact unified diff via `diff` npm package | Custom diff implementation |
-| Hook | Unified `hook.mjs` (reminder + RTK filter) | Separate hook scripts |
-| Path security | Canonicalization + binary detection, no ALLOWED_DIRS | Explicit ALLOWED_DIRS allowlist |
-| Transport | stdio only | stdio |
-| Outline | tree-sitter WASM (15+ languages) | tree-sitter WASM |
 
 ## FAQ
 
@@ -330,6 +328,14 @@ The PostToolUse hook normalizes Bash output (replaces UUIDs, timestamps, IPs wit
 Yes. Remove the PreToolUse hook from `.claude/settings.local.json`. The MCP tools will still work, but agents will be free to use built-in Read/Edit/Write/Grep alongside hex-line tools.
 
 </details>
+
+## Hex Family
+
+| Package | Purpose | npm |
+|---------|---------|-----|
+| [hex-line-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-line-mcp) | Local file editing with hash verification + hooks | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-line-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-line-mcp) |
+| [hex-ssh-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-ssh-mcp) | Remote file editing over SSH | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-ssh-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-ssh-mcp) |
+| [hex-graph-mcp](https://www.npmjs.com/package/@levnikolaevich/hex-graph-mcp) | Code knowledge graph with AST indexing | [![npm](https://img.shields.io/npm/v/@levnikolaevich/hex-graph-mcp)](https://www.npmjs.com/package/@levnikolaevich/hex-graph-mcp) |
 
 ## License
 
