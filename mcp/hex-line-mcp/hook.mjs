@@ -197,9 +197,13 @@ function handlePreToolUse(data) {
             process.exit(0);
         }
 
+        // Strip heredoc bodies to avoid false positives on data content
+        // e.g. gh api -f body="$(cat <<'EOF'\n...rm -rf...\nEOF)"
+        const cmdCheck = command.replace(/<<['"]?(\w+)['"]?\s*\n[\s\S]*?\n\1/g, "");
+
         // Dangerous command blocker
         for (const { regex, reason } of DANGEROUS_PATTERNS) {
-            if (regex.test(command)) {
+            if (regex.test(cmdCheck)) {
                 block(
                     `DANGEROUS: ${reason}. Ask user to confirm, then retry with: # hex-confirmed`,
                     `Original command: ${command.slice(0, 100)}`

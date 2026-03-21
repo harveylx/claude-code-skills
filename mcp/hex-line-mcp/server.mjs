@@ -54,7 +54,7 @@ try {
     process.exit(1);
 }
 
-const server = new McpServer({ name: "hex-line-mcp", version: "1.1.0" });
+const server = new McpServer({ name: "hex-line-mcp", version: "1.1.1" });
 
 
 // ==================== read_file ====================
