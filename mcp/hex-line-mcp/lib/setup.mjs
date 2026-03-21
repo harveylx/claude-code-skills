@@ -171,25 +171,17 @@ function installOutputStyle() {
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, readFileSync(source, "utf-8"), "utf-8");
 
-    // Check outputStyle in all scopes (Local > Project > User)
-    const scopes = [
-        { path: resolve(process.cwd(), ".claude/settings.local.json"), label: "local" },
-        { path: resolve(process.cwd(), ".claude/settings.json"), label: "project" },
-        { path: resolve(homedir(), ".claude/settings.json"), label: "user" },
-    ];
-
-    for (const scope of scopes) {
-        const config = readJson(scope.path);
-        if (config && config.outputStyle) {
-            return `Output style 'hex-line' installed to ~/.claude/output-styles/. Current style '${config.outputStyle}' preserved (scope: ${scope.label}). Switch via /config > Output style`;
-        }
-    }
-
-    // No outputStyle set anywhere — activate hex-line at user level
+    // Always set hex-line at user (global) level.
+    // Project/local styles override global, so this is safe.
     const userSettings = resolve(homedir(), ".claude/settings.json");
     const config = readJson(userSettings) || {};
+    const prev = config.outputStyle;
     config.outputStyle = "hex-line";
     writeJson(userSettings, config);
+
+    if (prev && prev !== "hex-line") {
+        return `Output style 'hex-line' installed and activated globally (was '${prev}')`;
+    }
     return "Output style 'hex-line' installed and activated in ~/.claude/settings.json";
 }
 
