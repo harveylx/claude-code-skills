@@ -36,7 +36,7 @@ try {
     process.exit(1);
 }
 
-const server = new McpServer({ name: "hex-graph-mcp", version: "0.2.1" });
+const server = new McpServer({ name: "hex-graph-mcp", version: "0.2.2" });
 
 // --- Error helper (MCP_TOOL_DESIGN_GUIDE Rule 3) ---
 function graphError(code, message, recovery) {
@@ -79,13 +79,14 @@ server.registerTool("search_symbols", {
         query: z.string().describe("Symbol name or partial name to search"),
         kind: z.string().optional().describe('Filter by kind: "function", "class", "method", "variable", "import"'),
         limit: flexNum().describe("Max results (default: 20)"),
+        path: z.string().optional().describe("Project path (auto-detected if single project indexed)"),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
 }, async (rawParams) => {
-    const { query, kind, limit } = coerceParams(rawParams);
+    const { query, kind, limit, path } = coerceParams(rawParams);
     try {
         const { searchSymbols } = await import("./lib/store.mjs");
-        const result = searchSymbols(query, { kind, limit });
+        const result = searchSymbols(query, { kind, limit, path });
         if (result.isError) return result;
         return { content: [{ type: "text", text: result }] };
     } catch (e) {
@@ -105,13 +106,14 @@ server.registerTool("get_impact", {
         symbol: z.string().describe("Symbol name to analyze"),
         depth: flexNum().describe("Max traversal depth (default: 3)"),
         limit: flexNum().describe("Max results (default: 50)"),
+        path: z.string().optional().describe("Project path (auto-detected if single project indexed)"),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
 }, async (rawParams) => {
-    const { symbol, depth, limit } = coerceParams(rawParams);
+    const { symbol, depth, limit, path } = coerceParams(rawParams);
     try {
         const { getImpact } = await import("./lib/store.mjs");
-        const result = getImpact(symbol, { depth, limit });
+        const result = getImpact(symbol, { depth, limit, path });
         if (result.isError) return result;
         return { content: [{ type: "text", text: result }] };
     } catch (e) {
@@ -133,13 +135,14 @@ server.registerTool("trace_calls", {
         direction: z.enum(["callers", "callees"]).optional().describe('Traversal direction (default: "callers")'),
         depth: flexNum().describe("Max traversal depth (default: 3)"),
         limit: flexNum().describe("Max results (default: 50)"),
+        path: z.string().optional().describe("Project path (auto-detected if single project indexed)"),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
 }, async (rawParams) => {
-    const { symbol, direction, depth, limit } = coerceParams(rawParams);
+    const { symbol, direction, depth, limit, path } = coerceParams(rawParams);
     try {
         const { traceCalls } = await import("./lib/store.mjs");
-        const result = traceCalls(symbol, { direction, depth, limit });
+        const result = traceCalls(symbol, { direction, depth, limit, path });
         if (result.isError) return result;
         return { content: [{ type: "text", text: result }] };
     } catch (e) {
@@ -158,13 +161,14 @@ server.registerTool("get_context", {
         "Key tool for understanding unfamiliar code — start here.",
     inputSchema: z.object({
         symbol: z.string().describe("Symbol name to inspect"),
+        path: z.string().optional().describe("Project path (auto-detected if single project indexed)"),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
 }, async (rawParams) => {
-    const { symbol } = coerceParams(rawParams);
+    const { symbol, path } = coerceParams(rawParams);
     try {
         const { getContext } = await import("./lib/store.mjs");
-        const result = getContext(symbol);
+        const result = getContext(symbol, { path });
         if (result.isError) return result;
         return { content: [{ type: "text", text: result }] };
     } catch (e) {
@@ -182,13 +186,14 @@ server.registerTool("get_architecture", {
         "Use when starting work on unfamiliar codebase.",
     inputSchema: z.object({
         path: z.string().optional().describe("Scope to subdirectory (default: entire indexed project)"),
+        project_path: z.string().optional().describe("Project path (auto-detected if single project indexed)"),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
 }, async (rawParams) => {
-    const { path: scopePath } = coerceParams(rawParams);
+    const { path: scopePath, project_path } = coerceParams(rawParams);
     try {
         const { getArchitecture } = await import("./lib/store.mjs");
-        const result = getArchitecture(scopePath);
+        const result = getArchitecture(scopePath, { path: project_path });
         if (result.isError) return result;
         return { content: [{ type: "text", text: result }] };
     } catch (e) {
@@ -223,4 +228,4 @@ server.registerTool("watch_project", {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-void checkForUpdates("@levnikolaevich/hex-graph-mcp", "0.2.1");
+void checkForUpdates("@levnikolaevich/hex-graph-mcp", "0.2.2");

@@ -447,9 +447,23 @@ export function graphError(code, message, recovery) {
     return { content: [{ type: "text", text: `${code}: ${message}\nRecovery: ${recovery}` }], isError: true };
 }
 
+function resolveStore(path) {
+    if (path) {
+        const store = _stores.get(path);
+        if (store) return store;
+        for (const [key, s] of _stores) {
+            if (path.startsWith(key) || key.startsWith(path)) return s;
+        }
+    }
+    const first = [..._stores.values()][0];
+    if (!first) return null;
+    return first;
+}
+
+
 // --- Exported query functions (for server.mjs tool handlers) ---
-export function searchSymbols(query, { kind, limit = 20 } = {}) {
-    const store = [..._stores.values()][0];
+export function searchSymbols(query, { kind, limit = 20, path } = {}) {
+    const store = resolveStore(path);
     if (!store) return graphError("NOT_INDEXED", "No project indexed", "Run index_project first");
 
     const results = store.search(query, { kind, limit });
@@ -464,8 +478,8 @@ export function searchSymbols(query, { kind, limit = 20 } = {}) {
     return lines.join("\n");
 }
 
-export function getImpact(symbol, { depth = 3, limit = 50 } = {}) {
-    const store = [..._stores.values()][0];
+export function getImpact(symbol, { depth = 3, limit = 50, path } = {}) {
+    const store = resolveStore(path);
     if (!store) return graphError("NOT_INDEXED", "No project indexed", "Run index_project first");
 
     const results = store.impact(symbol, { depth });
@@ -485,8 +499,8 @@ export function getImpact(symbol, { depth = 3, limit = 50 } = {}) {
     return lines.join("\n");
 }
 
-export function traceCalls(symbol, { direction = "callers", depth = 3, limit = 50 } = {}) {
-    const store = [..._stores.values()][0];
+export function traceCalls(symbol, { direction = "callers", depth = 3, limit = 50, path } = {}) {
+    const store = resolveStore(path);
     if (!store) return graphError("NOT_INDEXED", "No project indexed", "Run index_project first");
 
     const results = store.trace(symbol, { direction, depth });
@@ -505,8 +519,8 @@ export function traceCalls(symbol, { direction = "callers", depth = 3, limit = 5
     return lines.join("\n");
 }
 
-export function getContext(symbol) {
-    const store = [..._stores.values()][0];
+export function getContext(symbol, { path } = {}) {
+    const store = resolveStore(path);
     if (!store) return graphError("NOT_INDEXED", "No project indexed", "Run index_project first");
 
     const ctx = store.context(symbol);
@@ -544,8 +558,8 @@ export function getContext(symbol) {
     return lines.join("\n");
 }
 
-export function getArchitecture(scopePath, { limit = 15 } = {}) {
-    const store = [..._stores.values()][0];
+export function getArchitecture(scopePath, { limit = 15, path } = {}) {
+    const store = resolveStore(path);
     if (!store) return graphError("NOT_INDEXED", "No project indexed", "Run index_project first");
 
     const { modules, hotspots, crossEdges } = store.architecture(scopePath);

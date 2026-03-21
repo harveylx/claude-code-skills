@@ -54,7 +54,7 @@ try {
     process.exit(1);
 }
 
-const server = new McpServer({ name: "hex-line-mcp", version: "1.1.1" });
+const server = new McpServer({ name: "hex-line-mcp", version: "1.1.2" });
 
 
 // ==================== read_file ====================
@@ -109,9 +109,9 @@ server.registerTool("edit_file", {
         edits: z.string().describe(
             'JSON array. Examples:\n' +
             '{"set_line":{"anchor":"ab.12","new_text":"new"}} — replace line\n' +
-            '{"replace_lines":{"start_anchor":"ab.10","end_anchor":"cd.15","new_text":"..."}} — range\n' +
+            '{"replace_lines":{"start_anchor":"ab.10","end_anchor":"cd.15","new_text":"...","range_checksum":"10-15:a1b2c3d4"}} — range (range_checksum from read_file required)\n' +
             '{"insert_after":{"anchor":"ab.20","text":"inserted"}} — insert below\n' +
-            '{"replace":{"old_text":"find","new_text":"replace","all":false}} — text match',
+            '{"replace":{"old_text":"find","new_text":"replace","all":true}} — rename-all (all:true required)',
         ),
         dry_run: flexBool().describe("Preview changes without writing"),
         restore_indent: flexBool().describe("Auto-fix indentation to match anchor (default: false)"),
@@ -364,4 +364,4 @@ server.registerTool("bulk_replace", {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-void checkForUpdates("@levnikolaevich/hex-line-mcp", "1.1.1");
+void checkForUpdates("@levnikolaevich/hex-line-mcp", "1.1.2");
