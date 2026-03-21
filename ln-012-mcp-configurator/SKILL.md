@@ -11,7 +11,7 @@ license: MIT
 **Type:** L3 Worker
 **Category:** 0XX Shared
 
-Configures MCP servers in Claude Code: audits current state, registers missing servers via `claude mcp add`, grants user-level permissions, analyzes token budget impact.
+Configures MCP servers in Claude Code: audits state, registers servers, installs hooks and output style, migrates allowed-tools, updates instruction files, grants permissions, analyzes token budget.
 
 ---
 
@@ -126,12 +126,21 @@ Registration commands by server and source:
 | Connection failed after add | WARN, report detail from `claude mcp list` |
 | API key missing (Ref) | Prompt user for key, skip if declined |
 
-### Phase 4b: Install Output Style
+### Phase 4b: Install Hooks and Output Style [CRITICAL]
 
-After hex-line registration, install Output Style via `mcp__hex-line__setup_hooks(agent="claude")`. This:
-1. Copies `output-style.md` to `~/.claude/output-styles/hex-line.md`
-2. Sets `outputStyle: "hex-line"` in `~/.claude/settings.json` if no style is active
-3. If another style is active — preserves it, reports to user
+MUST call `mcp__hex-line__setup_hooks(agent="claude")` immediately after hex-line registration. This configures:
+
+**Hooks** (in `~/.claude/settings.json`):
+1. `PreToolUse` hook — redirects built-in Read/Edit/Write/Grep to hex-line equivalents
+2. `PostToolUse` hook — compresses verbose tool output (RTK filter)
+3. `SessionStart` hook — injects MCP Tool Preferences reminder
+4. Sets `disableAllHooks: false`
+
+**Output Style:**
+5. Copies `output-style.md` to `~/.claude/output-styles/hex-line.md`
+6. Sets `outputStyle: "hex-line"` if no style is active (preserves existing style)
+
+**Verification:** After setup_hooks returns, confirm hooks array is non-empty in its response. If empty or error — STOP and report failure. Without hooks, hex-line pipeline does not work.
 
 ### Phase 4c: Graph Indexing
 
@@ -141,9 +150,9 @@ After hex-graph registration + connected status:
 
 Skip if hex-graph not registered or not connected.
 
-### Phase 4d: Migrate Project allowed-tools
+### Phase 4d: Migrate Project allowed-tools [CRITICAL]
 
-After hex-line is configured, scan project commands and skills to add hex-line tool equivalents to `allowed-tools` frontmatter.
+After hex-line is configured, MUST scan project commands and skills to replace built-in tools with hex-line equivalents in `allowed-tools` frontmatter. Failure to do this leaves commands using slow built-in tools despite hex-line being available.
 
 **Tool mapping:**
 
@@ -158,7 +167,10 @@ After hex-line is configured, scan project commands and skills to add hex-line t
 
 1. Glob `.claude/commands/*.md` + `.claude/skills/*/SKILL.md` in current project
 2. For each file: parse YAML frontmatter, extract `allowed-tools`
-3. For each mapping entry: if built-in present AND hex equivalent absent → append hex equivalent
+3. For each mapping entry:
+   a. If built-in present AND hex equivalent absent → add hex equivalent, remove built-in (except `Read` and `Bash`)
+   b. If built-in present AND hex equivalent already present → remove built-in (except `Read` and `Bash`)
+   c. Preserve ALL existing `mcp__*` tools not in the replacement table (e.g., `mcp__hex-ssh__remote-ssh`)
 4. Write back updated frontmatter (preserve quoting style)
 5. Report:
 
@@ -177,10 +189,31 @@ allowed-tools Migration:
 |-----------|--------|
 | No `.claude/` directory | Skip entire phase |
 | File has no `allowed-tools` | Skip file, report "no allowed-tools" |
-| All hex equivalents already present | Skip file, report "already migrated" |
+| All hex equivalents present, no stale built-ins, all `mcp__*` preserved | Skip file, report "already migrated" |
 | `dry_run: true` | Show planned changes, don't write |
 
-**Strategy:** ADD hex equivalents alongside built-ins (don't remove built-ins — commands stay functional without hex-line).
+**Strategy:** REPLACE built-in tools with hex-line equivalents. Keep `Bash` and `Read` (always needed). Preserve all existing `mcp__*` tools (hex-ssh, linear, etc.) that are NOT being replaced.
+
+### Phase 4e: Update Instruction Files [CRITICAL]
+
+After hex-line is configured with hooks, ensure instruction files have MCP Tool Preferences section. Without this section, agents default to built-in tools in every session — negating the entire hex-line setup.
+
+**MANDATORY READ:** Load `mcp/hex-line-mcp/output-style.md` → use its `# MCP Tool Preferences` section as template. MUST include the full table (Read, Edit, Write, Grep + directory_tree row).
+
+**Steps (MUST execute all):**
+
+1. For each file: CLAUDE.md, GEMINI.md, AGENTS.md (if exists in project):
+2. Search for `## MCP Tool Preferences` or `### MCP Tool Preferences`
+3. If MISSING → MUST insert section before `## Navigation` (or at end of conventions/rules block)
+4. If PRESENT but OUTDATED → MUST update table rows to match template
+5. For GEMINI.md: MUST adapt tool names (`Read` → `read_file`, `Edit` → `edit_file`, `Grep` → `search_files`)
+
+**Skip conditions:**
+
+| Condition | Action |
+|-----------|--------|
+| File doesn't exist | Skip (don't create instruction files) |
+| Section already matches template | Skip, report "up to date" |
 
 ### Phase 5: Grant Permissions
 
@@ -252,13 +285,13 @@ Key metrics shown:
 - Hash overhead (expect ~0% — negligible)
 - Break-even point (typically ~30 lines)
 
-If benchmark shows >50% savings on outline+read → recommend adding hex-line hook for automatic reminders.
+Report savings summary to user.
 
 ---
 
 ## Critical Rules
 
-1. **Claude configs are read-only.** Use `claude mcp add` CLI to register servers. Never write directly to Claude JSON files
+1. **Write only via sanctioned paths.** Register servers via `claude mcp add`. Write to `~/.claude/settings.json` ONLY for hooks (via `setup_hooks`), permissions (`permissions.allow[]`), and `outputStyle`
 2. **Verify after add.** Always run `claude mcp list` after registration to confirm connection
 3. **Ask before optional servers.** Linear requires explicit user consent
 4. **Prefer global install.** Use `npm i -g` for hex-line/hex-ssh/hex-graph — hooks need stable paths. Local only for active MCP development
@@ -269,7 +302,7 @@ If benchmark shows >50% savings on outline+read → recommend adding hex-line ho
 
 | DON'T | DO |
 |-------|-----|
-| Write directly to `~/.claude.json` | Use `claude mcp add` CLI |
+| Write arbitrary fields to `~/.claude.json` | Use `claude mcp add` for servers, `setup_hooks` for hooks |
 | Skip verification after add | Always check `claude mcp list` |
 | Auto-add optional servers | Ask user for Linear and other optional servers |
 | Ignore budget impact | Always calculate and report token budget |
@@ -279,14 +312,17 @@ If benchmark shows >50% savings on outline+read → recommend adding hex-line ho
 
 ## Definition of Done
 
-- [ ] Current MCP state audited (via `claude mcp list`)
-- [ ] Deprecated servers flagged for removal
+- [ ] Current MCP state audited via `claude mcp list`
+- [ ] Outdated hex-* npm packages updated (or skipped if current)
 - [ ] Missing required servers registered via `claude mcp add`
 - [ ] Each registered server verified via `claude mcp list`
+- [ ] Hooks installed in settings.json (PreToolUse, PostToolUse, SessionStart) and `disableAllHooks: false`
+- [ ] Output style installed (`outputStyle: "hex-line"` or existing style preserved)
 - [ ] Token budget calculated and warnings shown if applicable
 - [ ] Final status table displayed with all servers
 - [ ] Permissions granted for all configured servers in user settings
-- [ ] Project allowed-tools migrated to include hex-line equivalents (or skipped if no `.claude/`)
+- [ ] Project allowed-tools migrated: built-ins replaced with hex-line, existing `mcp__*` preserved
+- [ ] MCP Tool Preferences section present in all existing instruction files
 - [ ] Token efficiency benchmark run and results shown
 
 ---

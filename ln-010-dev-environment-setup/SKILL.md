@@ -106,13 +106,13 @@ Environment Scan:
 
 ### Phase 2: Delegate to Workers (sequential, same context)
 
-> **MANDATORY:** All 4 workers MUST be invoked via Skill tool sequentially in this context.
+> **MANDATORY:** All 4 workers MUST be invoked via Skill tool sequentially in this context. DO NOT skip any worker. DO NOT execute worker tasks inline — each worker MUST be invoked via Skill tool.
 > Pass scan results as delegation context. If agent `disabled: true`, pass flag so workers skip operations for that agent.
 
 | Step | Worker | Responsibility | Args |
 |------|--------|---------------|------|
 | 2a | ln-011-agent-installer | Install/update Codex CLI, Gemini CLI, Claude Code | `{OS} {disabled_flags} {dry_run}` |
-| 2b | ln-012-mcp-configurator | Configure MCP servers, permissions, output style, token budget | `{OS} {mcp_state} {dry_run}` |
+| 2b | ln-012-mcp-configurator | Configure MCP servers, hooks, output style, permissions, instruction files, token budget | `{OS} {mcp_state} {dry_run}` |
 | 2c | ln-013-config-syncer | Sync Claude settings to Gemini/Codex via symlinks & format conversion | `{OS} {disabled_flags} {targets} {dry_run}` |
 | 2d | ln-014-agent-instructions-auditor | Audit CLAUDE.md, AGENTS.md, GEMINI.md for quality and consistency | `{instruction_file_list} {dry_run}` |
 
@@ -199,7 +199,7 @@ State: docs/environment_state.json
 
 | # | Rule | Detail |
 |---|------|--------|
-| 1 | Claude = source of truth | Read Claude configs as read-only source. Never write TO Claude settings |
+| 1 | Claude = source of truth | Read Claude configs as source. Writes ONLY via `claude mcp add`, `setup_hooks()`, and permissions in `settings.json` |
 | 2 | Skip disabled agents | If `disabled: true` in environment_state.json, skip ALL operations for that agent |
 | 3 | Preserve disabled field | Never overwrite user's `disabled` flags. Detection updates, preference stays |
 | 4 | Scan before fix | Always display current state (Phase 1) before any modifications (Phase 2) |
@@ -211,7 +211,7 @@ State: docs/environment_state.json
 | DON'T | DO |
 |-------|-----|
 | Skip Phase 1 scan | Always scan first, then delegate |
-| Modify Claude settings | Read-only. Only targets (Gemini/Codex) are written |
+| Write arbitrary Claude settings | Only write via `claude mcp add`, `setup_hooks()`, and `permissions.allow[]` |
 | Delete disabled flags on rescan | Merge: overwrite detection fields, preserve disabled |
 | Block on single worker failure | Continue with remaining workers, report failure |
 | Run workers without scan context | Pass Phase 1 results as delegation input |

@@ -4,6 +4,11 @@
 
 ---
 
+## 2026-03-21
+
+- **ln-012 MCP configurator** — 3 critical phases added: hooks+outputStyle install (Phase 4b), allowed-tools REPLACE strategy with mcp__* preservation (Phase 4d), MCP Tool Preferences auto-write to CLAUDE.md/GEMINI.md/AGENTS.md (Phase 4e)
+- **01X consistency audit** — ln-010 delegation table and rules aligned with ln-012 sanctioned write paths; ln-013 hooks mentioned in description, duplicate tool mapping removed
+
 ## 2026-03-20
 
 - **hex MCP family** — 3 npm MCP servers: hex-line (hash-verified file editing, 10 tools), hex-ssh (remote file ops over SSH, 6 tools), hex-graph (code knowledge graph, 7 tools); rebranded from sharpline
