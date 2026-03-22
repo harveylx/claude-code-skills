@@ -4,7 +4,6 @@
  * Supports:
  * - Range-based: range "ab.12-cd.15" + checksum
  * - Anchor-based: set_line, replace_lines, insert_after
- * - Text-based: replace { old_text, new_text, all }
  * - dry_run preview, noop detection, diff output
  */
 
@@ -12,18 +11,9 @@ import { writeFileSync } from "node:fs";
 import { diffLines } from "diff";
 import { fnv1a, lineTag, rangeChecksum, parseChecksum, parseRef } from "./hash.mjs";
 import { validatePath, normalizePath } from "./security.mjs";
-import { getGraphDB, blastRadius, getRelativePath } from "./graph-enrich.mjs";
+import { getGraphDB, callImpact, getRelativePath } from "./graph-enrich.mjs";
 import { readText } from "./format.mjs";
 
-// Unicode characters visually similar to ASCII hyphen-minus (U+002D)
-const CONFUSABLE_HYPHENS = /[\u2010\u2011\u2012\u2013\u2014\u2212\uFE63\uFF0D]/g;
-
-/**
- * Normalize confusable unicode hyphens to ASCII hyphen-minus.
- */
-function normalizeConfusables(text) {
-    return text.replace(CONFUSABLE_HYPHENS, "-");
-}
 
 /**
  * Restore indentation from original lines onto replacement lines.
@@ -113,9 +103,11 @@ function findLine(lines, lineNum, expectedTag, hashIndex) {
     }
 
     // Confusable normalization: try matching after normalizing unicode hyphens
-    const normalizedExpected = normalizeConfusables(expectedTag);
+    const CONFUSABLE_RE = /[\u2010\u2011\u2012\u2013\u2014\u2212\uFE63\uFF0D]/g;
+    const norm = t => t.replace(CONFUSABLE_RE, "-");
+    const normalizedExpected = norm(expectedTag);
     for (let i = Math.max(0, idx - 10); i <= Math.min(lines.length - 1, idx + 10); i++) {
-        const normalizedActual = normalizeConfusables(lineTag(fnv1a(normalizeConfusables(lines[i]))));
+        const normalizedActual = norm(lineTag(fnv1a(norm(lines[i]))));
         if (normalizedActual === normalizedExpected) return i;
     }
 
@@ -183,116 +175,6 @@ export function simpleDiff(oldLines, newLines, ctx = 3) {
     return out.length ? out.join("\n") : null;
 }
 
-/**
- * Find the longest common substring between two strings.
- * Returns { pos, len } — position in `haystack` and length of match.
- */
-function longestCommonSubstring(haystack, needle) {
-    if (!haystack || !needle) return { pos: 0, len: 0 };
-    const h = haystack, n = needle;
-    let bestLen = 0, bestPos = 0;
-    // Sliding window: for each start in needle, check match lengths in haystack
-    // Use suffix approach limited to first 200 chars of needle for performance
-    const sample = n.slice(0, 200);
-    for (let i = 0; i < h.length && bestLen < sample.length; i++) {
-        let len = 0;
-        for (let j = 0; j < sample.length && i + len < h.length; j++) {
-            if (h[i + len] === sample[j]) { len++; } else { if (len > bestLen) { bestLen = len; bestPos = i; } len = 0; }
-        }
-        if (len > bestLen) { bestLen = len; bestPos = i; }
-    }
-    return { pos: bestPos, len: bestLen };
-}
-
-/**
- * Build a snippet of ~10 lines around a character position in normalized content.
- */
-function buildSnippet(norm, charPos) {
-    const lines = norm.split("\n");
-    // Find which line the charPos falls on
-    let cumulative = 0;
-    let targetLine = 0;
-    for (let i = 0; i < lines.length; i++) {
-        cumulative += lines[i].length + 1; // +1 for \n
-        if (cumulative > charPos) { targetLine = i; break; }
-    }
-    const half = 5;
-    const start = Math.max(0, targetLine - half);
-    const end = Math.min(lines.length, start + 10);
-    const snippetLines = [];
-    for (let i = start; i < end; i++) {
-        const tag = lineTag(fnv1a(lines[i]));
-        snippetLines.push(`${tag}.${i + 1}\t${lines[i]}`);
-    }
-    return { start: start + 1, end, text: snippetLines.join("\n") };
-}
-
-/**
- * Fuzzy text replacement.
- */
-function textReplace(content, oldText, newText, all) {
-    const norm = content.replace(/\r\n/g, "\n");
-    const normOld = oldText.replace(/\r\n/g, "\n");
-    const normNew = newText.replace(/\r\n/g, "\n");
-
-    if (!all) {
-        // Uniqueness check: count occurrences
-        const parts = norm.split(normOld);
-        const count = parts.length - 1;
-        if (count === 0) {
-            // Fall through to TEXT_NOT_FOUND below
-        } else if (count === 1) {
-            // Unique match — safe to replace single occurrence
-            return parts.join(normNew);
-        } else {
-            throw new Error(
-                `AMBIGUOUS_MATCH: "${normOld.slice(0, 80)}" found ${count} times. ` +
-                `Use all:true to replace all, or use set_line/replace_lines for a specific occurrence.`
-            );
-        }
-    }
-    let idx = norm.indexOf(normOld);
-    let confusableMatch = false;
-    if (idx === -1) {
-        // Confusable normalization: try matching after normalizing unicode hyphens
-        const normContent = normalizeConfusables(norm);
-        const normSearch = normalizeConfusables(normOld);
-        const confIdx = normContent.indexOf(normSearch);
-        if (confIdx !== -1) {
-            idx = confIdx;
-            confusableMatch = true;
-        } else {
-            const { pos, len } = longestCommonSubstring(norm, normOld);
-            const anchor = len > 3 ? pos : Math.floor(norm.length / 2);
-            const snip = buildSnippet(norm, anchor);
-            throw new Error(
-                `TEXT_NOT_FOUND: "${normOld.slice(0, 100)}..." not found.\n\n` +
-                `Nearest content (lines ${snip.start}-${snip.end}):\n${snip.text}\n\n` +
-                `Tip: Use hashes above for anchor-based edit, or adjust old_text.`
-            );
-        }
-    }
-
-    // Determine the match length in original content (same as normOld.length for both paths)
-    const matchLen = normOld.length;
-
-    if (confusableMatch) {
-        // Replace all via normalized matching
-        const normContent = normalizeConfusables(norm);
-        const normSearch = normalizeConfusables(normOld);
-        let result = "";
-        let pos = 0;
-        let searchIdx = normContent.indexOf(normSearch, pos);
-        while (searchIdx !== -1) {
-            result += norm.slice(pos, searchIdx) + normNew;
-            pos = searchIdx + matchLen;
-            searchIdx = normContent.indexOf(normSearch, pos);
-        }
-        result += norm.slice(pos);
-        return result;
-    }
-    return norm.split(normOld).join(normNew);
-}
 
 
 /**
@@ -314,13 +196,11 @@ export function editFile(filePath, edits, opts = {}) {
     // Build hash index once for global relocation in findLine
     const hashIndex = buildHashIndex(lines);
 
-    // Separate anchor edits from text-replace edits
     const anchored = [];
-    const texts = [];
 
     for (const e of edits) {
         if (e.set_line || e.replace_lines || e.insert_after) anchored.push(e);
-        else if (e.replace) texts.push(e);
+        else if (e.replace) throw new Error('REPLACE_REMOVED: replace is no longer supported in edit_file. Use set_line/replace_lines for single edits, bulk_replace tool for rename/refactor.');
         else throw new Error(`BAD_INPUT: unknown edit type: ${JSON.stringify(e)}`);
     }
 
@@ -442,14 +322,9 @@ export function editFile(filePath, edits, opts = {}) {
         }
     }
 
-    // Apply text replacements
     let content = lines.join("\n");
     if (hadTrailingNewline && !content.endsWith("\n")) content += "\n";
     if (!hadTrailingNewline && content.endsWith("\n")) content = content.slice(0, -1);
-    for (const e of texts) {
-        if (!e.replace.old_text) throw new Error("replace.old_text required");
-        content = textReplace(content, e.replace.old_text, e.replace.new_text || "", e.replace.all || false);
-    }
 
     if (original === content) {
         throw new Error("NOOP_EDIT: File already contains the desired content. No changes needed.");
@@ -470,7 +345,7 @@ export function editFile(filePath, edits, opts = {}) {
     let msg = `Updated ${filePath} (${content.split("\n").length} lines)`;
     if (diff) msg += `\n\nDiff:\n\`\`\`diff\n${diff}\n\`\`\``;
 
-    // Blast radius warning (optional — silent if no graph DB)
+    // Call impact warning (optional — silent if no graph DB)
     try {
         const db = getGraphDB(real);
         const relFile = db ? getRelativePath(real) : null;
@@ -483,10 +358,10 @@ export function editFile(filePath, edits, opts = {}) {
                 if (m) { const n = +m[1]; if (n < minLine) minLine = n; if (n > maxLine) maxLine = n; }
             }
             if (minLine <= maxLine) {
-                const affected = blastRadius(db, relFile, minLine, maxLine);
+                const affected = callImpact(db, relFile, minLine, maxLine);
                 if (affected.length > 0) {
                     const list = affected.map(a => `${a.name} (${a.file}:${a.line})`).join(", ");
-                    msg += `\n\n\u26A0 Blast radius: ${affected.length} dependents in other files\n  ${list}`;
+                    msg += `\n\n\u26A0 Call impact: ${affected.length} callers in other files\n  ${list}`;
                 }
             }
         }

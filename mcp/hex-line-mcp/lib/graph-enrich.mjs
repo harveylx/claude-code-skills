@@ -1,30 +1,32 @@
 /**
  * Graph enrichment for hex-line tools.
  *
- * Reads .codegraph/index.db (created by hex-graph-mcp) in readonly mode.
- * Provides symbol annotations for outline, read_file, grep_search, edit_file.
+ * Reads .codegraph/index.db (created by hex-graph-mcp) in readonly mode via a
+ * small explicit compatibility contract:
+ * - hex_line_contract
+ * - hex_line_symbol_annotations
+ * - hex_line_call_edges
  *
- * Lazy singleton: DB opened once per session, reused across calls.
- * Graceful fallback: if better-sqlite3 or DB missing → returns null silently.
+ * Graceful fallback: if better-sqlite3, contract views, or DB are missing,
+ * enrichment is disabled silently for that project.
  */
 
 import { existsSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { createRequire } from "node:module";
 
-let _db = null;
-
-let _unavailable = false;
+const HEX_LINE_CONTRACT_VERSION = 1;
+const _dbs = new Map();
+let _driverUnavailable = false;
 
 /**
  * Get readonly graph DB for a project root.
- * Returns null if DB missing or better-sqlite3 not installed.
+ * Returns null if DB missing or contract unavailable.
  * @param {string} filePath - any file path inside the project
  * @returns {object|null} better-sqlite3 Database instance or null
  */
 export function getGraphDB(filePath) {
-    if (_unavailable) return null;
-    if (_db) return _db;
+    if (_driverUnavailable) return null;
 
     try {
         const projectRoot = findProjectRoot(filePath);
@@ -32,15 +34,43 @@ export function getGraphDB(filePath) {
 
         const dbPath = join(projectRoot, ".codegraph", "index.db");
         if (!existsSync(dbPath)) return null;
+        if (_dbs.has(dbPath)) return _dbs.get(dbPath);
 
         const require = createRequire(import.meta.url);
         const Database = require("better-sqlite3");
-        _db = new Database(dbPath, { readonly: true });
-
-        return _db;
+        const db = new Database(dbPath, { readonly: true });
+        if (!validateHexLineContract(db)) {
+            db.close();
+            return null;
+        }
+        _dbs.set(dbPath, db);
+        return db;
     } catch {
-        _unavailable = true;
+        _driverUnavailable = true;
         return null;
+    }
+}
+
+/**
+ * Test helper: close cached DB handles so each test can start clean.
+ */
+export function _resetGraphDBCache() {
+    for (const db of _dbs.values()) {
+        try { db.close(); } catch { /* ignore */ }
+    }
+    _dbs.clear();
+    _driverUnavailable = false;
+}
+
+function validateHexLineContract(db) {
+    try {
+        const contract = db.prepare("SELECT contract_version FROM hex_line_contract LIMIT 1").get();
+        if (!contract || contract.contract_version !== HEX_LINE_CONTRACT_VERSION) return false;
+        db.prepare("SELECT node_id, file, line_start, line_end, display_name, kind, callees, callers FROM hex_line_symbol_annotations LIMIT 1").all();
+        db.prepare("SELECT source_id, target_id, source_file, source_line, source_display_name, target_file, target_line, target_display_name FROM hex_line_call_edges LIMIT 1").all();
+        return true;
+    } catch {
+        return false;
     }
 }
 
@@ -54,19 +84,12 @@ export function getGraphDB(filePath) {
 export function symbolAnnotation(db, file, name) {
     try {
         const node = db.prepare(
-            "SELECT id FROM nodes WHERE file = ? AND name = ? AND kind != 'import' LIMIT 1"
+            "SELECT callees, callers FROM hex_line_symbol_annotations WHERE file = ? AND name = ? LIMIT 1"
         ).get(file, name);
         if (!node) return null;
 
-        const callees = db.prepare(
-            "SELECT COUNT(*) as c FROM edges WHERE source_id = ? AND kind = 'calls'"
-        ).get(node.id).c;
-        const callers = db.prepare(
-            "SELECT COUNT(*) as c FROM edges WHERE target_id = ? AND kind = 'calls'"
-        ).get(node.id).c;
-
-        if (callees === 0 && callers === 0) return null;
-        return `[${callees}\u2193 ${callers}\u2191]`;
+        if (node.callees === 0 && node.callers === 0) return null;
+        return `[${node.callees}\u2193 ${node.callers}\u2191]`;
     } catch {
         return null;
     }
@@ -81,42 +104,39 @@ export function symbolAnnotation(db, file, name) {
 export function fileAnnotations(db, file) {
     try {
         const nodes = db.prepare(
-            "SELECT id, name, kind FROM nodes WHERE file = ? AND kind != 'import' ORDER BY line_start"
+            `SELECT display_name, kind, callees, callers
+             FROM hex_line_symbol_annotations
+             WHERE file = ?
+             ORDER BY line_start`
         ).all(file);
 
-        const result = [];
-        for (const node of nodes) {
-            const callees = db.prepare(
-                "SELECT COUNT(*) as c FROM edges WHERE source_id = ? AND kind = 'calls'"
-            ).get(node.id).c;
-            const callers = db.prepare(
-                "SELECT COUNT(*) as c FROM edges WHERE target_id = ? AND kind = 'calls'"
-            ).get(node.id).c;
-            result.push({
-                name: node.name,
-                kind: node.kind,
-                callees,
-                callers,
-            });
-        }
-        return result;
+        return nodes.map((node) => ({
+            name: node.display_name,
+            kind: node.kind,
+            callees: node.callees,
+            callers: node.callers,
+        }));
     } catch {
         return [];
     }
 }
 
 /**
- * Blast radius: symbols affected by changes in given line range.
+ * Call impact: callers affected by changes in given line range.
  * @param {object} db
  * @param {string} file - relative file path
  * @param {number} startLine
  * @param {number} endLine
  * @returns {Array<{name, file, line}>} affected symbols (max 10)
  */
-export function blastRadius(db, file, startLine, endLine) {
+export function callImpact(db, file, startLine, endLine) {
     try {
         const modified = db.prepare(
-            "SELECT id, name FROM nodes WHERE file = ? AND kind != 'import' AND line_start <= ? AND line_end >= ?"
+            `SELECT node_id
+             FROM hex_line_symbol_annotations
+             WHERE file = ?
+               AND line_start <= ?
+               AND line_end >= ?`
         ).all(file, endLine, startLine);
 
         if (modified.length === 0) return [];
@@ -126,14 +146,16 @@ export function blastRadius(db, file, startLine, endLine) {
 
         for (const node of modified) {
             const dependents = db.prepare(
-                "SELECT n.name, n.file, n.line_start FROM edges e JOIN nodes n ON n.id = e.source_id WHERE e.target_id = ? AND e.kind = 'calls'"
-            ).all(node.id);
+                `SELECT source_display_name AS name, source_file AS file, source_line AS line
+                 FROM hex_line_call_edges
+                 WHERE target_id = ?`
+            ).all(node.node_id);
 
             for (const dep of dependents) {
                 const key = `${dep.file}:${dep.name}`;
                 if (!seen.has(key) && dep.file !== file) {
                     seen.add(key);
-                    affected.push({ name: dep.name, file: dep.file, line: dep.line_start });
+                    affected.push({ name: dep.name, file: dep.file, line: dep.line });
                 }
             }
         }
@@ -154,21 +176,17 @@ export function blastRadius(db, file, startLine, endLine) {
 export function matchAnnotation(db, file, line) {
     try {
         const node = db.prepare(
-            "SELECT id, name, kind FROM nodes WHERE file = ? AND kind != 'import' AND line_start <= ? AND line_end >= ? LIMIT 1"
+            `SELECT display_name, kind, callees, callers
+             FROM hex_line_symbol_annotations
+             WHERE file = ? AND line_start <= ? AND line_end >= ?
+             ORDER BY line_start DESC
+             LIMIT 1`
         ).get(file, line, line);
         if (!node) return null;
 
         const kindShort = { function: "fn", class: "cls", method: "mtd", variable: "var" }[node.kind] || node.kind;
-
-        const callees = db.prepare(
-            "SELECT COUNT(*) as c FROM edges WHERE source_id = ? AND kind = 'calls'"
-        ).get(node.id).c;
-        const callers = db.prepare(
-            "SELECT COUNT(*) as c FROM edges WHERE target_id = ? AND kind = 'calls'"
-        ).get(node.id).c;
-
-        if (callees === 0 && callers === 0) return `[${kindShort}]`;
-        return `[${kindShort} ${callees}\u2193 ${callers}\u2191]`;
+        if (node.callees === 0 && node.callers === 0) return `[${kindShort}]`;
+        return `[${kindShort} ${node.callees}\u2193 ${node.callers}\u2191]`;
     } catch {
         return null;
     }

@@ -168,31 +168,18 @@ function installOutputStyle() {
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, readFileSync(source, "utf-8"), "utf-8");
 
-    // Set hex-line at user (global) level
+    // Set hex-line only if no explicit style is already active
     const userSettings = resolve(homedir(), ".claude/settings.json");
     const config = readJson(userSettings) || {};
     const prev = config.outputStyle;
-    config.outputStyle = "hex-line";
-    writeJson(userSettings, config);
-
-    // Remove outputStyle from local/project scopes so global is not overridden
-    const overrides = [
-        resolve(process.cwd(), ".claude/settings.local.json"),
-        resolve(process.cwd(), ".claude/settings.json"),
-    ];
-    const cleared = [];
-    for (const p of overrides) {
-        const c = readJson(p);
-        if (c && c.outputStyle) {
-            cleared.push(`${c.outputStyle} (${p.includes("local") ? "local" : "project"})`);
-            delete c.outputStyle;
-            writeJson(p, c);
-        }
+    if (!prev) {
+        config.outputStyle = "hex-line";
+        writeJson(userSettings, config);
     }
 
-    let msg = "Output style 'hex-line' installed and activated globally";
-    if (prev && prev !== "hex-line") msg += ` (was '${prev}')`;
-    if (cleared.length) msg += `. Removed overrides: ${cleared.join(", ")}`;
+    const msg = prev
+        ? `Output style file installed. Existing style '${prev}' preserved (not overridden)`
+        : "Output style 'hex-line' installed and activated globally";
     return msg;
 }
 

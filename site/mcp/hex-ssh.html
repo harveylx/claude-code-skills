@@ -370,7 +370,7 @@
           <tbody>
             <tr>
               <td class="tool-name">remote-ssh</td>
-              <td class="tool-desc">Execute shell commands. Output auto-normalized and deduplicated</td>
+              <td class="tool-desc">Execute shell commands. Disabled by default; normalized output when enabled</td>
             </tr>
             <tr>
               <td class="tool-name">ssh-read-lines</td>
@@ -378,7 +378,7 @@
             </tr>
             <tr>
               <td class="tool-name">ssh-edit-block</td>
-              <td class="tool-desc">Hash-verified text replacement. Checksum verification + compact diff</td>
+              <td class="tool-desc">Hash-verified anchor edits. Checksum verification + compact diff</td>
             </tr>
             <tr>
               <td class="tool-name">ssh-search-code</td>
@@ -386,7 +386,7 @@
             </tr>
             <tr>
               <td class="tool-name">ssh-write-chunk</td>
-              <td class="tool-desc">Write or append to remote files. Auto-creates parent directories</td>
+              <td class="tool-desc">Write or append to remote files. Rewrite is atomic; append is direct</td>
             </tr>
             <tr>
               <td class="tool-name">ssh-verify</td>
@@ -401,8 +401,18 @@
   <section style="background: var(--bg-secondary);">
     <div class="container">
       <h2>Security</h2>
-      <p class="section-desc">Security is not optional when agents talk to production servers. hex-ssh restricts what hosts agents can reach, what paths they can touch, and requires key-only authentication.</p>
+      <p class="section-desc">Security is not optional when agents talk to production servers. hex-ssh verifies host fingerprints, restricts host/path reachability, enforces absolute canonical paths, times out long commands, and keeps raw remote shell access disabled by default.</p>
       <div class="features-grid">
+        <div class="feature">
+          <h3>Host Key Verification</h3>
+          <p>Connections fail closed unless the host fingerprint matches <code>ALLOWED_HOST_FINGERPRINTS</code> or a plain-entry <code>known_hosts</code> record. v1 does not parse hashed hostnames or <code>@cert-authority</code> markers.</p>
+          <span class="example">SHA256:&lt;base64&gt; or KNOWN_HOSTS_PATH</span>
+        </div>
+        <div class="feature">
+          <h3>remote-ssh Disabled by Default</h3>
+          <p>Raw shell execution starts in <code>REMOTE_SSH_MODE=disabled</code>. Opt into <code>safe</code> or <code>open</code> explicitly.</p>
+          <span class="example">REMOTE_SSH_MODE=safe</span>
+        </div>
         <div class="feature">
           <h3>ALLOWED_HOSTS</h3>
           <p>Comma-separated permitted hostnames/IPs. When set, connections to unlisted hosts are rejected.</p>
@@ -412,6 +422,21 @@
           <h3>ALLOWED_DIRS</h3>
           <p>Comma-separated permitted remote directory prefixes. File operations outside these paths are rejected.</p>
           <span class="example">ALLOWED_DIRS=/home/deploy,/var/www</span>
+        </div>
+        <div class="feature">
+          <h3>Absolute Canonical Paths</h3>
+          <p>Remote file operations require absolute paths. <code>.</code> and <code>..</code> segments are resolved before allowlist checks.</p>
+          <span class="example">/home/deploy/app/config.js</span>
+        </div>
+        <div class="feature">
+          <h3>Write Semantics</h3>
+          <p><code>rewrite</code> uses temp file + rename. <code>append</code> writes directly and is intentionally non-atomic.</p>
+          <span class="example">rewrite = atomic; append = direct &gt;&gt;</span>
+        </div>
+        <div class="feature">
+          <h3>Exec Timeout</h3>
+          <p>Long-running SSH commands are terminated after 120 seconds instead of hanging the agent indefinitely.</p>
+          <span class="example">EXEC_TIMEOUT after 120s</span>
         </div>
         <div class="feature">
           <h3>SSH Key Authentication</h3>
@@ -425,7 +450,7 @@
   <section>
     <div class="container">
       <h2>Output Normalization</h2>
-      <p class="section-desc">Command output from remote servers is often noisy &mdash; timestamps, UUIDs, IPs change on every run. The normalization pipeline reduces this noise automatically:</p>
+      <p class="section-desc">The package currently publishes a normalization diagnostic, not a comparative workflow benchmark. Command output from remote servers is often noisy &mdash; timestamps, UUIDs, IPs change on every run. The normalization pipeline reduces this noise automatically:</p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -462,12 +487,47 @@
       </div>
 
       <div class="workflow-block" style="margin-top: 32px;">
+        <p><strong style="color: var(--text-primary);">Diagnostic command</strong></p>
+        <p><code>npm run benchmark:diagnostic</code></p>
+      </div>
+
+      <div class="table-wrap" style="margin-top: 24px;">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Scenario</th><th>Input</th><th>Output</th><th>Savings</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td><td class="tool-desc">Hash annotation overhead</td><td>3,934 ch</td><td>4,526 ch</td><td>-15%</td>
+            </tr>
+            <tr>
+              <td>2</td><td class="tool-desc">Normalize: npm install</td><td>11,219 ch</td><td>2,953 ch</td><td class="savings-high">74%</td>
+            </tr>
+            <tr>
+              <td>3</td><td class="tool-desc">Normalize: server logs</td><td>19,715 ch</td><td>4,470 ch</td><td class="savings-high">77%</td>
+            </tr>
+            <tr>
+              <td>4</td><td class="tool-desc">Dedup: grep results</td><td>5,799 ch</td><td>3,199 ch</td><td class="savings-high">45%</td>
+            </tr>
+            <tr>
+              <td>5</td><td class="tool-desc">Smart truncate: large output</td><td>22,281 ch</td><td>2,717 ch</td><td class="savings-high">88%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="summary-box" style="margin-top: 24px;">
+        Normalization diagnostic summary: <strong>72% average reduction</strong> (62,948 &rarr; 17,865 chars)
+      </div>
+
+      <div class="workflow-block" style="margin-top: 32px;">
         <p><strong style="color: var(--text-primary);">Processing pipeline</strong></p>
         <ol>
           <li><strong>Normalize</strong> &mdash; replace dynamic values with placeholders</li>
           <li><strong>Deduplicate</strong> &mdash; collapse identical lines with (xN) counts</li>
           <li><strong>Truncate</strong> &mdash; keep first 40 + last 20 lines, omit middle</li>
         </ol>
+        <p style="margin-top: 14px;">This measures normalization, deduplication, and truncation efficiency only. It is not yet a benchmark against built-in remote workflows.</p>
       </div>
     </div>
   </section>

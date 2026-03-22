@@ -415,7 +415,7 @@
             </tr>
             <tr>
               <td class="tool-name">edit_file</td>
-              <td class="tool-desc">Anchor-based or text replacement edits. Returns a compact diff</td>
+              <td class="tool-desc">Hash-verified anchor edits (set_line, replace_lines, insert_after). Returns compact diff</td>
             </tr>
             <tr>
               <td class="tool-name">write_file</td>
@@ -451,7 +451,7 @@
             </tr>
             <tr>
               <td class="tool-name">setup_hooks</td>
-              <td class="tool-desc">One call configures hooks for Claude, Gemini, or Codex</td>
+              <td class="tool-desc">Installs Claude hooks and output style; Gemini/Codex use guidance only</td>
             </tr>
           </tbody>
         </table>
@@ -480,7 +480,7 @@
         <div class="workflow-block">
           <p>
             A persistent <strong style="color: var(--text-primary);">Output Style</strong> installed to
-            <code>~/.claude/output-styles/hex-line.md</code> embeds tool preferences directly in Claude's system prompt &mdash; reducing hook firings by making Claude prefer hex-line tools from the start. Installed automatically by <code>setup_hooks</code>.
+            <code>~/.claude/output-styles/hex-line.md</code> embeds tool preferences directly in Claude's system prompt &mdash; reducing hook firings by making Claude prefer hex-line tools from the start. Installed automatically by <code>setup_hooks</code> alongside Claude hooks; Gemini/Codex use the same preferences as manual guidance.
           </p>
         </div>
       </div>
@@ -490,119 +490,53 @@
   <!-- Benchmark -->
   <section>
     <div class="container">
-      <h2>Token Efficiency</h2>
-      <p class="section-desc">How much does it actually save? We measured.</p>
+      <h2>Workflow Benchmarking</h2>
+      <p class="section-desc">Public benchmark mode now reports only session-derived comparative workflows against built-in tools.</p>
 
-      <details>
-        <summary>Full benchmark table (18 scenarios, 21 files, 4,801 lines)</summary>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>#</th><th>Scenario</th><th>Baseline</th><th>Hex-line</th><th>Savings</th><th>Ops</th><th>Steps</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>1</td><td class="tool-desc">Read full (&lt;50L)</td>
-                <td>1,837 ch</td><td>1,676 ch</td><td>9%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>1</td><td class="tool-desc">Read full (50-200L)</td>
-                <td>4,976 ch</td><td>4,609 ch</td><td>7%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>1</td><td class="tool-desc">Read full (200-500L)</td>
-                <td>11,702 ch</td><td>10,796 ch</td><td>8%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>1</td><td class="tool-desc">Read full (500L+)</td>
-                <td>76,079 ch</td><td>71,578 ch</td><td>6%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>2</td><td class="tool-desc">Outline+read (200-500L)</td>
-                <td>11,702 ch</td><td>3,620 ch</td><td class="savings-high">69%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;2</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;2</td>
-              </tr>
-              <tr>
-                <td>2</td><td class="tool-desc">Outline+read (500L+)</td>
-                <td>76,079 ch</td><td>19,020 ch</td><td class="savings-high">75%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;2</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;2</td>
-              </tr>
-              <tr>
-                <td>3</td><td class="tool-desc">Grep search</td>
-                <td>2,816 ch</td><td>2,926 ch</td><td>-4%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>4</td><td class="tool-desc">Directory tree</td>
-                <td>1,967 ch</td><td>699 ch</td><td class="savings-high">64%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>5</td><td class="tool-desc">File info</td>
-                <td>371 ch</td><td>197 ch</td><td class="savings-high">47%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>6</td><td class="tool-desc">Create file (200L)</td>
-                <td>113 ch</td><td>85 ch</td><td class="savings-high">25%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>7</td><td class="tool-desc">Edit x5 sequential</td>
-                <td>2,581 ch</td><td>1,529 ch</td><td class="savings-high">41%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">5&rarr;5</td><td style="color: var(--text-muted); font-size: 13px;">5&rarr;5</td>
-              </tr>
-              <tr>
-                <td>8</td><td class="tool-desc">Verify checksums (4 ranges)</td>
-                <td>8,295 ch</td><td>93 ch</td><td class="savings-high">99%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">4&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">4&rarr;1</td>
-              </tr>
-              <tr>
-                <td>9</td><td class="tool-desc">Multi-file read (2 files)</td>
-                <td>3,674 ch</td><td>3,358 ch</td><td>9%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">2&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>10</td><td class="tool-desc">bulk_replace dry_run (5 files)</td>
-                <td>2,795 ch</td><td>1,706 ch</td><td class="savings-high">39%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">5&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">5&rarr;1</td>
-              </tr>
-              <tr>
-                <td>11</td><td class="tool-desc">Changes (semantic diff)</td>
-                <td>830 ch</td><td>271 ch</td><td class="savings-high">67%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>12</td><td class="tool-desc">FILE_NOT_FOUND recovery</td>
-                <td>2,071 ch</td><td>101 ch</td><td class="savings-high">95%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">3&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">3&rarr;1</td>
-              </tr>
-              <tr>
-                <td>13</td><td class="tool-desc">Hash mismatch recovery</td>
-                <td>8,918 ch</td><td>423 ch</td><td class="savings-high">95%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">3&rarr;1</td><td style="color: var(--text-muted); font-size: 13px;">3&rarr;1</td>
-              </tr>
-              <tr>
-                <td>14</td><td class="tool-desc">Bash redirects (cat+ls+stat)</td>
-                <td>5,602 ch</td><td>4,695 ch</td><td class="savings-high">16%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">3&rarr;3</td><td style="color: var(--text-muted); font-size: 13px;">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>15</td><td class="tool-desc">HASH_HINT multi-match</td>
-                <td>8,888 ch</td><td>653 ch</td><td class="savings-high">93%</td>
-                <td style="color: var(--text-muted); font-size: 13px;">3&rarr;2</td><td style="color: var(--text-muted); font-size: 13px;">3&rarr;1</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
+      <div class="workflow-block">
+        <p><strong style="color: var(--text-primary);">Commands</strong></p>
+        <p><code>npm run benchmark -- --repo /path/to/repo</code></p>
+        <p><code>npm run benchmark:diagnostic -- --repo /path/to/repo</code></p>
+        <p><code>npm run benchmark:diagnostic:graph -- --repo /path/to/repo</code></p>
+      </div>
+
+      <div class="table-wrap" style="margin-top: 28px;">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Workflow</th><th>Built-in</th><th>Hex-line</th><th>Savings</th><th>Ops</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>W1</td>
+              <td class="tool-desc">Debug hook file-listing redirect</td>
+              <td>23,143 ch</td><td>882 ch</td><td class="savings-high">96%</td><td class="tool-desc">3&rarr;2</td>
+            </tr>
+            <tr>
+              <td>W2</td>
+              <td class="tool-desc">Adjust <code>setup_hooks</code> guidance and verify</td>
+              <td>24,877 ch</td><td>1,637 ch</td><td class="savings-high">93%</td><td class="tool-desc">3&rarr;3</td>
+            </tr>
+            <tr>
+              <td>W3</td>
+              <td class="tool-desc">Repo-wide benchmark wording refresh</td>
+              <td>137,796 ch</td><td>38,918 ch</td><td class="savings-high">72%</td><td class="tool-desc">15&rarr;1</td>
+            </tr>
+            <tr>
+              <td>W4</td>
+              <td class="tool-desc">Inspect large smoke test before edit</td>
+              <td>49,566 ch</td><td>2,104 ch</td><td class="savings-high">96%</td><td class="tool-desc">3&rarr;3</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <div class="summary-box">
-        Average savings: <strong>45% (flat) / 52% (weighted)</strong> &mdash; 39&rarr;28 ops (28% fewer) &mdash; 36&rarr;25 steps
+        Workflow summary: <strong>89% average token savings</strong> &mdash; 24&rarr;9 tool calls (63% fewer)
+      </div>
+
+      <div class="workflow-block" style="margin-top: 24px;">
+        <p>These workflows are derived from recent real Claude sessions, but executed against reproducible local fixtures in the repository.</p>
+        <p>Tool-level synthetic comparisons still exist under diagnostics for engineering inspection, but they are no longer the public benchmark headline.</p>
       </div>
     </div>
   </section>

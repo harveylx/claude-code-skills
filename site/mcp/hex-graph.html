@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>hex-graph-mcp — Claude Code Skills</title>
-  <meta name="description" content="Code knowledge graph MCP server. AST indexing via tree-sitter for 15+ languages.">
+  <meta name="description" content="Identity-first layered code graph MCP server. tree-sitter indexing for JavaScript, TypeScript/TSX, Python, C#, and PHP.">
   <link rel="icon" type="image/jpeg" href="../favicon.jpg">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -311,7 +311,7 @@
     <div class="container">
       <a href="../index.html#mcp" class="back-link">&larr; Back to MCP servers</a>
       <h1>hex-graph-mcp</h1>
-      <p class="subtitle">Code knowledge graph MCP server. AST indexing via tree-sitter for 15+ languages.</p>
+      <p class="subtitle">Identity-first layered code graph MCP server. Deterministic indexing via tree-sitter for JavaScript, TypeScript/TSX, Python, C#, and PHP.</p>
       <div class="install-block" onclick="navigator.clipboard.writeText('npm i -g @levnikolaevich/hex-graph-mcp'); this.querySelector('.copy').textContent='Copied!'">
         <span class="prompt">$</span>
         <span class="cmd">npm i -g @levnikolaevich/hex-graph-mcp</span>
@@ -336,19 +336,19 @@
 
       <div class="scenario">
         <div class="scenario-title"><span class="scenario-icon">&#129300;</span> Understand an unfamiliar codebase</div>
-        <p>A new team member asks &ldquo;what does UserService do?&rdquo; An agent with grep reads the class definition, then searches for callers, then reads those files, then searches for their callers. Four separate tool calls, 38,611 characters of context. An agent with hex-graph calls <code>get_context("UserService")</code> &mdash; one request returns the definition, all callers, all callees, sibling methods, and file context. 1,274 characters.</p>
+        <p>A new team member asks &ldquo;what does UserService do?&rdquo; An agent with grep reads the class definition, then searches for callers, then reads those files, then searches for their callers. Four separate tool calls, 38,611 characters of context. An agent with hex-graph calls <code>get_symbol(name="UserService", file="src/services/user.ts")</code> &mdash; one request returns the definition, incoming edges, outgoing edges, structural context, and confidence summary.</p>
         <div class="scenario-result">38,611 &rarr; 1,274 ch. <strong>97% savings.</strong> 4 tool calls &rarr; 1.</div>
       </div>
 
       <div class="scenario">
         <div class="scenario-title"><span class="scenario-icon">&#128163;</span> Check blast radius before refactoring</div>
-        <p>&ldquo;What breaks if I change <code>calculateTotal</code>?&rdquo; Grep finds direct references but misses transitive dependencies &mdash; the function that calls the function that calls <code>calculateTotal</code>. hex-graph&rsquo;s <code>get_impact</code> walks reverse dependency edges recursively (depth&nbsp;3). It finds the complete chain of everything affected.</p>
-        <div class="scenario-result">hex-graph returns <span class="note">MORE data (-167%)</span> because it finds what grep misses: the full dependency tree. <strong>Completeness, not inefficiency.</strong></div>
+        <p>&ldquo;What breaks if I change <code>calculateTotal</code>?&rdquo; Grep finds direct references but misses transitive dependencies &mdash; the function that calls the function that calls <code>calculateTotal</code>. hex-graph&rsquo;s <code>trace_paths</code> walks reverse call, reference, import, type, or mixed paths from one canonical symbol identity. It finds the complete chain instead of just the first hop.</p>
+        <div class="scenario-result">hex-graph returns <span class="note">MORE data (-167%)</span> because it finds what grep misses: the full dependency chain. <strong>Completeness, not inefficiency.</strong></div>
       </div>
 
       <div class="scenario">
         <div class="scenario-title"><span class="scenario-icon">&#128269;</span> Find all entry points</div>
-        <p>&ldquo;Who ultimately calls <code>validateInput</code>?&rdquo; The agent needs to trace callers 3 levels deep. With grep: read the file, find callers, read those files, find their callers, read again &mdash; 12,716 characters across 4 tool calls. With hex-graph: <code>trace_calls("validateInput", direction="callers", depth=3)</code> &mdash; 477 characters, 1 call. The full call chain, served from the graph.</p>
+        <p>&ldquo;Who ultimately calls <code>validateInput</code>?&rdquo; The agent needs to trace callers 3 levels deep. With grep: read the file, find callers, read those files, find their callers, read again &mdash; 12,716 characters across 4 tool calls. With hex-graph: <code>trace_paths(qualified_name="...", path_kind="calls", direction="reverse", depth=3)</code> &mdash; one call returns the full call chain, served from the graph.</p>
         <div class="scenario-result">12,716 &rarr; 477 ch. <strong>96% savings.</strong> 4 tool calls &rarr; 1.</div>
       </div>
 
@@ -361,15 +361,15 @@
       <div class="scenario">
         <div class="scenario-title"><span class="scenario-icon">&#128260;</span> Keep the graph current</div>
         <p>Call <code>watch_project</code> once and forget about it. Chokidar monitors the file system &mdash; every save triggers an incremental AST reparse of just that file. Deleted files CASCADE-clean their graph nodes and edges. No manual reindex, no stale data. The graph is always current.</p>
-        <div class="scenario-result">Incremental updates. <strong>8ms index cost</strong> for 52 files. Break-even: 1 query.</div>
+        <div class="scenario-result">Incremental updates stay available, but index cost and break-even numbers now live under diagnostics instead of the public benchmark headline.</div>
       </div>
     </div>
   </section>
 
-  <!-- 13 TOOLS -->
+  <!-- TOOLS -->
   <section>
     <div class="container">
-      <h2>14 Tools</h2>
+      <h2>15 Tools</h2>
       <p class="section-desc">Query, analyze, and maintain the knowledge graph.</p>
       <div class="table-wrap">
         <table>
@@ -383,51 +383,59 @@
             </tr>
             <tr>
               <td class="tool-name">search_symbols</td>
-              <td class="tool-desc">Full-text search for symbols (functions, classes, methods). FTS5, filter by kind</td>
+              <td class="tool-desc">Full-text search for candidate symbols. Identity-safe discovery step before semantic queries</td>
             </tr>
             <tr>
-              <td class="tool-name">get_impact</td>
-              <td class="tool-desc">Blast radius analysis: what symbols and files are affected by a change</td>
+              <td class="tool-name">get_symbol</td>
+              <td class="tool-desc">Identity-safe symbol context: definition, incoming edges, outgoing edges, siblings, and module owner</td>
             </tr>
             <tr>
-              <td class="tool-name">trace_calls</td>
-              <td class="tool-desc">Trace call chains &mdash; who calls this (callers) or what does it call (callees)</td>
+              <td class="tool-name">trace_paths</td>
+              <td class="tool-desc">Unified path traversal across calls, references, imports, type, flow, or mixed graph layers</td>
             </tr>
             <tr>
-              <td class="tool-name">get_context</td>
-              <td class="tool-desc">360-degree view: definition, callers, callees, siblings, file context</td>
+              <td class="tool-name">find_references</td>
+              <td class="tool-desc">Find semantic usages of one symbol identity: imports, calls, reads, type refs, and reexports</td>
+            </tr>
+            <tr>
+              <td class="tool-name">find_implementations</td>
+              <td class="tool-desc">Find type-layer implementations and overrides: extends, implements, overrides</td>
+            </tr>
+            <tr>
+              <td class="tool-name">find_dataflows</td>
+              <td class="tool-desc">Deterministic flow summaries and targeted interprocedural flow paths</td>
+            </tr>
+            <tr>
+              <td class="tool-name">explain_resolution</td>
+              <td class="tool-desc">Explain how a selector resolved, which candidates were considered, and why one won</td>
             </tr>
             <tr>
               <td class="tool-name">get_architecture</td>
-              <td class="tool-desc">Module matrix, cross-module dependencies, hotspot symbols</td>
+              <td class="tool-desc">Module structure, cross-module dependencies, and hotspot summary from the layered graph</td>
             </tr>
             <tr>
               <td class="tool-name">watch_project</td>
-              <td class="tool-desc">File watcher for incremental graph updates. Singleton per project</td>
+              <td class="tool-desc">File watcher for incremental graph updates. Reuses the same indexing pipeline as full indexing</td>
             </tr>
             <tr>
               <td class="tool-name">find_hotspots</td>
               <td class="tool-desc">Identify refactoring targets. Functions/methods ranked by risk = complexity &times; callers</td>
             </tr>
             <tr>
-              <td class="tool-name">impact_of_changes</td>
-              <td class="tool-desc">Estimate affected files/tests from git diff via static call graph</td>
-            </tr>
-            <tr>
-              <td class="tool-name">find_unused</td>
-              <td class="tool-desc">Find exported symbols with zero imports across the codebase</td>
+              <td class="tool-name">find_unused_exports</td>
+              <td class="tool-desc">Find exported symbols with no proven incoming usage. Confidence-aware outside JS/TS</td>
             </tr>
             <tr>
               <td class="tool-name">find_cycles</td>
               <td class="tool-desc">Detect circular module dependencies via Tarjan&rsquo;s SCC algorithm</td>
             </tr>
             <tr>
-              <td class="tool-name">module_metrics</td>
+              <td class="tool-name">get_module_metrics</td>
               <td class="tool-desc">Calculate coupling metrics (Ca/Ce/Instability) per file</td>
             </tr>
             <tr>
-              <td class="tool-name">find_references</td>
-              <td class="tool-desc">Find all usages of a symbol — calls, reads, type annotations, re-exports</td>
+              <td class="tool-name">find_clones</td>
+              <td class="tool-desc">Detect exact, normalized, and near-miss clones with suppression and scope controls</td>
             </tr>
           </tbody>
         </table>
@@ -443,7 +451,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Language</th><th>Extensions</th><th>Graph Features</th><th>find_unused</th></tr>
+            <tr><th>Language</th><th>Extensions</th><th>Graph Features</th><th>Unused Export Confidence</th></tr>
           </thead>
           <tbody>
             <tr>
@@ -461,19 +469,19 @@
             <tr>
               <td class="tool-name">Python</td>
               <td class="tool-desc">.py</td>
-              <td class="tool-desc">Calls + exports</td>
+              <td class="tool-desc">Calls + exports + structured imports</td>
               <td class="tool-desc">Export detection only</td>
             </tr>
             <tr>
               <td class="tool-name">C#</td>
               <td class="tool-desc">.cs</td>
-              <td class="tool-desc">Calls + exports</td>
+              <td class="tool-desc">Calls + exports + type graph</td>
               <td class="tool-desc">Export detection only</td>
             </tr>
             <tr>
               <td class="tool-name">PHP</td>
               <td class="tool-desc">.php</td>
-              <td class="tool-desc">Calls + exports</td>
+              <td class="tool-desc">Calls + exports + structured imports</td>
               <td class="tool-desc">Export detection only</td>
             </tr>
           </tbody>
@@ -485,62 +493,52 @@
   <!-- FULL BENCHMARK -->
   <section style="background: var(--bg-secondary);">
     <div class="container">
-      <h2>Token Efficiency</h2>
-      <p class="section-desc">Built-in grep/read vs hex-graph on a real codebase.</p>
-      <details>
-        <summary>Full benchmark (50 files, 422 symbols indexed)</summary>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>#</th><th>Scenario</th><th>Built-in</th><th>Hex-graph</th><th>Savings</th><th>Ops</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>1</td>
-                <td>Search symbols</td>
-                <td>5,800 ch</td>
-                <td>196 ch</td>
-                <td class="savings-high">97%</td>
-                <td class="tool-desc">1&rarr;1</td>
-              </tr>
-              <tr>
-                <td>2</td>
-                <td>Get context (360&deg;)</td>
-                <td>38,611 ch</td>
-                <td>1,274 ch</td>
-                <td class="savings-high">97%</td>
-                <td class="tool-desc">4&rarr;1</td>
-              </tr>
-              <tr>
-                <td>3</td>
-                <td>Get impact (blast radius)</td>
-                <td>969 ch</td>
-                <td>2,590 ch</td>
-                <td class="savings-note">-167%</td>
-                <td class="tool-desc">6&rarr;1</td>
-              </tr>
-              <tr>
-                <td>4</td>
-                <td>Trace calls (callers)</td>
-                <td>12,716 ch</td>
-                <td>477 ch</td>
-                <td class="savings-high">96%</td>
-                <td class="tool-desc">4&rarr;1</td>
-              </tr>
-              <tr>
-                <td>5</td>
-                <td>Architecture overview</td>
-                <td>389,523 ch</td>
-                <td>2,941 ch</td>
-                <td class="savings-high">99%</td>
-                <td class="tool-desc">50&rarr;1</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
+      <h2>Workflow Benchmarking</h2>
+      <p class="section-desc">Public benchmark mode reports only session-derived workflow comparisons against built-in grep/read chains.</p>
+
+      <div class="workflow-block">
+        <p><strong style="color: var(--text-primary);">Commands</strong></p>
+        <p><code>npm run benchmark -- --repo /path/to/repo</code></p>
+        <p><code>npm run benchmark:diagnostic -- --repo /path/to/repo</code></p>
+      </div>
+
+      <div class="table-wrap" style="margin-top: 28px;">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Workflow</th><th>Built-in</th><th>Hex-graph</th><th>Savings</th><th>Ops</th><th>Steps</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>W1</td>
+              <td class="tool-desc">Explore unfamiliar MCP before refactor</td>
+              <td>93,361 ch</td><td>16,081 ch</td><td class="savings-high">83%</td><td class="tool-desc">12&rarr;3</td><td class="tool-desc">12&rarr;3</td>
+            </tr>
+            <tr>
+              <td>W2</td>
+              <td class="tool-desc">Estimate blast radius before refactor</td>
+              <td>106,117 ch</td><td>49,674 ch</td><td class="savings-high">53%</td><td class="tool-desc">7&rarr;3</td><td class="tool-desc">5&rarr;3</td>
+            </tr>
+            <tr>
+              <td>W3</td>
+              <td class="tool-desc">Audit cycles, dead exports, hotspots</td>
+              <td>61,754 ch</td><td>4,184 ch</td><td class="savings-high">93%</td><td class="tool-desc">22&rarr;4</td><td class="tool-desc">22&rarr;4</td>
+            </tr>
+            <tr>
+              <td>W4</td>
+              <td class="tool-desc">Review PR semantic risk snapshot</td>
+              <td>51,390 ch</td><td>44,474 ch</td><td>13%</td><td class="tool-desc">3&rarr;2</td><td class="tool-desc">4&rarr;2</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <div class="summary-box">
-        <strong>Average: 44% tokens saved</strong> | 65&rarr;5 ops (92% reduction) | 61&rarr;5 steps | Index: 8ms for 52 files
+        <strong>Workflow summary: 61% average token savings</strong> | 44&rarr;12 ops | 43&rarr;12 steps
+      </div>
+
+      <div class="workflow-block" style="margin-top: 24px;">
+        <p>These workflows are derived from recent real Claude sessions: unfamiliar-codebase exploration, blast-radius estimation, code-quality audit, and PR risk review.</p>
+        <p>Atomic query comparisons and index-cost numbers remain available under diagnostics, but they are no longer used as headline benchmark claims.</p>
       </div>
     </div>
   </section>
@@ -552,9 +550,9 @@
       <div class="workflow-block">
         <p>Built on SQLite and tree-sitter &mdash; fast indexing, instant queries, zero external services.</p>
         <ul>
-          <li><strong>Storage:</strong> SQLite via better-sqlite3. Single <code>.hex-graph.db</code> file per project. FTS5 for fast symbol search.</li>
-          <li><strong>Parsing:</strong> tree-sitter WASM &mdash; 15+ languages (JavaScript, TypeScript, Python, Go, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Bash).</li>
-          <li><strong>Indexer:</strong> 4-pass pipeline: PURGE old data &rarr; SCAN files &rarr; PARSE AST &rarr; RESOLVE cross-file references.</li>
+          <li><strong>Storage:</strong> SQLite via better-sqlite3. Single <code>.codegraph/index.db</code> per project. FTS5 for fast symbol search.</li>
+          <li><strong>Parsing:</strong> tree-sitter WASM with 6 configured grammars: JavaScript, TypeScript, TSX, Python, C#, PHP.</li>
+          <li><strong>Indexer:</strong> shared layered pipeline: PURGE &rarr; SCAN &rarr; PARSE &rarr; MATERIALIZE nodes &rarr; RESOLVE symbol/module/type/flow edges.</li>
           <li><strong>Watcher:</strong> Chokidar file system events. Incremental reparse on change, CASCADE cleanup on delete.</li>
         </ul>
       </div>

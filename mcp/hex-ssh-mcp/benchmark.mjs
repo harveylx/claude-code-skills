@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * hex-ssh-mcp benchmark — measures token efficiency of normalize/dedup pipeline.
+ * hex-ssh-mcp normalization diagnostic.
  *
- * Pure-function benchmark: no SSH connection needed.
+ * Pure-function diagnostic: no SSH connection needed.
  * Generates synthetic data simulating real SSH command outputs.
  *
  * Run: node benchmark.mjs
@@ -202,7 +202,7 @@ const scenarios = [
 
 // ---- Main ----
 
-console.log("=== hex-ssh-mcp benchmark ===\n");
+console.log("=== hex-ssh-mcp normalization diagnostic ===\n");
 
 const header = "| # | Scenario                    | Input      | Output     | Savings |";
 const sep =    "|---|-----------------------------|-----------:|-----------:|--------:|";
@@ -226,3 +226,4 @@ for (let i = 0; i < scenarios.length; i++) {
 
 console.log(sep);
 console.log(`\nAverage savings: ${savings(totalInput, totalOutput)} (${fmt(totalInput)} ch -> ${fmt(totalOutput)} ch)`);
+console.log("Note: this script measures normalization/dedup/truncation efficiency only. It is not a comparative workflow benchmark against built-in tools.");

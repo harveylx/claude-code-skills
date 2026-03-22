@@ -8,6 +8,8 @@ import { Client } from "ssh2";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { buildHostVerifier } from "./host-verify.mjs";
+import { assertSafeArg } from "./shell-escape.mjs";
 
 const DEFAULT_KEY_PATHS = [
     join(homedir(), ".ssh", "id_rsa"),
@@ -17,6 +19,7 @@ const DEFAULT_KEY_PATHS = [
 
 const CONNECT_TIMEOUT = 20000;
 const KEEPALIVE_INTERVAL = 30000;
+const EXEC_TIMEOUT = 120_000;
 
 /**
  * Validate host against ALLOWED_HOSTS env.
@@ -34,21 +37,39 @@ function validateHost(host) {
 }
 
 /**
+ * Canonicalize a remote path: require absolute, resolve . and ..
+ */
+function canonicalize(raw) {
+    if (!raw.startsWith("/")) {
+        throw new Error(`BAD_PATH: absolute remote path required, got "${raw}"`);
+    }
+    const parts = raw.split("/").filter(Boolean);
+    const resolved = [];
+    for (const p of parts) {
+        if (p === "..") { if (resolved.length) resolved.pop(); }
+        else if (p !== ".") resolved.push(p);
+    }
+    return "/" + resolved.join("/");
+}
+
+/**
  * Validate remote path against ALLOWED_DIRS env.
- * If ALLOWED_DIRS is set, only paths under listed dirs are permitted.
+ * Requires absolute path, resolves .., canonicalizes both sides.
  */
 export function validateRemotePath(filePath) {
+    assertSafeArg("filePath", filePath);
+    const canonical = canonicalize(filePath);
+
     const allowed = process.env.ALLOWED_DIRS;
     if (!allowed) return;
-    const dirs = allowed.split(",").map((d) => d.trim());
-    const normalized = filePath.replace(/\/+$/, "");
-    const ok = dirs.some((dir) => {
-        const nd = dir.replace(/\/+$/, "");
-        return normalized === nd || normalized.startsWith(nd + "/");
-    });
+
+    const dirs = allowed.split(",").map((d) => canonicalize(d.trim()));
+    const ok = dirs.some((dir) =>
+        canonical === dir || canonical.startsWith(dir + "/")
+    );
     if (!ok) {
         throw new Error(
-            `Path "${filePath}" not under ALLOWED_DIRS. Permitted: ${dirs.join(", ")}`
+            `PATH_OUTSIDE_ROOT: "${filePath}" (resolved: "${canonical}") not under ALLOWED_DIRS. Permitted: ${dirs.join(", ")}`
         );
     }
 }
@@ -113,7 +134,15 @@ export function executeCommand({ host, user, command, privateKeyPath, port = 22 
                     conn.end();
                     return reject(new Error(`Exec failed: ${err.message}`));
                 }
+
+                const timer = setTimeout(() => {
+                    stream.close();
+                    conn.end();
+                    reject(new Error(`EXEC_TIMEOUT: command exceeded ${EXEC_TIMEOUT / 1000}s limit`));
+                }, EXEC_TIMEOUT);
+
                 stream.on("close", (code) => {
+                    clearTimeout(timer);
                     conn.end();
                     resolve({
                         output: stdout.trim(),
@@ -135,6 +164,7 @@ export function executeCommand({ host, user, command, privateKeyPath, port = 22 
             port,
             username: user,
             privateKey,
+            hostVerifier: buildHostVerifier(host, port),
             algorithms: {
                 kex: [
                     "ecdh-sha2-nistp256",

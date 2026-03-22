@@ -7,19 +7,17 @@ import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { RUNS, rg } from "./helpers.mjs";
 import {
-    searchSymbols,
-    getImpact,
-    traceCalls,
-    getContext,
-    getArchitecture,
+    findSymbols,
+    getSymbol,
+    tracePaths,
+    getArchitectureReport,
     getHotspots,
-    getModuleMetrics,
-    getReferences,
+    getModuleMetricsReport,
+    getReferencesBySelector,
 } from "../lib/store.mjs";
 import { findClones } from "../lib/clones.mjs";
 import { findCycles } from "../lib/cycles.mjs";
-import { findUnused } from "../lib/unused.mjs";
-import { impactOfChanges } from "../lib/impact.mjs";
+import { findUnusedExports } from "../lib/unused.mjs";
 import { indexProject } from "../lib/indexer.mjs";
 
 /**
@@ -29,27 +27,27 @@ import { indexProject } from "../lib/indexer.mjs";
  */
 export async function runAmortization(store, config) {
     const { repoRoot, searchSym, contextSym, impactSym, traceSym } = config;
+    const selectorFor = (sym) => ({ name: sym.name, file: sym.file });
 
     // Measure index time (re-index -- mostly skips unchanged files)
     const t0 = performance.now();
     await indexProject(repoRoot);
     const indexTimeMs = performance.now() - t0;
 
-    // Measure average query time from tests 1-12
+    // Measure average query time from the atomic benchmark set
     const queryTimes = [];
     const queries = [
-        () => searchSymbols(searchSym.name, { limit: 20 }),
-        () => getContext(contextSym.name),
-        () => getImpact(impactSym.name, { depth: 3, limit: 50 }),
-        () => traceCalls(traceSym.name, { direction: "callers", depth: 3, limit: 50 }),
-        () => getArchitecture(),
+        () => findSymbols(searchSym.name, { limit: 20 }),
+        () => getSymbol(selectorFor(contextSym)),
+        () => tracePaths(selectorFor(impactSym), { path_kind: "mixed", direction: "reverse", depth: 3, limit: 50 }),
+        () => tracePaths(selectorFor(traceSym), { path_kind: "calls", direction: "reverse", depth: 3, limit: 50 }),
+        () => getArchitectureReport(),
         () => findClones(store, { type: "all", threshold: 0.80, minStmts: 3, crossFile: true, format: "text", suppress: true }),
         () => getHotspots({ limit: 10 }),
-        () => impactOfChanges(store, repoRoot, { ref: "HEAD", depth: 2 }),
-        () => findUnused(store),
+        () => findUnusedExports(store),
         () => findCycles(store),
-        () => getModuleMetrics(),
-        () => getReferences(searchSym.name),
+        () => getModuleMetricsReport(),
+        () => getReferencesBySelector(selectorFor(searchSym)),
     ];
     for (const q of queries) {
         const qt0 = performance.now();

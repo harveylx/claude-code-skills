@@ -86,7 +86,7 @@ Group ALL failed/wasted tool calls by problem type. Raw facts:
 | Wrong target | {N} | Looked at file X when needed Y (Step 3) |
 | Retry storm | {N} | 3 attempts at edit before correct anchor (Step 5) |
 | Hash mismatch | {N} | Stale hash after prior edit (Step 4) |
-| Text not found | {N} | old_text didn't match content (Step 2) |
+| Anchor not found | {N} | anchor didn't match content (Step 2) |
 | Permission denied | {N} | Hook blocked built-in Read (Step 1) |
 | Unnecessary work | {N} | Read 500-line file without outline, re-read same file 3x |
 | Dead end | {N} | Explored approach X, abandoned, switched to Y (Step 6) |

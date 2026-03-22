@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /**
- * Hex-graph Benchmark v2
+ * Hex-graph workflow benchmark with optional diagnostics.
  *
- * Compares "agent with built-in grep/read" vs "agent with hex-graph" across
- * code intelligence scenarios. Measures chars, ops, steps, and accuracy.
+ * Public benchmark mode reports only comparative multi-step workflows.
+ * Atomic scenarios and amortization numbers are diagnostics, not headline
+ * benchmark results.
  *
  * Prerequisites: .codegraph/index.db must exist. Run hex-graph index_project first.
- * Usage: node benchmark/index.mjs [--repo /path/to/repo]
+ * Usage:
+ *   node benchmark/index.mjs [--repo /path/to/repo]
+ *   node benchmark/index.mjs --diagnostics [--repo /path/to/repo]
  */
 
 import { existsSync } from "node:fs";
@@ -25,6 +28,7 @@ const args = process.argv.slice(2);
 let repoRoot = process.cwd();
 const repoIdx = args.indexOf("--repo");
 if (repoIdx !== -1 && args[repoIdx + 1]) repoRoot = resolve(args[repoIdx + 1]);
+const diagnostics = args.includes("--diagnostics");
 
 // Check DB
 const dbPath = resolve(repoRoot, ".codegraph/index.db");
@@ -116,85 +120,74 @@ async function main() {
 
     const config = { repoRoot, allFiles, searchSym, contextSym, impactSym, traceSym };
 
-    // Run all benchmark phases
-    const results = runAtomic(store, config);
     const workflows = runWorkflows(store, config);
-    const amort = await runAmortization(store, config);
+    const results = diagnostics ? runAtomic(store, config) : [];
+    const amort = diagnostics ? await runAmortization(store, config) : null;
 
     // ===================================================================
     // Report
     // ===================================================================
 
     const out = [];
-    out.push("# Hex-graph Benchmark v2");
+    out.push("# Hex-graph Workflow Benchmark");
     out.push("");
     out.push(`Repository: ${repoName} (${fmt(allFiles.length)} files, ${fmt(stats.nodes)} symbols indexed)`);
     out.push(`Date: ${new Date().toISOString().slice(0, 10)}`);
     out.push("");
-
-    // Results table
-    out.push("## Results");
+    out.push("Mode: comparative workflow benchmark");
+    out.push("");
+    out.push("## Workflow Scenarios");
     out.push("");
     out.push("| # | Scenario | Built-in | Hex-graph | Savings | Ops | Steps |");
     out.push("|---|----------|----------|-----------|---------|-----|-------|");
 
-    let totalOpsWithout = 0;
-    let totalOpsWith = 0;
-    let totalStepsWithout = 0;
-    let totalStepsWith = 0;
-
-    for (const r of results) {
+    let totalWorkflowOpsWithout = 0;
+    let totalWorkflowOpsWith = 0;
+    let totalWorkflowStepsWithout = 0;
+    let totalWorkflowStepsWith = 0;
+    for (const w of workflows) {
         out.push(
-            `| ${r.id} | ${r.scenario} | ${fmt(r.without)} chars | ${fmt(r.withG)} chars | ${pctSavings(r.without, r.withG)} | ${r.opsWithout}\u2192${r.opsWith} | ${r.stepsWithout}\u2192${r.stepsWith} |`
+            `| ${w.id} | ${w.scenario} | ${fmt(w.without)} chars | ${fmt(w.withG)} chars | ${pctSavings(w.without, w.withG)} | ${w.opsWithout}\u2192${w.opsWith} | ${w.stepsWithout}\u2192${w.stepsWith} |`
         );
-        totalOpsWithout += r.opsWithout;
-        totalOpsWith += r.opsWith;
-        totalStepsWithout += r.stepsWithout;
-        totalStepsWith += r.stepsWith;
+        totalWorkflowOpsWithout += w.opsWithout;
+        totalWorkflowOpsWith += w.opsWith;
+        totalWorkflowStepsWithout += w.stepsWithout;
+        totalWorkflowStepsWith += w.stepsWith;
+    }
+    out.push("");
+    if (workflows.length > 0) {
+        const avgWorkflowSavings = workflows.reduce((sum, w) => {
+            if (w.without === 0) return sum;
+            return sum + (((w.without - w.withG) / w.without) * 100);
+        }, 0) / workflows.length;
+        out.push(`Workflow summary: ${avgWorkflowSavings.toFixed(0)}% average token savings | ${totalWorkflowOpsWithout}\u2192${totalWorkflowOpsWith} ops | ${totalWorkflowStepsWithout}\u2192${totalWorkflowStepsWith} steps`);
+        out.push("");
     }
 
-    out.push("");
-    const avgSavings = results.length > 0
-        ? results.reduce((sum, r) => sum + (r.without > 0 ? ((r.without - r.withG) / r.without) * 100 : 0), 0) / results.length
-        : 0;
-    out.push(`**Average:** ${avgSavings.toFixed(0)}% tokens | ${totalOpsWithout}\u2192${totalOpsWith} ops | ${totalStepsWithout}\u2192${totalStepsWith} steps`);
+    out.push("Note: public benchmark mode reports only workflow comparisons. Atomic scenarios and index-cost measurements are diagnostics and should not be used as headline benchmark claims.");
     out.push("");
 
-    // Index cost
-    out.push("## Index Cost");
-    out.push("");
-    out.push(`Index time: ${fmt(Math.round(amort.indexTimeMs))}ms for ${fmt(stats.files)} files`);
-    out.push(`Average query: ${amort.avgQueryMs.toFixed(1)}ms`);
-
-    const breakEvenStr = amort.breakEven === Infinity
-        ? "N/A (queries not faster)"
-        : `${fmt(amort.breakEven)} queries (amortized after ~${fmt(amort.breakEven)} calls)`;
-    out.push(`Break-even: ${breakEvenStr}`);
-    out.push("");
-
-    // Accuracy notes
-    out.push("## Accuracy");
-    out.push("");
-    out.push("| Metric | Built-in (grep) | Hex-graph |");
-    out.push("|--------|----------------|-----------|");
-    out.push("| False positives | Comments, strings, variable names matching | Zero (AST-based) |");
-    out.push("| Cross-file resolution | Manual chain of greps | Automatic via import edges |");
-    out.push("| Depth control | Manual BFS, error-prone | CTE with depth parameter |");
-    out.push("| Structured output | Raw text lines | Markdown tables with metadata |");
-    out.push("");
-
-    // Workflow results
-    if (workflows.length > 0) {
-        out.push("## Workflow Scenarios");
+    if (diagnostics) {
+        out.push("## Diagnostics");
+        out.push("");
+        out.push("These rows are engineering diagnostics. They are useful for inspecting specific query shapes and latency, but they are not part of the public workflow benchmark score.");
         out.push("");
         out.push("| # | Scenario | Built-in | Hex-graph | Savings | Ops | Steps |");
         out.push("|---|----------|----------|-----------|---------|-----|-------|");
-        for (const w of workflows) {
+        for (const r of results) {
             out.push(
-                `| ${w.id} | ${w.scenario} | ${fmt(w.without)} chars | ${fmt(w.withG)} chars | ${pctSavings(w.without, w.withG)} | ${w.opsWithout}\u2192${w.opsWith} | ${w.stepsWithout}\u2192${w.stepsWith} |`
+                `| ${r.id} | ${r.scenario} | ${fmt(r.without)} chars | ${fmt(r.withG)} chars | ${pctSavings(r.without, r.withG)} | ${r.opsWithout}\u2192${r.opsWith} | ${r.stepsWithout}\u2192${r.stepsWith} |`
             );
         }
         out.push("");
+        if (amort) {
+            out.push("### Latency Diagnostics");
+            out.push("");
+            out.push(`Index time: ${fmt(Math.round(amort.indexTimeMs))}ms for ${fmt(stats.files)} files`);
+            out.push(`Average query: ${amort.avgQueryMs.toFixed(1)}ms`);
+            out.push(`Built-in comparison query: ${amort.avgBuiltinMs.toFixed(1)}ms`);
+            out.push("");
+        }
     }
 
     console.log(out.join("\n"));

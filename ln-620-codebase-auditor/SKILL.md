@@ -39,7 +39,7 @@ Coordinates 9 specialized audit workers to perform comprehensive codebase qualit
 - `docs/principles.md` - project-specific quality principles
 - Package manifests: `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`
 - Auto-discover Team ID from `docs/tasks/kanban_board.md`
-- **Supported projects (15+ languages):** Run `index_project` and set `graph_indexed: true` in contextStore. Supports JS, TS, Python, Go, Rust, Java, C#, PHP, Kotlin, Swift, C, C++, Ruby, Bash and more.
+- **Supported projects (hex-graph indexed):** For JavaScript, TypeScript/TSX, Python, C#, and PHP projects, run `index_project` and set `graph_indexed: true` in contextStore. For other languages, continue without graph acceleration.
 
 **Extract metadata only** (not full codebase scan):
 - Programming language(s)

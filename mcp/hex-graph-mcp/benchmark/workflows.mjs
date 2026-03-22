@@ -1,23 +1,20 @@
 /**
- * W1-W4: Multi-tool pipeline workflow scenarios.
+ * Session-derived graph workflows based on recent real refactor/review tasks.
  */
 
 import { readFileSync } from "node:fs";
-import { execSync } from "node:child_process";
-import { runN, graphResult, rg } from "./helpers.mjs";
+import { runN, rg } from "./helpers.mjs";
 import {
-    searchSymbols,
-    getImpact,
-    traceCalls,
-    getContext,
-    getArchitecture,
+    findSymbols,
+    getSymbol,
+    tracePaths,
+    getArchitectureReport,
     getHotspots,
-    getModuleMetrics,
-    getReferences,
+    getModuleMetricsReport,
+    getReferencesBySelector,
 } from "../lib/store.mjs";
 import { findCycles } from "../lib/cycles.mjs";
-import { findUnused } from "../lib/unused.mjs";
-import { impactOfChanges } from "../lib/impact.mjs";
+import { findUnusedExports } from "../lib/unused.mjs";
 
 /**
  * @param {object} store  — initialized graph store
@@ -27,8 +24,9 @@ import { impactOfChanges } from "../lib/impact.mjs";
 export function runWorkflows(store, config) {
     const workflows = [];
     const { repoRoot, allFiles, searchSym, impactSym } = config;
+    const selectorFor = (sym) => ({ name: sym.name, file: sym.file });
 
-    // W1: Understand unfamiliar codebase
+    // W1: derived from "Merge scanner and synchronizer into system configurator"
     {
         const withoutChars = runN(() => {
             let total = 0;
@@ -43,21 +41,21 @@ export function runWorkflows(store, config) {
 
         const withChars = runN(() => {
             let total = 0;
-            total += graphResult(getArchitecture()).text.length;
-            total += graphResult(searchSymbols("main", { limit: 5 })).text.length;
-            if (searchSym) total += graphResult(getContext(searchSym.name)).text.length;
+            total += JSON.stringify(getArchitectureReport()).length;
+            total += JSON.stringify(findSymbols("main", { limit: 5 })).length;
+            if (searchSym) total += JSON.stringify(getSymbol(selectorFor(searchSym))).length;
             return total;
         });
 
         workflows.push({
-            id: "W1", scenario: "Understand codebase",
+            id: "W1", scenario: "Explore unfamiliar MCP before refactor",
             without: withoutChars, withG: withChars,
             opsWithout: 12, opsWith: 3,
             stepsWithout: 12, stepsWith: 3,
         });
     }
 
-    // W2: Safe refactoring
+    // W2: derived from "Estimate blast radius before semantic/server refactor"
     {
         const name = impactSym?.name || searchSym.name;
         const withoutChars = runN(() => {
@@ -73,21 +71,21 @@ export function runWorkflows(store, config) {
 
         const withChars = runN(() => {
             let total = 0;
-            total += graphResult(getImpact(name, { depth: 3, limit: 50 })).text.length;
-            total += (typeof getReferences(name) === "string" ? getReferences(name) : JSON.stringify(getReferences(name))).length;
-            total += graphResult(traceCalls(name, { direction: "callers", depth: 2 })).text.length;
+            total += JSON.stringify(tracePaths(selectorFor(impactSym || searchSym), { path_kind: "mixed", direction: "reverse", depth: 3, limit: 50 })).length;
+            total += JSON.stringify(getReferencesBySelector(selectorFor(impactSym || searchSym))).length;
+            total += JSON.stringify(tracePaths(selectorFor(impactSym || searchSym), { path_kind: "calls", direction: "reverse", depth: 2, limit: 50 })).length;
             return total;
         });
 
         workflows.push({
-            id: "W2", scenario: "Safe refactoring",
+            id: "W2", scenario: "Estimate blast radius before refactor",
             without: withoutChars, withG: withChars,
             opsWithout: 7, opsWith: 3,
             stepsWithout: 5, stepsWith: 3,
         });
     }
 
-    // W3: Code quality audit
+    // W3: derived from "Review and assess coding skills"
     {
         const withoutChars = runN(() => {
             let total = 0;
@@ -101,42 +99,41 @@ export function runWorkflows(store, config) {
 
         const withChars = runN(() => {
             let total = 0;
-            total += JSON.stringify(findUnused(store)).length;
+            total += JSON.stringify(findUnusedExports(store)).length;
             total += JSON.stringify(findCycles(store)).length;
             total += JSON.stringify(getHotspots({ limit: 10 })).length;
-            total += JSON.stringify(getModuleMetrics()).length;
+            total += JSON.stringify(getModuleMetricsReport()).length;
             return total;
         });
 
         workflows.push({
-            id: "W3", scenario: "Code quality audit",
+            id: "W3", scenario: "Audit cycles, dead exports, hotspots",
             without: withoutChars, withG: withChars,
             opsWithout: 22, opsWith: 4,
             stepsWithout: 22, stepsWith: 4,
         });
     }
 
-    // W4: PR review — impact assessment
+    // W4: derived from PR/review sessions over server/store changes
     {
         const withoutChars = runN(() => {
             let total = 0;
-            try {
-                total += execSync("git diff --name-only HEAD", { cwd: repoRoot, encoding: "utf-8", timeout: 5000 }).length;
-            } catch { total += 50; }
             total += rg(`-n "function " --type js "${repoRoot}" --max-count 20`).length;
             total += rg(`-n "export " --type js "${repoRoot}" --max-count 20`).length;
+            total += rg(`-n "import " --type js "${repoRoot}" --max-count 20`).length;
             return total;
         });
 
         const withChars = runN(() => {
             let total = 0;
-            total += JSON.stringify(impactOfChanges(store, repoRoot)).length;
-            total += JSON.stringify(getHotspots({ limit: 5 })).length;
+            total += JSON.stringify(getSymbol(selectorFor(impactSym || searchSym))).length;
+            total += JSON.stringify(tracePaths(selectorFor(impactSym || searchSym), { path_kind: "mixed", direction: "reverse", depth: 3, limit: 50 })).length;
+            total += JSON.stringify(getReferencesBySelector(selectorFor(impactSym || searchSym))).length;
             return total;
         });
 
         workflows.push({
-            id: "W4", scenario: "PR review impact",
+            id: "W4", scenario: "Review PR semantic risk snapshot",
             without: withoutChars, withG: withChars,
             opsWithout: 3, opsWith: 2,
             stepsWithout: 4, stepsWith: 2,

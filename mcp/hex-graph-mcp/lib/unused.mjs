@@ -44,7 +44,7 @@ function classifySuppression(file, name) {
  * @param {string} [opts.kind] - node kind filter (function/class/variable)
  * @returns {{ unused: object[], total_exported: number, total_unused: number, suppressed_count: number }}
  */
-export function findUnused(store, { scopePath, kind } = {}) {
+export function findUnusedExports(store, { scopePath, kind } = {}) {
     let exported = store.exportedNodes();
 
     if (scopePath) {
@@ -93,7 +93,7 @@ export function findUnused(store, { scopePath, kind } = {}) {
             continue;
         }
 
-        // Check legacy total import count for test-only usage
+        // Fallback import count used for test-only usage classification
         const totalImports = store.importEdgeCount(node.id);
         if (totalImports > 0) {
             // Has import edges — check if they are only from test files
@@ -125,7 +125,7 @@ export function findUnused(store, { scopePath, kind } = {}) {
 
 /**
  * Format unused exports as human-readable text.
- * @param {object} result - output from findUnused()
+ * @param {object} result - output from findUnusedExports()
  * @param {boolean} showSuppressed - include suppressed items
  * @returns {string}
  */

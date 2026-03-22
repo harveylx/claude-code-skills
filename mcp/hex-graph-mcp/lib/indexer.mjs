@@ -88,16 +88,17 @@ export async function indexProject(projectPath, { languages } = {}) {
         // Insert clone detection data
         persistCloneData(store, definitions, nodeIds);
 
-        fileNodeMap.set(relPath, { definitions, imports, calls, references, exports: result.exports, defaultExport: result.defaultExport, reexports: result.reexports, language, nodeIds });
+        fileNodeMap.set(relPath, { source, definitions, imports, calls, references, exports: result.exports, defaultExport: result.defaultExport, reexports: result.reexports, language, nodeIds });
         parsed++;
     }
 
     // Pass 3: RESOLVE — build edges (import, call, reexport)
     let edgeCount = 0;
     for (const [filePath, data] of fileNodeMap) {
-        const { definitions, imports, calls, references, exports: fileExports, defaultExport, reexports, language, nodeIds } = data;
-        edgeCount += resolveFileEdges(store, filePath, { definitions, imports, calls, references, exports: fileExports, defaultExport, reexports, nodeIds, language });
+        const { source, definitions, imports, calls, references, exports: fileExports, defaultExport, reexports, language, nodeIds } = data;
+        edgeCount += resolveFileEdges(store, filePath, { source, definitions, imports, calls, references, exports: fileExports, defaultExport, reexports, nodeIds, language });
     }
+    store.rebuildAllModuleLayerEdges();
 
     const elapsed = Date.now() - t0;
     const stats = store.stats();
@@ -136,7 +137,8 @@ export async function reindexFile(projectPath, filePath) {
     const nodeIds = store.bulkInsert(filePath, stat.mtimeMs, hash, language, definitions, imports);
 
     persistCloneData(store, definitions, nodeIds);
-    resolveFileEdges(store, filePath, { definitions, imports, calls, references, exports: fileExports, defaultExport, reexports, nodeIds, language });
+    resolveFileEdges(store, filePath, { source, definitions, imports, calls, references, exports: fileExports, defaultExport, reexports, nodeIds, language });
+    store.rebuildAllModuleLayerEdges();
 }
 
 // --- Helpers ---
@@ -147,7 +149,7 @@ export async function reindexFile(projectPath, filePath) {
  * marks exported symbols, and persists module_edges.
  * @returns {number} count of call edges created
  */
-function resolveFileEdges(store, filePath, { definitions, imports, calls, references, exports: fileExports, defaultExport, reexports, nodeIds, language }) {
+function resolveFileEdges(store, filePath, { source, definitions, imports, calls, references, exports: fileExports, defaultExport, reexports, nodeIds, language }) {
     let callEdgeCount = 0;
 
     // 1. Create synthetic reexport nodes
@@ -210,12 +212,24 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
     const importedSymbols = new Map();
     for (const imp of imports) {
         const resolvedFile = resolveImportSource(imp.source, filePath, store);
-        if (!resolvedFile) continue;
-
-        const targetNodes = store.nodesByFile(resolvedFile);
+        const targetNodes = resolvedFile ? store.nodesByFile(resolvedFile) : [];
+        const externalModule = !resolvedFile ? store.ensureExternalModuleNode(imp.source, language) : null;
 
         if (imp.specifiers && imp.specifiers.length > 0) {
             for (const spec of imp.specifiers) {
+                if (!resolvedFile) {
+                    if (spec.type === "named") {
+                        const target = store.ensureExternalSymbolNode(imp.source, spec.imported, language);
+                        importedSymbols.set(spec.local, target.id);
+                    } else if (spec.type === "default") {
+                        const target = store.ensureExternalSymbolNode(imp.source, "default", language);
+                        importedSymbols.set(spec.local, target.id);
+                    } else if ((spec.type === "namespace" || spec.type === "module") && externalModule) {
+                        importedSymbols.set(spec.local, externalModule.id);
+                    }
+                    continue;
+                }
+
                 if (spec.type === "named") {
                     const target = targetNodes.find(n => n.name === spec.imported && n.kind !== "import");
                     if (target) importedSymbols.set(spec.local, target.id);
@@ -224,7 +238,7 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
                     if (target) importedSymbols.set(spec.local, target.id);
                 }
             }
-        } else {
+        } else if (resolvedFile) {
             // Fallback for non-structured imports (Python etc.)
             for (const name of imp.name.split(", ")) {
                 const trimmed = name.trim();
@@ -235,29 +249,94 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
         }
     }
 
-    // 4. Persist symbol-level import edges
+    // 4. Persist type-layer edges
+    const resolvedTypeTargetsByOwner = new Map();
+    for (const def of definitions) {
+        if ((def.kind !== "class" && def.kind !== "interface") || !def.supertypes?.length) continue;
+        const sourceId = nodeIds.get(def.key);
+        if (!sourceId) continue;
+
+        for (const supertype of def.supertypes) {
+            const target = resolveTypeTarget(supertype.name, filePath, localSymbols, importedSymbols, store);
+            if (!target) continue;
+
+            store.insertEdge({
+                source_id: sourceId,
+                target_id: target.id,
+                layer: "type",
+                kind: supertype.relation,
+                confidence: target.confidence,
+                origin: "resolved",
+                file: filePath,
+                line: def.line_start,
+            });
+
+            const ownerTargets = resolvedTypeTargetsByOwner.get(def.name) || [];
+            ownerTargets.push(target);
+            resolvedTypeTargetsByOwner.set(def.name, ownerTargets);
+        }
+    }
+
+    // 5. Persist override edges for methods in inherited types
+    for (const def of definitions) {
+        if (def.kind !== "method" || !def.parent) continue;
+        const sourceId = nodeIds.get(def.key);
+        if (!sourceId) continue;
+        const superTargets = resolvedTypeTargetsByOwner.get(def.parent) || [];
+
+        for (const targetType of superTargets) {
+            const baseMethod = store.findByName(def.name).find(candidate =>
+                candidate.kind === "method" &&
+                candidate.qualified_name &&
+                candidate.qualified_name.endsWith(`:${targetType.name}.${def.name}`)
+            );
+            if (!baseMethod) continue;
+
+            store.insertEdge({
+                source_id: sourceId,
+                target_id: baseMethod.id,
+                layer: "type",
+                kind: "overrides",
+                confidence: targetType.confidence,
+                origin: "resolved",
+                file: filePath,
+                line: def.line_start,
+            });
+        }
+    }
+
+    // 6. Persist symbol-level import edges
     for (const imp of imports) {
         const resolvedFile = resolveImportSource(imp.source, filePath, store);
-        if (!resolvedFile) continue;
         if (!imp.specifiers || imp.specifiers.length === 0) continue;
 
         const sourceId = nodeIds.get(`import:${imp.source}:${imp.line}`);
         if (!sourceId) continue;
 
-        const targetNodes = store.nodesByFile(resolvedFile);
+        const targetNodes = resolvedFile ? store.nodesByFile(resolvedFile) : [];
 
         for (const spec of imp.specifiers) {
             let target;
-            const confidence = "exact";
+            const confidence = resolvedFile ? "exact" : "low";
 
-            if (spec.type === "default") {
+            if (!resolvedFile) {
+                if (spec.type === "default") {
+                    target = store.ensureExternalSymbolNode(imp.source, "default", language);
+                } else if (spec.type === "named") {
+                    target = store.ensureExternalSymbolNode(imp.source, spec.imported, language);
+                } else if (spec.type === "namespace" || spec.type === "module") {
+                    target = store.ensureExternalModuleNode(imp.source, language);
+                }
+            } else if (spec.type === "default") {
                 target = targetNodes.find(n => n.is_default_export && n.kind !== "import");
             } else if (spec.type === "namespace") {
                 for (const tn of targetNodes) {
                     if (tn.kind !== "import" && tn.is_exported) {
                         store.insertEdge({
                             source_id: sourceId, target_id: tn.id,
+                            layer: "symbol",
                             kind: "imports", confidence: "namespace",
+                            origin: "resolved",
                             file: filePath, line: imp.line,
                         });
                     }
@@ -270,31 +349,35 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
             if (target) {
                 store.insertEdge({
                     source_id: sourceId, target_id: target.id,
+                    layer: "symbol",
                     kind: "imports", confidence,
+                    origin: resolvedFile ? "resolved" : "unresolved",
                     file: filePath, line: imp.line,
                 });
             }
         }
     }
 
-    // 5. Persist module-level import edges (file-to-file)
+    // 7. Persist module-level import edges (file-to-file)
     store.clearModuleEdges(filePath);
     for (const imp of imports) {
         const resolvedFile = resolveImportSource(imp.source, filePath, store);
-        if (resolvedFile) {
-            const isSideEffect = !imp.name || imp.name === "*" || imp.name === "";
-            store.insertModuleEdge({
-                source_file: filePath,
-                target_file: resolvedFile,
-                line: imp.line,
-                is_side_effect: isSideEffect ? 1 : 0,
-                is_dynamic: 0,
-                is_reexport: 0,
-            });
+        const targetFile = resolvedFile || store.externalModuleFile(imp.source);
+        if (!resolvedFile) {
+            store.ensureExternalModuleNode(imp.source, language);
         }
+        const isSideEffect = !imp.name || imp.name === "*" || imp.name === "";
+        store.insertModuleEdge({
+            source_file: filePath,
+            target_file: targetFile,
+            line: imp.line,
+            is_side_effect: isSideEffect ? 1 : 0,
+            is_dynamic: 0,
+            is_reexport: 0,
+        });
     }
 
-    // 6. Mark exported symbols
+    // 8. Mark exported symbols
     if (fileExports && fileExports.size > 0) {
         for (const exportName of fileExports) {
             for (const def of definitions) {
@@ -318,20 +401,25 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
         }
     }
 
-    // 7. Wire reexport edges
+    // 9. Wire reexport edges
     if (reexports && reexports.length > 0) {
         for (const re of reexports) {
             const resolvedTarget = resolveImportSource(re.source, filePath, store);
-            if (!resolvedTarget) continue;
+            const targetFile = resolvedTarget || store.externalModuleFile(re.source);
+            if (!resolvedTarget) {
+                store.ensureExternalModuleNode(re.source, language);
+            }
 
             store.insertModuleEdge({
                 source_file: filePath,
-                target_file: resolvedTarget,
+                target_file: targetFile,
                 line: re.line || 0,
                 is_side_effect: 0,
                 is_dynamic: 0,
                 is_reexport: 1,
             });
+
+            if (!resolvedTarget) continue;
 
             const targetNodes = store.nodesByFile(resolvedTarget);
 
@@ -352,8 +440,10 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
                 store.insertEdge({
                     source_id: reexportNodeId,
                     target_id: target.id,
+                    layer: "symbol",
                     kind: "reexports",
                     confidence: "exact",
+                    origin: "resolved",
                     file: filePath,
                     line: re.line || 0,
                 });
@@ -361,7 +451,7 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
         }
     }
 
-    // 8. Resolve and persist call edges
+    // 10. Resolve and persist call edges
     for (const call of calls) {
         const callerDef = findEnclosingDefinition(call.line, definitions);
         const callerId = callerDef ? nodeIds.get(callerDef.key) : moduleNodeId;
@@ -400,8 +490,10 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
             store.insertEdge({
                 source_id: callerId,
                 target_id: targetId,
+                layer: "symbol",
                 kind: "calls",
                 confidence,
+                origin: "resolved",
                 file: filePath,
                 line: call.line,
             });
@@ -409,7 +501,7 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
         }
     }
 
-    // 9. Resolve reference edges
+    // 11. Resolve reference edges
     if (references && references.length > 0) {
         for (const ref of references) {
             const enclosingDef = findEnclosingDefinition(ref.line, definitions);
@@ -441,15 +533,130 @@ function resolveFileEdges(store, filePath, { definitions, imports, calls, refere
             store.insertEdge({
                 source_id: callerId,
                 target_id: targetId,
+                layer: "symbol",
                 kind: edgeKind,
                 confidence,
+                origin: "resolved",
                 file: filePath,
                 line: ref.line,
             });
         }
     }
 
+    materializeFlowSummaries(store, filePath, source, definitions, nodeIds);
     return callEdgeCount;
+}
+
+function materializeFlowSummaries(store, filePath, source, definitions, nodeIds) {
+    if (!source) return;
+    const lines = source.split("\n");
+
+    for (const def of definitions) {
+        if (def.kind !== "function" && def.kind !== "method") continue;
+        const ownerId = nodeIds.get(def.key);
+        if (!ownerId) continue;
+
+        const params = extractParamNames(def.signature);
+        if (params.length === 0) continue;
+
+        const bodyLines = lines.slice(def.line_start - 1, def.line_end);
+        const bodyByLine = new Map(bodyLines.map((line, index) => [def.line_start + index, line]));
+        const callEdges = store.edgesFrom(ownerId).filter(edge => edge.kind === "calls");
+
+        for (const [lineNo, text] of bodyByLine) {
+            const normalizedText = text || "";
+            const returnedIdentifier = extractReturnedIdentifier(normalizedText);
+            if (returnedIdentifier && params.some(param => namesEqual(param, returnedIdentifier))) {
+                store.insertFlowSummary({
+                    owner_id: ownerId,
+                    kind: "param_to_return",
+                    source_name: returnedIdentifier,
+                    target_name: "return",
+                    file: filePath,
+                    line: lineNo,
+                    confidence: "exact",
+                });
+            }
+
+            const lineCalls = callEdges.filter(edge => edge.line === lineNo);
+            for (const edge of lineCalls) {
+                for (const param of params) {
+                    if (!containsIdentifier(normalizedText, param)) continue;
+                    store.insertFlowSummary({
+                        owner_id: ownerId,
+                        kind: "param_to_call",
+                        source_name: param,
+                        target_name: edge.target_name,
+                        related_symbol_id: edge.target_id,
+                        file: filePath,
+                        line: lineNo,
+                        confidence: edge.confidence,
+                    });
+                }
+                if (/\breturn\b/.test(normalizedText)) {
+                    store.insertFlowSummary({
+                        owner_id: ownerId,
+                        kind: "call_to_return",
+                        source_name: edge.target_name,
+                        target_name: "return",
+                        related_symbol_id: edge.target_id,
+                        file: filePath,
+                        line: lineNo,
+                        confidence: edge.confidence,
+                    });
+                }
+            }
+        }
+    }
+}
+
+function extractParamNames(signature) {
+    if (!signature) return [];
+    return signature
+        .replace(/^[({\[]|[)}\]]$/g, "")
+        .split(",")
+        .map(part => part.trim())
+        .map(part => part.replace(/=[^,]+$/g, "").trim())
+        .map(part => part.replace(/^(public|private|protected|readonly|async|ref|out|in)\s+/g, ""))
+        .map(part => part.replace(/:[^,]+$/g, "").trim())
+        .map(part => part.replace(/\s+/g, " ").split(" ").pop())
+        .map(part => part.replace(/^\*+/, "").replace(/^\$/,"").replace(/[?]$/g, ""))
+        .filter(Boolean);
+}
+
+function extractReturnedIdentifier(lineText) {
+    const match = lineText.match(/\breturn\s+\$?([A-Za-z_]\w*)\b/);
+    return match ? match[1] : null;
+}
+
+function containsIdentifier(lineText, name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?<![\\w$])\\$?${escaped}(?![\\w$])`).test(lineText);
+}
+
+function namesEqual(left, right) {
+    return left.replace(/^\$/, "") === right.replace(/^\$/, "");
+}
+
+function resolveTypeTarget(name, filePath, localSymbols, importedSymbols, store) {
+    if (localSymbols.has(name) && localSymbols.get(name) != null) {
+        const node = store.getNodeById(localSymbols.get(name));
+        if (node && (node.kind === "class" || node.kind === "interface")) {
+            return { ...node, confidence: "exact" };
+        }
+    }
+    if (importedSymbols.has(name)) {
+        const node = store.getNodeById(importedSymbols.get(name));
+        if (node && (node.kind === "class" || node.kind === "interface")) {
+            return { ...node, confidence: "exact" };
+        }
+    }
+
+    const candidates = store.findByName(name).filter(c => c.kind === "class" || c.kind === "interface");
+    const moduleConnected = candidates.filter(c => store.moduleEdgeExists(filePath, c.file));
+    if (moduleConnected.length === 1) return { ...moduleConnected[0], confidence: "inferred" };
+    if (candidates.length === 1) return { ...candidates[0], confidence: "heuristic" };
+    return null;
 }
 
 function persistCloneData(store, definitions, nodeIds) {

@@ -121,43 +121,60 @@ c) When second agent completes:
 
 d) If an agent fails: log failure, continue with available results
 
-## Step: Critical Verification + Debate
-
-Per Debate Protocol in `shared/references/agent_delegation_pattern.md`.
+## Step: Critical Verification
 
 For EACH suggestion from agent results:
 
-a) **Claude Evaluation:** Independently assess against the actual code — is the issue real? Actionable? Conflicts with project patterns? Read the agent's Analysis Process and Evidence sections from the report for deeper understanding of the suggestion's basis.
+a) **Claude Evaluation:** Independently assess against the actual code -- is the issue real? Actionable? Conflicts with project patterns? Read the agent's Analysis Process and Evidence sections from the report for deeper understanding of the suggestion's basis.
 
-b) **AGREE** -> accept as-is. **DISAGREE** -> apply debate triage.
+b) **AGREE** -> accept as-is. **REJECT** -> skip (Claude's independent judgment is final).
 
-c) **Debate triage** (determines whether to challenge or reject outright):
+c) **Persist:** all evaluation decisions in review summary.
 
+## Step: Iterative Refinement (MANDATORY when Codex available)
+
+After Critical Verification, run a deterministic refinement loop using Codex. This automates the manual "show to Codex -> get feedback -> fix -> repeat" cycle.
+
+**Pre-condition:** Phase 5 merge applied all accepted suggestions. The artifact is in its "current best" state.
+
+**Skip condition:** Codex unavailable in health check OR disabled in `environment_state.json`. If skipped -> log `"Iterative Refinement: SKIPPED (Codex unavailable)"`.
+
+**Loop (max 5 iterations):**
+
+1. **Build artifact:** Read current state of the reviewed artifact (Story+Tasks / plan file / context docs)
+2. **Build prompt:** Load `shared/agents/prompt_templates/iterative_refinement.md`, fill placeholders (`{artifact_type}`, `{artifact_content}`, `{project_context}`, `{iteration_number}`, `{max_iterations}`, `{previous_findings_summary}`)
+3. **Save prompt:** `.agent-review/refinement/{identifier}_refinement_iter{N}_prompt.md`
+4. **Send to Codex** (foreground, synchronous -- NOT background):
+   ```
+   node shared/agents/agent_runner.mjs --agent codex \
+     --prompt-file .agent-review/refinement/{identifier}_refinement_iter{N}_prompt.md \
+     --output-file .agent-review/refinement/{identifier}_refinement_iter{N}_result.md \
+     --cwd {project_dir}
+   ```
+5. **Parse result:** Extract JSON from `## Structured Data` section
+6. **Exit conditions:**
+   - `verdict == "APPROVED"` -> converged, exit loop
+   - `iteration == 5` -> max iterations, exit loop
+   - Codex failed/timed out -> exit loop, use current state
+   - 0 suggestions accepted by Claude -> exit loop (prevents infinite rejection loop)
+7. **Apply fixes:** Claude evaluates each suggestion (AGREE/REJECT), applies accepted fixes
+8. **Build `{previous_findings_summary}`** for next iteration, return to step 1
+
+**Post-loop display:** `"Iterative Refinement: {N} iterations, {total} suggestions, {applied} applied, exit: {reason}"`
+
+**Append to `.agent-review/review_history.md`:**
+```markdown
+### Refinement: {identifier} | {YYYY-MM-DD}
+- Iterations: {N}/{max}, Exit: {APPROVED|MAX_ITER|ERROR|ZERO_ACCEPTED}
+- Total suggestions: {count}, Applied: {count}
+- Per-iteration: iter1 ({applied}/{total}), iter2 ({applied}/{total}), ...
 ```
-IF review_mode == "code":
-  IF area IN {security, correctness} → full debate (Challenge + Follow-Up)
-  ELSE IF confidence >= 95 AND impact_percent >= 20 → full debate
-  ELSE → reject without debate (no challenge rounds)
-ELSE:
-  → full debate for all areas (story/context/plan_review modes)
-```
-
-Rationale: In code mode, only security/correctness findings affect the quality verdict (quality coordinator normalization matrix). Debate rounds cost agent session resume + parsing -- reserve for verdict-affecting findings. High-confidence high-impact findings in other areas still get debated as exception.
-
-d) **Challenge + Follow-Up (with session resume):** Follow Debate Protocol (Challenge Round 1 -> Follow-Up Round if not resolved). Resume agent's review session for full context continuity:
-   - Read `session_id` from `.agent-review/{agent}/{identifier}_session.json`
-   - Run with `--resume-session {session_id}` -- agent continues in same session, preserving file analysis and reasoning
-   - If `session_resumed: false` in result -> log warning, result still valid (stateless fallback)
-   - Challenge files: `.agent-review/{agent}/{identifier}_{review_type}_challenge_{N}_prompt.md` / `_result.md`
-   - Follow-up files: `.agent-review/{agent}/{identifier}_{review_type}_followup_{N}_prompt.md` / `_result.md`
-
-e) **Persist:** all challenge and follow-up prompts/results in `.agent-review/{agent}/`
 
 ## Step: Aggregate + Return
 
-- Collect ACCEPTED suggestions only (after verification + debate)
+- Collect ACCEPTED suggestions only (after Critical Verification)
 - Deduplicate by `(area, issue)` -- keep higher confidence
-- **Return** JSON with suggestions + agent_stats + debate_log. **NO cleanup/deletion.**
+- **Return** JSON with suggestions + agent_stats. **NO cleanup/deletion.**
 
 ## Step: Verify Agent Cleanup
 
@@ -204,22 +221,21 @@ Entry format (per `shared/references/agent_review_memory.md`):
 - Same base prompt to all agents. Only `{focus_hint}` differs per agent.
 - Agents produce structured review report (markdown analysis + `## Structured Data` with JSON block). Agent stdout streams to log file for real-time visibility.
 - Log all attempts for user visibility (agent name, duration, suggestion count)
-- **Persist** per-agent prompts in `.agent-review/{agent}/`, results and challenge artifacts in `.agent-review/{agent}/` -- do NOT delete
+- **Persist** per-agent prompts in `.agent-review/{agent}/`, results in `.agent-review/{agent}/` -- do NOT delete
 - Ensure `.agent-review/.gitignore` exists before creating files (only create if `.agent-review/` is new)
 - **HARD TIMEOUT (30 min default):** `agent_runner.mjs` kills the agent process after `hard_timeout_seconds` (configurable in registry, override via `--timeout`). On timeout, returns `success: false`. Monitor liveness via log file stat (growing = alive). **TaskStop is still FORBIDDEN** — the runner handles timeout internally.
-- **CRITICAL VERIFICATION:** Do NOT trust agent suggestions blindly. Claude MUST independently verify each suggestion and debate if disagreeing. Accept only after verification.
+- **CRITICAL VERIFICATION:** Do NOT trust agent suggestions blindly. Claude MUST independently verify each suggestion. Accept only after verification.
 
 ## Definition of Done
 
 - All available agents launched as background tasks (or gracefully failed with logged reason)
 - Per-agent prompts persisted in `.agent-review/{agent}/` (differ only by `{focus_hint}`)
 - Raw results persisted in `.agent-review/{agent}/` (no cleanup)
-- Each suggestion critically verified by Claude; challenges executed for disagreements
-- Follow-up rounds executed for suggestions rejected after Round 1 (DEFEND+weak / MODIFY+disagree)
-- Challenge and follow-up prompts/results persisted alongside review artifacts
-- Deduplicated verified suggestions returned with verdict, agent_stats, and debate_log
+- Each suggestion critically verified by Claude (AGREE or REJECT)
+- Deduplicated verified suggestions returned with verdict and agent_stats
 - `.agent-review/.gitignore` exists (created only if `.agent-review/` was new)
-- Session files persisted in `.agent-review/{agent}/{identifier}_session.json` for debate resume
+- Iterative Refinement executed (or SKIPPED if Codex unavailable)
+- Refinement artifacts persisted in `.agent-review/refinement/`
 - Review summary appended to `.agent-review/review_history.md`
 - Agent process trees verified dead after results collection (Step: Verify Agent Cleanup)
 
@@ -240,24 +256,18 @@ suggestions:
     confidence: 95
     impact_percent: 15
     source: "{agent}"
-    resolution: "accepted | accepted_after_debate | accepted_after_followup | rejected"
+    resolution: "accepted | rejected"
 agent_stats:
   - name: "{agent}"
     duration_s: 12.4
     suggestion_count: 3
     accepted_count: 2
-    challenged_count: 1
-    followup_count: 1
     status: "success | failed | timeout"
-debate_log:
-  - suggestion_summary: "..."
-    agent: "{agent}"
-    rounds:
-      - round: 1
-        claude_position: "..."
-        agent_decision: "DEFEND | WITHDRAW | MODIFY"
-        resolution: "accepted | rejected | follow_up"
-    final_resolution: "accepted | accepted_after_debate | accepted_after_followup | rejected"
+refinement:
+  iterations: 3
+  exit_reason: "APPROVED | MAX_ITER | ERROR | ZERO_ACCEPTED | SKIPPED"
+  total_suggestions: 8
+  total_applied: 6
 ```
 
 ### Mode-specific extensions
@@ -269,9 +279,8 @@ debate_log:
 - **Agent delegation pattern:** `shared/references/agent_delegation_pattern.md`
 - **Review base template:** `shared/agents/prompt_templates/review_base.md`
 - **Review mode files:** `shared/agents/prompt_templates/modes/` (code.md, story.md, context.md)
-- **Prompt template (challenge):** `shared/agents/prompt_templates/challenge_review.md`
-- **Challenge schema:** `shared/agents/schemas/challenge_review_schema.json`
+- **Iterative refinement template:** `shared/agents/prompt_templates/iterative_refinement.md`
 - **Agent registry:** `shared/agents/agent_registry.json`
 - **Agent runner:** `shared/agents/agent_runner.mjs`
-- **Agent review memory (write-only):** `shared/references/agent_review_memory.md` — defines review_history.md format (human audit trail)
+- **Agent review memory (write-only):** `shared/references/agent_review_memory.md` -- defines review_history.md format (human audit trail)
 - **Meta-analysis protocol:** `shared/references/meta_analysis_protocol.md`

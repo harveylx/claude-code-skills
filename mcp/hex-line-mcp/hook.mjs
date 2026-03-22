@@ -42,7 +42,7 @@ const BINARY_EXT = new Set([
 
 const REVERSE_TOOL_HINTS = {
     "mcp__hex-line__read_file":      "Read (file_path, offset, limit)",
-    "mcp__hex-line__edit_file":      "Edit (file_path, old_string, new_string)",
+    "mcp__hex-line__edit_file":      "Edit (anchor-based hash edits only)",
     "mcp__hex-line__write_file":     "Write (file_path, content)",
     "mcp__hex-line__grep_search":    "Grep (pattern, path)",
     "mcp__hex-line__directory_tree": "Glob (pattern) or Bash(ls)",
@@ -50,13 +50,13 @@ const REVERSE_TOOL_HINTS = {
     "mcp__hex-line__outline":        "Read with offset/limit",
     "mcp__hex-line__verify":         "Read the file again with Read",
     "mcp__hex-line__changes":        "Bash(git diff)",
-    "mcp__hex-line__bulk_replace":   "Edit for each file",
+    "mcp__hex-line__bulk_replace":   "Edit (text rename/refactor across files)",
     "mcp__hex-line__setup_hooks":    "Not available (hex-line disabled)",
 };
 
 const TOOL_HINTS = {
     Read:  "mcp__hex-line__read_file (not Read). For writing: write_file (no prior Read needed)",
-    Edit:  "mcp__hex-line__edit_file (not Edit, not sed -i). read_file first for hashes",
+    Edit:  "mcp__hex-line__edit_file for hash-verified edits (not Edit). For text rename use bulk_replace",
     Write: "mcp__hex-line__write_file (not Write). No prior Read needed",
     Grep:  "mcp__hex-line__grep_search (not Grep). Params: output, literal, context_before, context_after, multiline",
     cat:   "mcp__hex-line__read_file (not cat/head/tail/less/more)",
@@ -65,7 +65,7 @@ const TOOL_HINTS = {
     ls:    "mcp__hex-line__directory_tree with pattern param (not ls/find/tree). E.g. pattern='*-mcp' type='dir'",
     stat:  "mcp__hex-line__get_file_info (not stat/wc/file)",
     grep:  "mcp__hex-line__grep_search (not grep/rg). Params: output, literal, context_before, context_after, multiline",
-    sed:   "mcp__hex-line__edit_file (not sed -i). read_file first for hashes",
+    sed:   "mcp__hex-line__edit_file for hash edits, or mcp__hex-line__bulk_replace for text rename (not sed -i)",
     diff:  "mcp__hex-line__changes (not diff). Git-based semantic diff",
     outline: "mcp__hex-line__outline (before reading large code files)",
     verify:  "mcp__hex-line__verify (staleness check without re-read)",
@@ -425,7 +425,7 @@ function handleSessionStart() {
     }
     lines.push("Exceptions: images, PDFs, notebooks, .claude/settings.json, .claude/settings.local.json \u2192 built-in Read; Glob always OK");
     lines.push("Bash OK for: npm/node/git/docker/curl, pipes, scripts");
-    const msg = "Hex-line MCP available. PREFER:\n" + lines.join("\n");
+    const msg = "Hex-line MCP available. Workflow:\n- Discovery: read_file, grep_search, outline, directory_tree\n- Hash edits: edit_file (set_line, replace_lines, insert_after)\n- Text rename: bulk_replace (multi-file search-replace)\n- Write new: write_file\n" + lines.join("\n");
     process.stdout.write(JSON.stringify({ systemMessage: msg }));
     process.exit(0);
 }

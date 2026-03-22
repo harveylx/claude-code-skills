@@ -5,18 +5,16 @@
  * for a single tool or error-recovery scenario.
  */
 
-import { readFileSync, writeFileSync, unlinkSync, readdirSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { performance } from "node:perf_hooks";
 import { fnv1a, lineTag, rangeChecksum } from "../lib/hash.mjs";
 import { readFile } from "../lib/read.mjs";
 import { directoryTree } from "../lib/tree.mjs";
 import { fileInfo } from "../lib/info.mjs";
 import { verifyChecksums } from "../lib/verify.mjs";
 import { fileChanges } from "../lib/changes.mjs";
-import { editFile } from "../lib/edit.mjs";
-import { grepSearch } from "../lib/search.mjs";
-import { bulkReplace } from "../lib/bulk-replace.mjs";
 import {
     getFileLines,
     simBuiltInReadFull, simBuiltInOutlineFull, simBuiltInGrep,
@@ -305,7 +303,7 @@ export async function runAtomic(config) {
         // With hex-line: 1 bulk_replace — summary + per-file compact diff
         const { value: withSL, ms: withMs } = runN(() => {
             let response = "5 files changed, 0 errors\n";
-            for (const p of bulkTmpPaths) {
+            for (let i = 0; i < bulkTmpPaths.length; i++) {
                 const origLines = [...tmpLines];
                 const newLines = [...tmpLines];
                 newLines[editLine - 1] = editNew;
@@ -499,48 +497,6 @@ export async function runAtomic(config) {
         }
     }
 
-    // ===================================================================
-    // TEST 15: HASH_HINT multi-match recovery
-    // ===================================================================
-    {
-        // Create a file with a duplicated line so textReplace triggers HASH_HINT
-        const dupLine = '    return this.config;';
-        const dupContent = tmpLines.map((l, i) => (i === 20 || i === 80) ? dupLine : l);
-        const dupPath = resolve(tmpdir(), `hex-line-dup-${ts}.js`);
-        writeFileSync(dupPath, dupContent.join("\n"), "utf-8");
-
-        // Without hex-line: 3 round-trips (opaque error + re-read full + retry)
-        const { value: without, ms: withoutMs } = runN(() => {
-            const r1 = 'Error: multiple occurrences found. Provide more context.';
-            const r2 = simBuiltInReadFull(dupPath, dupContent);
-            const origLines = [...dupContent];
-            const newLines = [...dupContent];
-            newLines[20] = '    return this.updatedConfig;';
-            const r3 = simBuiltInEdit(dupPath, origLines, newLines);
-            return (r1 + r2 + r3).length;
-        });
-
-        // With hex-line: HASH_HINT error contains annotated snippets (1 round-trip)
-        const { value: withSL, ms: withMs } = runN(() => {
-            try {
-                editFile(dupPath, [{ replace: { old_text: dupLine, new_text: '    return this.updatedConfig;' } }]);
-                return 0; // should not reach
-            } catch (e) {
-                // HASH_HINT error message + simulated anchor retry
-                const retry = '{"set_line":{"anchor":"xx.21","new_text":"    return this.updatedConfig;"}}';
-                return (e.message + retry).length;
-            }
-        });
-
-        results.push({
-            num: 15, scenario: "HASH_HINT multi-match recovery*",
-            without, withSL,
-            savings: pctSavings(without, withSL),
-            latencyWithout: withoutMs, latencyWith: withMs,
-        });
-
-        try { unlinkSync(dupPath); } catch { /* ok */ }
-    }
 
     return results;
 }

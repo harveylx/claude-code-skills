@@ -16,14 +16,14 @@ Every line carries an FNV-1a content hash. Every edit must present those hashes 
 | Tool | Description | Key Feature |
 |------|-------------|-------------|
 | `read_file` | Read file with hash-annotated lines and range checksums | Partial reads via `offset`/`limit` |
-| `edit_file` | Hash-verified edits with anchor or text replacement | Returns compact diff via `diff` package |
+| `edit_file` | Hash-verified anchor edits (set_line, replace_lines, insert_after) | Returns compact diff via `diff` package |
 | `write_file` | Create new file or overwrite, auto-creates parent dirs | Path validation, no hash overhead |
 | `grep_search` | Search with ripgrep, 3 output modes, per-group checksums | Edit-ready: grep -> edit directly with checksums |
 | `outline` | AST-based structural overview via tree-sitter WASM | 95% token reduction (10 lines instead of 500) |
 | `verify` | Check if held range checksums are still valid | Single-line response avoids full re-read |
 | `directory_tree` | Compact directory tree with root .gitignore support | Skips node_modules/.git, shows file sizes |
 | `get_file_info` | File metadata without reading content | Size, lines, mtime, type, binary detection |
-| `setup_hooks` | Configure PreToolUse + PostToolUse hooks for Claude/Gemini/Codex | One call sets up everything, idempotent |
+| `setup_hooks` | Configure Claude hooks + install output style | Gemini/Codex get guidance only; no hooks |
 | `changes` | Compare file against git ref, shows added/removed/modified symbols | AST-level semantic diff |
 | `bulk_replace` | Search-and-replace across multiple files by glob | Per-file diffs, dry_run, max_files safety |
 
@@ -69,35 +69,55 @@ mcp__hex-line__setup_hooks(agent="claude")
 
 The `setup_hooks` tool automatically installs the output style to `~/.claude/output-styles/hex-line.md` and activates it if no other style is set. To activate manually: `/config` > Output style > hex-line.
 
-## Token Efficiency
+## Benchmarking
 
-Benchmark v3 (21 code files, 4,801 lines, 18 scenarios):
+`hex-line-mcp` now distinguishes:
 
-| # | Scenario | Baseline | Hex-line | Savings | Ops | Steps |
-|---|----------|----------|----------|---------|-----|-------|
-| 1 | Read full (<50L) | 1,837 ch | 1,676 ch | 9% | 1→1 | 1→1 |
-| 1 | Read full (50-200L) | 4,976 ch | 4,609 ch | 7% | 1→1 | 1→1 |
-| 1 | Read full (200-500L) | 11,702 ch | 10,796 ch | 8% | 1→1 | 1→1 |
-| 1 | Read full (500L+) | 76,079 ch | 71,578 ch | 6% | 1→1 | 1→1 |
-| 2 | Outline+read (200-500L) | 11,702 ch | 3,620 ch | **69%** | 1→2 | 1→2 |
-| 2 | Outline+read (500L+) | 76,079 ch | 19,020 ch | **75%** | 1→2 | 1→2 |
-| 3 | Grep search | 2,816 ch | 2,926 ch | -4% | 1→1 | 1→1 |
-| 4 | Directory tree | 1,967 ch | 699 ch | **64%** | 1→1 | 1→1 |
-| 5 | File info | 371 ch | 197 ch | **47%** | 1→1 | 1→1 |
-| 6 | Create file (200L) | 113 ch | 85 ch | **25%** | 1→1 | 1→1 |
-| 7 | Edit x5 sequential | 2,581 ch | 1,529 ch | **41%** | 5→5 | 5→5 |
-| 8 | Verify checksums (4 ranges) | 8,295 ch | 93 ch | **99%** | 4→1 | 4→1 |
-| 9 | Multi-file read (2 files) | 3,674 ch | 3,358 ch | 9% | 2→1 | 1→1 |
-| 10 | bulk_replace dry_run (5 files) | 2,795 ch | 1,706 ch | **39%** | 5→1 | 5→1 |
-| 11 | Changes (semantic diff) | 830 ch | 271 ch | **67%** | 1→1 | 1→1 |
-| 12 | FILE_NOT_FOUND recovery | 2,071 ch | 101 ch | **95%** | 3→1 | 3→1 |
-| 13 | Hash mismatch recovery | 8,918 ch | 423 ch | **95%** | 3→1 | 3→1 |
-| 14 | Bash redirects (cat+ls+stat) | 5,602 ch | 4,695 ch | **16%** | 3→3 | 1→1 |
-| 15 | HASH_HINT multi-match recovery | 8,888 ch | 653 ch | **93%** | 3→2 | 3→1 |
+- `tests` — correctness and regression safety
+- `benchmarks` — comparative workflow efficiency against built-in tools
+- `diagnostics` — modeled tool-level measurements for engineering inspection
 
-**Average savings: 45% (flat) / 52% (weighted) | 39→28 ops (28% fewer) | 36→25 steps.**
+Public benchmark mode reports only comparative multi-step workflows:
 
-Reproduce: `node benchmark.mjs` or `node benchmark.mjs --with-graph --repo /path/to/repo`
+```bash
+npm run benchmark -- --repo /path/to/repo
+```
+
+Optional diagnostics stay available separately:
+
+```bash
+npm run benchmark:diagnostic -- --repo /path/to/repo
+npm run benchmark:diagnostic:graph -- --repo /path/to/repo
+```
+
+The diagnostics output includes synthetic tool-level comparisons such as read, grep, verify, and graph-enrichment helpers. Those numbers are useful for inspecting output shape and token behavior, but they are not the public workflow benchmark score.
+
+Current sample run on the `hex-line-mcp` repo with session-derived workflows:
+
+| ID | Workflow | Built-in | hex-line | Savings | Ops |
+|----|----------|---------:|---------:|--------:|----:|
+| W1 | Debug hook file-listing redirect | 23,143 chars | 882 chars | 96% | 3→2 |
+| W2 | Adjust `setup_hooks` guidance and verify | 24,877 chars | 1,637 chars | 93% | 3→3 |
+| W3 | Repo-wide benchmark wording refresh | 137,796 chars | 38,918 chars | 72% | 15→1 |
+| W4 | Inspect large smoke test before edit | 49,566 chars | 2,104 chars | 96% | 3→3 |
+
+Workflow summary: `89%` average token savings, `24→9` tool calls (`63%` fewer).
+
+These workflows are derived from recent real Claude sessions, but executed against local reproducible fixtures in the repository. They should be read as workflow-efficiency measurements, not as correctness or semantic-quality claims.
+
+### Optional Graph Enrichment
+
+If a project already has `.codegraph/index.db`, `hex-line` can add lightweight graph hints to `read_file`, `outline`, `grep_search`, and `edit_file`.
+
+- Graph enrichment is optional. If `.codegraph/index.db` is missing, `hex-line` falls back to standard behavior silently.
+- `better-sqlite3` is optional. If it is unavailable, `hex-line` still works without graph hints.
+- `edit_file` reports **Call impact**, not full semantic blast radius. The warning uses call-graph callers only.
+
+`hex-line` does not read `hex-graph` internals directly anymore. The integration uses a small read-only contract exposed by `hex-graph-mcp`:
+
+- `hex_line_contract`
+- `hex_line_symbol_annotations`
+- `hex_line_call_edges`
 
 ## Tools Reference
 
@@ -124,7 +144,7 @@ checksum: 1-50:f7e2a1b0
 
 ### edit_file
 
-Edit using hash-verified anchors or text replacement. Returns diff + post-edit checksums for chaining edits.
+Edit using hash-verified anchors. For text rename use bulk_replace.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -140,8 +160,6 @@ Edit operations (JSON array):
   {"set_line": {"anchor": "ab.12", "new_text": "replacement line"}},
   {"replace_lines": {"start_anchor": "ab.10", "end_anchor": "cd.15", "new_text": "..."}},
   {"insert_after": {"anchor": "ab.20", "text": "inserted line"}},
-  {"replace": {"old_text": "unique text", "new_text": "replacement"}},
-  {"replace": {"old_text": "find all", "new_text": "replace all", "all": true}}
 ]
 ```
 
@@ -269,7 +287,7 @@ hex-line-mcp/
   lib/
     hash.mjs          FNV-1a hashing, 2-char tags, range checksums
     read.mjs          File reading with hash annotation
-    edit.mjs          Anchor-based and text-based edits, diff output
+    edit.mjs          Anchor-based edits, diff output
     search.mjs        ripgrep wrapper with hash-annotated results
     outline.mjs       tree-sitter WASM AST outline
     verify.mjs        Range checksum verification
@@ -277,9 +295,9 @@ hex-line-mcp/
     tree.mjs          Directory tree with .gitignore support
     changes.mjs       Semantic git diff via AST
     bulk-replace.mjs  Multi-file search-and-replace
-    setup.mjs         Hook installation for Claude/Gemini/Codex
+    setup.mjs         Claude hook installation + output style setup
     format.mjs        Output formatting utilities
-    coerce.mjs        Parameter alias mapping
+    coerce.mjs        Parameter pass-through (identity)
     security.mjs      Path validation, binary detection, size limits
     normalize.mjs     Output normalization, deduplication, truncation
 ```
@@ -317,7 +335,7 @@ FNV-1a accumulator over all line hashes in the range (little-endian byte feed). 
 <details>
 <summary><b>Does it work without Claude Code?</b></summary>
 
-Yes. hex-line-mcp is a standard MCP server (stdio transport). It works with any MCP-compatible client -- Claude Code, Gemini CLI, Codex CLI, or custom integrations. Hooks are Claude/Gemini/Codex-specific.
+Yes. hex-line-mcp is a standard MCP server (stdio transport). It works with any MCP-compatible client -- Claude Code, Gemini CLI, Codex CLI, or custom integrations. Hook installation is Claude-specific; Gemini/Codex use MCP Tool Preferences guidance instead.
 
 </details>
 

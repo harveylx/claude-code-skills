@@ -18,7 +18,8 @@
     "lint:fix": "eslint . --fix",
     "test": "node --test test/*.mjs",
     "check": "node --check server.mjs",
-    "benchmark": "node benchmark.mjs"
+    "benchmark": "node -e \"console.error('hex-ssh-mcp does not publish a comparative workflow benchmark yet. Run npm run benchmark:diagnostic for normalization diagnostics.'); process.exit(1)\"",
+    "benchmark:diagnostic": "node benchmark.mjs"
   },
   "engines": {
     "node": ">=18.0.0"

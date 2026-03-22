@@ -6,9 +6,19 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HOOK_PATH = resolve(__dirname, "../hook.mjs");
+const require = createRequire(import.meta.url);
+const HAS_GRAPH_SQLITE = (() => {
+    try {
+        require("better-sqlite3");
+        return true;
+    } catch {
+        return false;
+    }
+})();
 
 function runHook(hookEvent, toolName, toolInput, extra = {}) {
     return new Promise((res) => {
@@ -26,6 +36,28 @@ function runHook(hookEvent, toolName, toolInput, extra = {}) {
 }
 
 const CWD = "d:/Development/LevNikolaevich/claude-code-skills/mcp/hex-line-mcp";
+
+function makeTempRepo(prefix, files) {
+    const dir = fs.mkdtempSync(join(tmpdir(), prefix));
+    for (const [relPath, content] of Object.entries(files)) {
+        const fullPath = join(dir, relPath);
+        fs.mkdirSync(dirname(fullPath), { recursive: true });
+        fs.writeFileSync(fullPath, content);
+    }
+    return dir;
+}
+
+async function indexGraphRepo(dir) {
+    const { indexProject } = await import("../../hex-graph-mcp/lib/indexer.mjs");
+    const { _resetGraphDBCache } = await import("../lib/graph-enrich.mjs");
+    await indexProject(dir);
+    _resetGraphDBCache();
+}
+
+async function closeGraphRepo(dir) {
+    const { getStore } = await import("../../hex-graph-mcp/lib/store.mjs");
+    getStore(dir).close();
+}
 
 // ==================== hash ====================
 
@@ -62,20 +94,22 @@ describe("FNV-1a hash", () => {
 
 // ==================== coerce ====================
 
-describe("coerce params", () => {
-    it("maps aliases and removes originals", async () => {
+describe("coerce params (identity — no aliases)", () => {
+    it("passes canonical params through unchanged", async () => {
         const { coerceParams } = await import("../lib/coerce.mjs");
-        const result = coerceParams({ file_path: "test.js", dryRun: true, query: "foo" });
+        const result = coerceParams({ path: "test.js", dry_run: true, pattern: "foo" });
         assert.equal(result.path, "test.js");
         assert.equal(result.dry_run, true);
         assert.equal(result.pattern, "foo");
-        assert.equal(result.file_path, undefined);
     });
 
-    it("canonical params not overwritten by aliases", async () => {
+    it("does not normalize old aliases", async () => {
         const { coerceParams } = await import("../lib/coerce.mjs");
-        const result = coerceParams({ path: "canonical.js", file_path: "alias.js" });
-        assert.equal(result.path, "canonical.js");
+        const result = coerceParams({ file_path: "test.js", dryRun: true, query: "foo" });
+        assert.equal(result.file_path, "test.js");  // NOT mapped to path
+        assert.equal(result.path, undefined);        // canonical not set
+        assert.equal(result.dryRun, true);            // NOT mapped to dry_run
+        assert.equal(result.query, "foo");            // NOT mapped to pattern
     });
 });
 
@@ -107,12 +141,14 @@ describe("normalize output", () => {
 // ==================== edit ====================
 
 describe("edit business logic", () => {
-    it("NOOP_EDIT when replacing with identical content", async () => {
+    it("NOOP_EDIT when set_line produces identical content", async () => {
         const { editFile } = await import("../lib/edit.mjs");
+        const { fnv1a, lineTag } = await import("../lib/hash.mjs");
         const tmp = "d:/tmp/hex-test-noop.js";
         fs.writeFileSync(tmp, "const x = 1;\n");
         try {
-            editFile(tmp, [{ replace: { old_text: "const x = 1;", new_text: "const x = 1;", all: true } }]);
+            const tag = lineTag(fnv1a("const x = 1;"));
+            editFile(tmp, [{ set_line: { anchor: `${tag}.1`, new_text: "const x = 1;" } }]);
             assert.fail("Should have thrown NOOP_EDIT");
         } catch (e) {
             assert.ok(e.message.includes("NOOP_EDIT"));
@@ -222,7 +258,7 @@ describe("edit business logic", () => {
         }
     });
 
-    it("TEXT_NOT_FOUND error includes hash-annotated snippet", async () => {
+    it("replace throws REPLACE_REMOVED with helpful message", async () => {
         const { editFile } = await import("../lib/edit.mjs");
         const tmp = "d:/tmp/hex-test-notfound.js";
         fs.writeFileSync(tmp, "const a = 1;\nconst b = 2;\n");
@@ -230,27 +266,16 @@ describe("edit business logic", () => {
             editFile(tmp, [{ replace: { old_text: "nonexistent text", new_text: "x", all: true } }]);
             assert.fail("Should have thrown");
         } catch (e) {
-            assert.ok(e.message.includes("TEXT_NOT_FOUND"));
-            assert.ok(/[a-z2-7]{2}\.\d+\t/.test(e.message), "Has hash annotations");
-        } finally {
-            fs.unlinkSync(tmp);
-        }
-    });
-
-    it("text replace with regex special chars in old_text", async () => {
-        const { editFile } = await import("../lib/edit.mjs");
-        const tmp = "d:/tmp/hex-test-regex.js";
-        fs.writeFileSync(tmp, "arr.filter((x) => x > 0);\n");
-        try {
-            editFile(tmp, [{ replace: { old_text: "arr.filter((x) => x > 0)", new_text: "arr.filter((x) => x >= 0)", all: true } }]);
-            const written = fs.readFileSync(tmp, "utf-8");
-            assert.ok(written.includes("x >= 0"), "Regex chars handled safely");
+            assert.ok(e.message.includes("REPLACE_REMOVED"), "Error is REPLACE_REMOVED");
+            assert.ok(e.message.includes("set_line"), "Mentions set_line alternative");
+            assert.ok(e.message.includes("bulk_replace"), "Mentions bulk_replace alternative");
         } finally {
             fs.unlinkSync(tmp);
         }
     });
 });
 
+describe("edit error messages", () => {
     it("out-of-range error includes boundary snippet with hashes", async () => {
         const { editFile } = await import("../lib/edit.mjs");
         const tmp = "d:/tmp/hex-test-oor.js";
@@ -266,21 +291,7 @@ describe("edit business logic", () => {
             fs.unlinkSync(tmp);
         }
     });
-
-    it("NOOP_EDIT says 'already contains' not 'Re-read'", async () => {
-        const { editFile } = await import("../lib/edit.mjs");
-        const tmp = "d:/tmp/hex-test-noop2.js";
-        fs.writeFileSync(tmp, "const x = 1;\n");
-        try {
-            editFile(tmp, [{ replace: { old_text: "const x = 1;", new_text: "const x = 1;", all: true } }]);
-            assert.fail("Should have thrown");
-        } catch (e) {
-            assert.ok(e.message.includes("already contains"), "New message");
-            assert.ok(!e.message.includes("Re-read"), "Old message removed");
-        } finally {
-            fs.unlinkSync(tmp);
-        }
-    });
+});
 
 // ==================== directory_tree ====================
 
@@ -382,6 +393,87 @@ describe("read_file output", () => {
     });
 });
 
+describe("graph enrichment", () => {
+    it("falls back cleanly when no .codegraph exists", { skip: !HAS_GRAPH_SQLITE }, async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const tmp = join(tmpdir(), `hex-no-graph-${Date.now()}.js`);
+        fs.writeFileSync(tmp, "export function solo() {}\n");
+        try {
+            const result = readFile(tmp);
+            assert.ok(!result.includes("\nGraph:"), "No graph header without .codegraph");
+            assert.ok(result.includes("solo"), "Standard read still works");
+        } finally {
+            fs.rmSync(tmp, { force: true });
+        }
+    });
+
+    it("adds graph header, grep annotations, and call impact from hex-graph contract", { skip: !HAS_GRAPH_SQLITE }, async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { grepSearch } = await import("../lib/search.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const { fnv1a, lineTag } = await import("../lib/hash.mjs");
+        const { _resetGraphDBCache } = await import("../lib/graph-enrich.mjs");
+        const repo = makeTempRepo("hex-line-graph-", {
+            "a.mjs": "export function foo() {\n  return 1;\n}\n",
+            "b.mjs": "import { foo } from \"./a.mjs\";\nexport function run() {\n  return foo();\n}\n",
+        });
+        try {
+            await indexGraphRepo(repo);
+
+            const readResult = readFile(join(repo, "a.mjs"));
+            assert.ok(readResult.includes("\nGraph:"), "Graph header present");
+            assert.ok(readResult.includes("foo [function 0↓ 1↑]"), "Graph header uses annotation contract");
+
+            const grepResult = await grepSearch("export function foo", { path: join(repo, "a.mjs") });
+            assert.ok(grepResult.includes("[fn 0↓ 1↑]"), "grep match annotated via graph contract");
+
+            const anchor = `${lineTag(fnv1a("export function foo() {"))}.1`;
+            const editResult = editFile(join(repo, "a.mjs"), [
+                { set_line: { anchor, new_text: "export function foo() {" } },
+                { set_line: { anchor: `${lineTag(fnv1a("  return 1;"))}.2`, new_text: "  return 2;" } },
+            ]);
+            assert.ok(editResult.includes("Call impact: 1 callers in other files"), "Edit reports call impact");
+            assert.ok(editResult.includes("run (b.mjs:2)"), "Call impact names dependent caller");
+        } finally {
+            _resetGraphDBCache();
+            await closeGraphRepo(repo);
+            fs.rmSync(repo, { recursive: true, force: true });
+        }
+    });
+
+    it("keeps graph DBs isolated across projects in one process", { skip: !HAS_GRAPH_SQLITE }, async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { _resetGraphDBCache } = await import("../lib/graph-enrich.mjs");
+        const repoA = makeTempRepo("hex-line-graph-a-", {
+            "a.mjs": "export function alpha() {\n  return 1;\n}\n",
+            "use-a.mjs": "import { alpha } from \"./a.mjs\";\nexport function callAlpha() {\n  return alpha();\n}\n",
+        });
+        const repoB = makeTempRepo("hex-line-graph-b-", {
+            "b.mjs": "export function beta() {\n  return 1;\n}\n",
+            "use-b.mjs": "import { beta } from \"./b.mjs\";\nexport function callBeta() {\n  return beta();\n}\n",
+        });
+        try {
+            await indexGraphRepo(repoA);
+            await indexGraphRepo(repoB);
+            _resetGraphDBCache();
+
+            const readA = readFile(join(repoA, "a.mjs"));
+            const readB = readFile(join(repoB, "b.mjs"));
+
+            assert.ok(readA.includes("alpha [function 0↓ 1↑]"), "Repo A uses its own graph");
+            assert.ok(!readA.includes("beta [function"), "Repo A does not leak repo B graph");
+            assert.ok(readB.includes("beta [function 0↓ 1↑]"), "Repo B uses its own graph");
+            assert.ok(!readB.includes("alpha [function"), "Repo B does not leak repo A graph");
+        } finally {
+            _resetGraphDBCache();
+            await closeGraphRepo(repoA);
+            await closeGraphRepo(repoB);
+            fs.rmSync(repoA, { recursive: true, force: true });
+            fs.rmSync(repoB, { recursive: true, force: true });
+        }
+    });
+});
+
 // ==================== grep_search ====================
 
 describe("grep_search case modes", () => {
@@ -471,34 +563,48 @@ describe("grep_search new params", () => {
     });
 });
 
-describe("edit_file uniqueness replace", () => {
-    it("unique text replaced without all:true", async () => {
+describe("edit_file replace removed", () => {
+    it("replace throws REPLACE_REMOVED", async () => {
         const { editFile } = await import("../lib/edit.mjs");
         const tmp = CWD + "/test/tmp_unique_replace.txt";
         fs.writeFileSync(tmp, "line one\nline two unique marker\nline three\n");
         try {
-            const result = editFile(tmp, [{ replace: { old_text: "unique marker", new_text: "replaced marker" } }]);
-            assert.ok(result.includes("replaced marker"), "unique text should be replaced");
-            assert.ok(result.includes("Post-edit"), "response should include post-edit context");
-            assert.ok(result.includes("checksum:"), "response should include checksum");
-            assert.ok(result.includes("file:"), "response should include file checksum");
-            const content = fs.readFileSync(tmp, "utf-8");
-            assert.ok(content.includes("replaced marker"), "file should contain replaced text");
+            assert.throws(() => {
+                editFile(tmp, [{ replace: { old_text: "unique marker", new_text: "replaced marker" } }]);
+            }, /REPLACE_REMOVED/);
         } finally {
             fs.unlinkSync(tmp);
         }
     });
 
-    it("ambiguous text throws AMBIGUOUS_MATCH", async () => {
+    it("replace with all:true also throws REPLACE_REMOVED", async () => {
         const { editFile } = await import("../lib/edit.mjs");
         const tmp = CWD + "/test/tmp_ambiguous.txt";
         fs.writeFileSync(tmp, "hello world\nhello world\nhello world\n");
         try {
             assert.throws(() => {
-                editFile(tmp, [{ replace: { old_text: "hello world", new_text: "bye" } }]);
-            }, /AMBIGUOUS_MATCH.*3 times/);
+                editFile(tmp, [{ replace: { old_text: "hello world", new_text: "bye", all: true } }]);
+            }, /REPLACE_REMOVED/);
         } finally {
             fs.unlinkSync(tmp);
+        }
+    });
+
+    it("bulk_replace handles text rename (replace moved here)", async () => {
+        const { bulkReplace } = await import("../lib/bulk-replace.mjs");
+        const tmp = "d:/tmp/hex-test-bulk-rename";
+        fs.mkdirSync(tmp, { recursive: true });
+        fs.writeFileSync(tmp + "/rename.txt", "hello world\nhello world\nhello world\n");
+        try {
+            const result = bulkReplace(tmp, "*.txt",
+                [{ old: "hello world", new: "bye world" }]);
+            const content = fs.readFileSync(tmp + "/rename.txt", "utf-8");
+            assert.ok(!content.includes("hello world"), "no old text should remain");
+            assert.equal(content.split("bye world").length - 1, 3, "all 3 replaced");
+            assert.ok(result.includes("1 file"), "output reports changed file count");
+        } finally {
+            fs.unlinkSync(tmp + "/rename.txt");
+            fs.rmdirSync(tmp);
         }
     });
 });

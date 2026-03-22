@@ -103,19 +103,17 @@ server.registerTool("read_file", {
 server.registerTool("edit_file", {
     title: "Edit File",
     description:
-        "Edit a file using hash-verified anchors or text replacement. Returns diff + post-edit checksums. " +
+        "Edit a file using hash-verified anchor edits (set_line, replace_lines, insert_after). Returns diff + post-edit checksums. " +
         "Batch multiple edits in ONE call for atomicity (bottom-to-top auto-sorted). " +
         "set_line: single line (from grep/read). replace_lines: range with checksum. " +
-        "replace: unique text match, or all:true for rename. insert_after: add below anchor.",
+        "insert_after: add below anchor. For text rename use bulk_replace tool.",
     inputSchema: z.object({
         path: z.string().describe("File to edit"),
         edits: z.string().describe(
             'JSON array. Examples:\n' +
             '{"set_line":{"anchor":"ab.12","new_text":"new"}} — replace line\n' +
             '{"replace_lines":{"start_anchor":"ab.10","end_anchor":"cd.15","new_text":"...","range_checksum":"10-15:a1b2c3d4"}} — range\n' +
-            '{"insert_after":{"anchor":"ab.20","text":"inserted"}} — insert below\n' +
-            '{"replace":{"old_text":"find","new_text":"replace"}} — unique match\n' +
-            '{"replace":{"old_text":"find","new_text":"replace","all":true}} — replace all',
+            '{"insert_after":{"anchor":"ab.20","text":"inserted"}} — insert below. For text rename use bulk_replace tool.',
         ),
         dry_run: flexBool().describe("Preview changes without writing"),
         restore_indent: flexBool().describe("Auto-fix indentation to match anchor (default: false)"),
@@ -349,7 +347,7 @@ server.registerTool("bulk_replace", {
     title: "Bulk Replace",
     description:
         "Search-and-replace across multiple files. Finds files by glob, applies ordered text replacements, returns per-file diffs. " +
-        "Use dry_run:true to preview. For single-file edits use edit_file instead.",
+        "Use dry_run:true to preview. For single-file rename, set glob to the filename.",
     inputSchema: z.object({
         replacements: z.string().describe('JSON array of {old, new} pairs: [{"old":"foo","new":"bar"}]'),
         glob: z.string().optional().describe('File glob (default: "**/*.{md,mjs,json,yml,ts,js}")'),

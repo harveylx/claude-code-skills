@@ -2,7 +2,7 @@
   "name": "@levnikolaevich/hex-graph-mcp",
   "version": "0.2.3",
   "type": "module",
-  "description": "Code knowledge graph MCP server. Indexes codebases into SQLite graph via tree-sitter AST. Tools: index_project, search_symbols, get_impact, trace_calls, get_context, get_architecture, watch_project, find_clones, find_hotspots, impact_of_changes, find_unused, find_cycles, module_metrics, find_references.",
+  "description": "Deterministic layered code graph MCP server. Indexes codebases into a SQLite graph via tree-sitter AST, canonical symbol identities, hashes, and semantic overlays for navigation, architecture, clones, references, implementations, and flow analysis.",
   "main": "server.mjs",
   "bin": {
     "hex-graph-mcp": "server.mjs"
@@ -19,7 +19,8 @@
     "lint:fix": "eslint . --fix",
     "test": "node --test test/smoke.mjs",
     "check": "node --check server.mjs",
-    "benchmark": "node benchmark/index.mjs"
+    "benchmark": "node benchmark/index.mjs",
+    "benchmark:diagnostic": "node benchmark/index.mjs --diagnostics"
   },
   "engines": {
     "node": ">=20.0.0"

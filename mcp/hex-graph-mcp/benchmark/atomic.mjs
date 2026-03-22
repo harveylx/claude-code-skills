@@ -3,23 +3,20 @@
  */
 
 import { readFileSync } from "node:fs";
-import { execSync } from "node:child_process";
 import { resolve } from "node:path";
-import { runN, graphResult, rg } from "./helpers.mjs";
+import { runN, rg } from "./helpers.mjs";
 import {
-    searchSymbols,
-    getImpact,
-    traceCalls,
-    getContext,
-    getArchitecture,
+    findSymbols,
+    getSymbol,
+    tracePaths,
+    getArchitectureReport,
     getHotspots,
-    getModuleMetrics,
-    getReferences,
+    getModuleMetricsReport,
+    getReferencesBySelector,
 } from "../lib/store.mjs";
 import { findClones } from "../lib/clones.mjs";
 import { findCycles } from "../lib/cycles.mjs";
-import { findUnused } from "../lib/unused.mjs";
-import { impactOfChanges } from "../lib/impact.mjs";
+import { findUnusedExports } from "../lib/unused.mjs";
 
 /**
  * @param {object} store  — initialized graph store
@@ -29,6 +26,7 @@ import { impactOfChanges } from "../lib/impact.mjs";
 export function runAtomic(store, config) {
     const results = [];
     const { repoRoot, allFiles, searchSym, contextSym, impactSym, traceSym } = config;
+    const selectorFor = (sym) => ({ name: sym.name, file: sym.file });
 
     // ===================================================================
     // TEST 1: Search symbols
@@ -42,8 +40,7 @@ export function runAtomic(store, config) {
         });
 
         const withChars = runN(() => {
-            const r = graphResult(searchSymbols(name, { limit: 20 }));
-            return r.text.length;
+            return JSON.stringify(findSymbols(name, { limit: 20 })).length;
         });
 
         results.push({
@@ -59,7 +56,7 @@ export function runAtomic(store, config) {
     }
 
     // ===================================================================
-    // TEST 2: Get context (360 view)
+    // TEST 2: Get symbol (identity-safe symbol view)
     // ===================================================================
     {
         const name = contextSym.name;
@@ -80,13 +77,12 @@ export function runAtomic(store, config) {
         });
 
         const withChars = runN(() => {
-            const r = graphResult(getContext(name));
-            return r.text.length;
+            return JSON.stringify(getSymbol(selectorFor(contextSym))).length;
         });
 
         results.push({
             id: 2,
-            scenario: `Get context ("${name}")`,
+            scenario: `Get symbol ("${name}")`,
             without: withoutChars,
             withG: withChars,
             opsWithout: 4,
@@ -97,7 +93,7 @@ export function runAtomic(store, config) {
     }
 
     // ===================================================================
-    // TEST 3: Get impact (blast radius)
+    // TEST 3: Trace reverse mixed paths
     // ===================================================================
     {
         const name = impactSym.name;
@@ -120,13 +116,14 @@ export function runAtomic(store, config) {
         const refFileCount = Math.min(fileList.trim().split("\n").filter(Boolean).length, 5);
 
         const withChars = runN(() => {
-            const r = graphResult(getImpact(name, { depth: 3, limit: 50 }));
-            return r.text.length;
+            return JSON.stringify(
+                tracePaths(selectorFor(impactSym), { path_kind: "mixed", direction: "reverse", depth: 3, limit: 50 })
+            ).length;
         });
 
         results.push({
             id: 3,
-            scenario: `Get impact ("${name}")`,
+            scenario: `Trace reverse mixed paths ("${name}")`,
             without: withoutChars,
             withG: withChars,
             opsWithout: 1 + refFileCount,
@@ -137,7 +134,7 @@ export function runAtomic(store, config) {
     }
 
     // ===================================================================
-    // TEST 4: Trace calls
+    // TEST 4: Trace call paths
     // ===================================================================
     {
         const name = traceSym.name;
@@ -170,13 +167,14 @@ export function runAtomic(store, config) {
         const depth2Ops = Math.min(callerNames.size, 3);
 
         const withChars = runN(() => {
-            const r = graphResult(traceCalls(name, { direction: "callers", depth: 3, limit: 50 }));
-            return r.text.length;
+            return JSON.stringify(
+                tracePaths(selectorFor(traceSym), { path_kind: "calls", direction: "reverse", depth: 3, limit: 50 })
+            ).length;
         });
 
         results.push({
             id: 4,
-            scenario: `Trace calls ("${name}")`,
+            scenario: `Trace call paths ("${name}")`,
             without: withoutChars,
             withG: withChars,
             opsWithout: 1 + depth2Ops,
@@ -202,8 +200,7 @@ export function runAtomic(store, config) {
         const filesRead = Math.min(allFiles.length, 50);
 
         const withChars = runN(() => {
-            const r = graphResult(getArchitecture());
-            return r.text.length;
+            return JSON.stringify(getArchitectureReport()).length;
         });
 
         results.push({
@@ -276,44 +273,7 @@ export function runAtomic(store, config) {
     }
 
     // ===================================================================
-    // TEST 8: Impact of changes
-    // ===================================================================
-    {
-        const withoutChars = runN(() => {
-            let total = 0;
-            try {
-                const diff = execSync("git diff --name-only HEAD", { cwd: repoRoot, encoding: "utf-8", timeout: 5000 });
-                total += diff.length;
-                const files = diff.trim().split("\n").filter(Boolean).slice(0, 5);
-                for (const f of files) {
-                    const full = resolve(repoRoot, f);
-                    total += rg(`-n "export " "${full}"`).length;
-                    const exports = rg(`-o "export (?:function|const|class) (\\w+)" "${full}"`);
-                    const names = exports.match(/(?:function|const|class) (\w+)/g)?.slice(0, 3) || [];
-                    for (const n of names) {
-                        const sym = n.split(" ").pop();
-                        total += rg(`-l "${sym}" --type js "${repoRoot}"`).length;
-                    }
-                }
-            } catch { total += 100; }
-            return total;
-        });
-
-        const withChars = runN(() => {
-            const result = impactOfChanges(store, repoRoot, { ref: "HEAD", depth: 2 });
-            return JSON.stringify(result).length;
-        });
-
-        results.push({
-            id: 8, scenario: "Impact of changes",
-            without: withoutChars, withG: withChars,
-            opsWithout: 10, opsWith: 1,
-            stepsWithout: 4, stepsWith: 1,
-        });
-    }
-
-    // ===================================================================
-    // TEST 9: Find unused exports
+    // TEST 8: Find unused exports
     // ===================================================================
     {
         const withoutChars = runN(() => {
@@ -329,12 +289,12 @@ export function runAtomic(store, config) {
         });
 
         const withChars = runN(() => {
-            const result = findUnused(store);
+            const result = findUnusedExports(store);
             return JSON.stringify(result).length;
         });
 
         results.push({
-            id: 9, scenario: "Find unused exports",
+            id: 8, scenario: "Find unused exports",
             without: withoutChars, withG: withChars,
             opsWithout: 11, opsWith: 1,
             stepsWithout: 3, stepsWith: 1,
@@ -342,7 +302,7 @@ export function runAtomic(store, config) {
     }
 
     // ===================================================================
-    // TEST 10: Find cycles
+    // TEST 9: Find cycles
     // ===================================================================
     {
         const withoutChars = runN(() => {
@@ -360,7 +320,7 @@ export function runAtomic(store, config) {
         });
 
         results.push({
-            id: 10, scenario: "Find cycles",
+            id: 9, scenario: "Find cycles",
             without: withoutChars, withG: withChars,
             opsWithout: filesScanned, opsWith: 1,
             stepsWithout: filesScanned + 1, stepsWith: 1,
@@ -368,7 +328,7 @@ export function runAtomic(store, config) {
     }
 
     // ===================================================================
-    // TEST 11: Module metrics
+    // TEST 10: Get module metrics
     // ===================================================================
     {
         const withoutChars = runN(() => {
@@ -381,12 +341,12 @@ export function runAtomic(store, config) {
         const filesScanned = Math.min(allFiles.length, 30);
 
         const withChars = runN(() => {
-            const result = getModuleMetrics();
+            const result = getModuleMetricsReport();
             return JSON.stringify(result).length;
         });
 
         results.push({
-            id: 11, scenario: "Module metrics",
+            id: 10, scenario: "Get module metrics",
             without: withoutChars, withG: withChars,
             opsWithout: filesScanned, opsWith: 1,
             stepsWithout: filesScanned + 2, stepsWith: 1,
@@ -394,7 +354,7 @@ export function runAtomic(store, config) {
     }
 
     // ===================================================================
-    // TEST 12: Find references
+    // TEST 11: Find references
     // ===================================================================
     {
         const name = searchSym.name;
@@ -407,12 +367,11 @@ export function runAtomic(store, config) {
         });
 
         const withChars = runN(() => {
-            const result = getReferences(name);
-            return (typeof result === "string" ? result : JSON.stringify(result)).length;
+            return JSON.stringify(getReferencesBySelector(selectorFor(searchSym))).length;
         });
 
         results.push({
-            id: 12, scenario: `Find references ("${name}")`,
+            id: 11, scenario: `Find references ("${name}")`,
             without: withoutChars, withG: withChars,
             opsWithout: 2, opsWith: 1,
             stepsWithout: 3, stepsWith: 1,

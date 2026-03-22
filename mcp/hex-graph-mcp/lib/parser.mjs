@@ -111,6 +111,10 @@ function defKey(def) {
     return def.parent ? `${def.parent}.${def.name}:${def.line_start}` : `${def.name}:${def.line_start}`;
 }
 
+function classifyTypeKind(nodeType) {
+    return nodeType.includes("interface") ? "interface" : "class";
+}
+
 /**
  * Parse a file and extract symbols and calls.
  *
@@ -166,7 +170,7 @@ export async function parseFile(filePath, source, opts = {}) {
             if (nameNode) {
                 const def = {
                     name: nameNode.text,
-                    kind: "class",
+                    kind: classifyTypeKind(node.type),
                     line_start: startLine,
                     line_end: endLine,
                 };
@@ -180,7 +184,7 @@ export async function parseFile(filePath, source, opts = {}) {
                 let parentName = null;
                 let p = node.parent;
                 while (p) {
-                    if (p.type.includes("class") || p.type === "impl_item") {
+                    if (/(class|interface|trait|record|struct)/.test(p.type) || p.type === "impl_item") {
                         const pName = p.childForFieldName("name");
                         if (pName) {
                             parentName = pName.text;
@@ -300,6 +304,7 @@ export async function parseFile(filePath, source, opts = {}) {
 
     // Extract ESM exports before tree.delete()
     const { exports: exportSet, defaultExport, reexports } = extractExports(tree, config.grammar);
+    attachTypeMetadata(source, config.grammar, definitions);
 
     // Create synthetic node for anonymous default export
     if (defaultExport === "__default_export__") {
@@ -359,6 +364,84 @@ function extractCallName(node) {
         return fn.text;
     }
     return fn.text;
+}
+
+function attachTypeMetadata(source, grammar, definitions) {
+    const lines = source.split("\n");
+    for (const def of definitions) {
+        if (def.kind !== "class" && def.kind !== "interface") continue;
+        const header = collectTypeHeader(lines, def.line_start);
+        const supertypes = parseSupertypes(header, grammar, def);
+        if (supertypes.length > 0) def.supertypes = supertypes;
+    }
+}
+
+function collectTypeHeader(lines, lineStart, maxLines = 4) {
+    const chunks = [];
+    for (let i = 0; i < maxLines; i++) {
+        const line = lines[lineStart - 1 + i];
+        if (line == null) break;
+        chunks.push(line.trim());
+        if (/[{:]/.test(line)) break;
+    }
+    return chunks.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function parseSupertypes(header, grammar, def) {
+    if (!header) return [];
+    const name = escapeRe(def.name);
+    if (grammar === "javascript" || grammar === "typescript" || grammar === "tsx") {
+        if (def.kind === "interface") {
+            const match = header.match(new RegExp(`\\binterface\\s+${name}(?:<[^>]+>)?\\s+extends\\s+([^\\{]+)`));
+            return match ? splitTargets(match[1], "extends") : [];
+        }
+        const match = header.match(new RegExp(`\\bclass\\s+${name}(?:<[^>]+>)?(?:\\s+extends\\s+([^\\{\\s]+))?(?:\\s+implements\\s+([^\\{]+))?`));
+        const relations = [];
+        if (match?.[1]) relations.push(...splitTargets(match[1], "extends"));
+        if (match?.[2]) relations.push(...splitTargets(match[2], "implements"));
+        return relations;
+    }
+    if (grammar === "python") {
+        const match = header.match(new RegExp(`\\bclass\\s+${name}\\s*\\(([^)]*)\\)\\s*:`));
+        return match ? splitTargets(match[1], "extends") : [];
+    }
+    if (grammar === "c_sharp") {
+        const declKeyword = def.kind === "interface" ? "interface" : "(?:class|record|struct)";
+        const match = header.match(new RegExp(`\\b${declKeyword}\\s+${name}(?:<[^>]+>)?\\s*:\\s*([^\\{]+)`));
+        if (!match) return [];
+        const targets = splitTargetNames(match[1]);
+        if (def.kind === "interface") return targets.map(target => ({ name: target, relation: "extends" }));
+        return targets.map((target, index) => ({ name: target, relation: index === 0 ? "extends" : "implements" }));
+    }
+    if (grammar === "php") {
+        if (def.kind === "interface") {
+            const match = header.match(new RegExp(`\\binterface\\s+${name}\\s+extends\\s+([^\\{]+)`));
+            return match ? splitTargets(match[1], "extends") : [];
+        }
+        const extendsMatch = header.match(new RegExp(`\\bclass\\s+${name}(?:\\s+extends\\s+([^\\{\\s]+))?`));
+        const implementsMatch = header.match(/\bimplements\s+([^{]+)/);
+        const relations = [];
+        if (extendsMatch?.[1]) relations.push(...splitTargets(extendsMatch[1], "extends"));
+        if (implementsMatch?.[1]) relations.push(...splitTargets(implementsMatch[1], "implements"));
+        return relations;
+    }
+    return [];
+}
+
+function splitTargets(text, relation) {
+    return splitTargetNames(text).map(name => ({ name, relation }));
+}
+
+function splitTargetNames(text) {
+    return text
+        .split(",")
+        .map(part => part.trim().replace(/<.*?>/g, "").replace(/\s+/g, " "))
+        .map(part => part.split(".").pop())
+        .filter(Boolean);
+}
+
+function escapeRe(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function extractImport(node, grammar) {

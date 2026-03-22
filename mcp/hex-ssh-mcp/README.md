@@ -15,11 +15,11 @@ Every remote file read returns FNV-1a hash-annotated lines and range checksums. 
 
 | Tool | Description | Key Feature |
 |------|-------------|-------------|
-| `remote-ssh` | Execute shell commands on remote servers | Output normalization + deduplication |
+| `remote-ssh` | Execute shell commands on remote servers | Disabled by default; normalized output when enabled |
 | `ssh-read-lines` | Read remote file with hash-annotated lines | Partial reads via `startLine`/`endLine`/`maxLines` |
-| `ssh-edit-block` | Hash-verified text replacement in remote files | Checksum verification + compact diff output |
+| `ssh-edit-block` | Hash-verified anchor edits in remote files | Checksum verification + compact diff output |
 | `ssh-search-code` | Search remote files with grep | Deduplicated results with `(xN)` counts |
-| `ssh-write-chunk` | Write or append to remote files | Auto-creates parent directories |
+| `ssh-write-chunk` | Write or append to remote files | Rewrite is atomic; append is direct |
 | `ssh-verify` | Check if held checksums are still valid | Single-line response avoids full re-read |
 
 ### Output Normalization
@@ -39,7 +39,62 @@ claude mcp add -s user hex-ssh -e ALLOWED_HOSTS=server1,server2 -- hex-ssh-mcp
 
 Requires Node.js >= 18.0.0.
 
+## Supported Remote Targets
+
+Linux/POSIX hosts with standard coreutils (grep, sed, wc, base64).
+
 ## Security
+
+### Host Key Verification
+
+SSH host keys are verified against known fingerprints (fail-closed). Sources checked in order:
+
+1. `ALLOWED_HOST_FINGERPRINTS` env -- comma-separated `SHA256:<base64>` values
+2. `~/.ssh/known_hosts` -- parsed, fingerprints computed from stored keys
+
+If neither source has a match, the connection is **rejected**. Override known_hosts path with `KNOWN_HOSTS_PATH` env. Note: v1 supports plain hostname entries only (hashed hostnames and @cert-authority markers are not parsed).
+
+### Shell Escaping
+
+All user-supplied arguments (file paths, patterns, commands) are single-quote escaped before shell interpolation. Null bytes and newlines in arguments are rejected (`UNSAFE_ARG` error).
+
+### Command Policy (remote-ssh)
+
+`remote-ssh` is disabled by default. Modes:
+
+| Mode | Behavior |
+|------|----------|
+| `disabled` (default) | Reject all `remote-ssh` calls |
+| `safe` | Allow commands except blocked dangerous patterns |
+| `open` | Allow all commands |
+
+Dangerous patterns are blocked in `safe` mode:
+
+| Pattern | Reason |
+|---------|--------|
+| `rm -rf /` | Root/home deletion |
+| `mkfs` | Filesystem format |
+| `dd if=/dev/zero` | Direct disk write |
+| Fork bombs | Process exhaustion |
+| `> /dev/sd*` | Direct device write |
+| `chmod 777` | Removes access restrictions |
+
+Set `REMOTE_SSH_MODE=safe` or `REMOTE_SSH_MODE=open` explicitly to enable the tool.
+
+### Path Canonicalization
+
+All remote paths must be absolute (start with `/`). `..` segments are resolved before validation. Both file paths and `ALLOWED_DIRS` entries are canonicalized symmetrically.
+
+### Exec Timeout
+
+SSH commands are terminated after 120 seconds (`EXEC_TIMEOUT` error).
+
+### Atomic File Writes
+
+File content is base64-encoded for transfer (no shell injection via content).
+
+- `rewrite` uses temp file + rename and is atomic
+- `append` writes directly with `>>` and is not atomic
 
 ### ALLOWED_HOSTS (recommended)
 
@@ -75,7 +130,7 @@ Supported key types: RSA, ED25519, ECDSA.
 
 ### remote-ssh
 
-Execute shell commands on remote servers. Output is normalized and deduplicated.
+Execute shell commands on remote servers. Disabled by default; set `REMOTE_SSH_MODE=safe` or `REMOTE_SSH_MODE=open` to enable. Output is normalized and deduplicated when the tool runs.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -114,17 +169,19 @@ checksum: 1-50:f7e2a1b0
 
 ### ssh-edit-block
 
-Edit text blocks in remote files with optional hash verification. Use `ssh-read-lines` first to get checksums.
+Edit remote files using hash-verified anchors. Use `ssh-read-lines` first to get hash anchors and checksums.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `host` | string | yes | Remote hostname or IP |
 | `user` | string | yes | SSH username |
 | `filePath` | string | yes | Path to file on remote server |
-| `oldText` | string | yes | Text to find and replace |
-| `newText` | string | yes | Replacement text |
+| `newText` | string | yes | Replacement text (for anchor/range/insert edits) |
+| `anchor` | string | no | Hash anchor `ab.42` to set single line |
+| `startAnchor` | string | no | Start hash anchor for range replace |
+| `endAnchor` | string | no | End hash anchor for range replace |
+| `insertAfter` | string | no | Hash anchor to insert after |
 | `checksum` | string | no | Range checksum from `ssh-read-lines` (e.g. `1-50:f7e2a1b0`) |
-| `expectedReplacements` | number | no | Expected occurrence count (default: 1) |
 | `privateKeyPath` | string | no | Path to SSH private key |
 | `port` | number | no | SSH port (default: 22) |
 
@@ -149,7 +206,7 @@ Search remote files with grep. Results are deduplicated (identical normalized li
 
 ### ssh-write-chunk
 
-Write content to remote files (rewrite or append). Creates parent directories. For existing files, prefer `ssh-edit-block` (shows diff, verifies hashes).
+Write content to remote files (rewrite or append). Creates parent directories. `rewrite` is atomic via temp file + rename; `append` is non-atomic direct append. For existing files, prefer `ssh-edit-block` (shows diff, verifies hashes).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -179,6 +236,28 @@ Returns a single-line confirmation when all valid, or lists changed ranges with 
 ## Output Normalization
 
 The `normalize.mjs` module reduces token waste in command output. Applied automatically by `remote-ssh` and used internally by `ssh-search-code`.
+
+### Measurement Note
+
+The repository currently ships only a normalization diagnostic for `hex-ssh-mcp`, not a public comparative benchmark against built-in tools. That diagnostic measures normalize/deduplicate/truncate efficiency on synthetic command-output fixtures and should not be presented as a real workflow benchmark.
+
+Run it with:
+
+```bash
+npm run benchmark:diagnostic
+```
+
+Current normalization diagnostic sample:
+
+| ID | Scenario | Input | Output | Savings |
+|----|----------|------:|-------:|--------:|
+| 1 | Hash annotation overhead | 3,934 chars | 4,526 chars | -15% |
+| 2 | Normalize: npm install | 11,219 chars | 2,953 chars | 74% |
+| 3 | Normalize: server logs | 19,715 chars | 4,470 chars | 77% |
+| 4 | Dedup: grep results | 5,799 chars | 3,199 chars | 45% |
+| 5 | Smart truncate: large output | 22,281 chars | 2,717 chars | 88% |
+
+Diagnostic summary: `72%` average reduction (`62,948 → 17,865 chars`).
 
 ### Normalization Rules
 

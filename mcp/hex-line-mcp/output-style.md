@@ -14,6 +14,7 @@ keep-coding-instructions: true
 | Edit | `mcp__hex-line__edit_file` | Hash-verified anchors |
 | Write | `mcp__hex-line__write_file` | Consistent workflow |
 | Grep | `mcp__hex-line__grep_search` | Hash-annotated matches |
+| Edit (text rename) | `mcp__hex-line__bulk_replace` | Multi-file text rename/refactor |
 
 ## Efficient File Reading
 

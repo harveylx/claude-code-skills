@@ -22,12 +22,12 @@ Standard pattern for skills delegating work to external CLI AI agents (Codex, Ge
 
 Agent review is inline in parent skills, not in separate worker skills:
 
-| Parent Role | Review Type | Mode File | Challenge Template |
-|-------------|-------------|-----------|-------------------|
-| Story/context validator | Story/Tasks | `modes/story.md` | `challenge_review.md` |
-| Story/context validator | Context | `modes/context.md` | `challenge_review.md` |
-| Story/context validator | Plan review | `modes/plan_review.md` | `challenge_review.md` |
-| Quality coordinator | Code | `modes/code.md` | `challenge_review.md` |
+| Parent Role | Review Type | Mode File |
+|-------------|-------------|-----------|
+| Story/context validator | Story/Tasks | `modes/story.md` |
+| Story/context validator | Context | `modes/context.md` |
+| Story/context validator | Plan review | `modes/plan_review.md` |
+| Quality coordinator | Code | `modes/code.md` |
 
 All modes assembled with `review_base.md` + mode file per "Step: Build Prompt" in shared workflow.
 
@@ -35,8 +35,7 @@ All modes assembled with `review_base.md` + mode file per "Step: Build Prompt" i
 - No indirection: parent skill launches agents directly, no Skill() delegation overhead
 - Parallel architecture: agents run in background while parent does its own validation
 - Reference passing: Story/Tasks provided as Linear URLs or local file paths
-- Critical verification: Claude independently verifies each suggestion
-- Debate protocol: Claude challenges agent when disagreeing, accepts only convincing evidence
+- Critical verification: Claude independently evaluates each suggestion and either accepts or rejects
 
 ## Invocation Pattern
 
@@ -47,8 +46,8 @@ node shared/agents/agent_runner.mjs --agent codex --prompt "Review this plan..."
 # Large context via file with output (recommended)
 node shared/agents/agent_runner.mjs --agent codex --prompt-file prompt.md --output-file result.md --cwd /project
 
-# Resume session for debate (challenge/follow-up rounds only)
-node shared/agents/agent_runner.mjs --agent codex --resume-session abc-123 --prompt-file challenge.md --output-file result.md --cwd /project
+# Resume session (continues prior conversation context)
+node shared/agents/agent_runner.mjs --agent codex --resume-session abc-123 --prompt-file followup.md --output-file result.md --cwd /project
 
 # Health check
 node shared/agents/agent_runner.mjs --health-check
@@ -192,9 +191,9 @@ Phase 8: REPORT
 Both agents run as background tasks. First-finished agent processed immediately while second is still running.
 
 ```
-              +-- Agent A (background) --> completes first --> Step 6: Verify + Debate --+
-Prompt ------+                                                                           +--> Merge verified suggestions
-              +-- Agent B (background) --> completes second --> Step 6: Verify + Debate --+
+              +-- Agent A (background) --> completes first --> Step 6: Verify --+
+Prompt ------+                                                                    +--> Merge verified suggestions
+              +-- Agent B (background) --> completes second --> Step 6: Verify --+
                                both fail? -> Self-Review fallback
 ```
 
@@ -207,78 +206,25 @@ Prompt ------+                                                                  
 6. If an agent fails: log failure, continue with available results
 7. Log all attempts for user visibility (agent name, duration, suggestion count)
 
-## Critical Verification + Debate Protocol
+## Critical Verification
 
 Claude MUST independently verify each agent suggestion. Do NOT trust blindly.
 
 ```
 Agent Suggestion --> Claude Evaluation --> AGREE? --> Accept as-is
-                                      --> DISAGREE/UNCERTAIN? --> Challenge Round 1
-                                                                    |
-                                              Agent DEFEND (convincing, convincing) --> Accept
-                                              Agent WITHDRAW -----------------------> Reject (final)
-                                              Agent DEFEND (weak) ------------------> Follow-Up Round
-                                              Agent MODIFY (acceptable) ------------> Accept modified
-                                              Agent MODIFY (disagree) --------------> Follow-Up Round
-                                                                                         |
-                                              Agent DEFEND (new evidence, convincing) -> Accept
-                                              Agent DEFEND (same/weaker) -------------> Reject (final)
-                                              Agent WITHDRAW -------------------------> Reject (final)
-                                              Agent MODIFY (acceptable) --------------> Accept modified
-                                              Agent MODIFY (disagree) ----------------> Reject (final)
+                                      --> REJECT? --> Reject with reason (final)
 ```
 
-### Session Resume for Debate Rounds
+**Verification criteria:**
+- Is the suggestion factually correct? (check code, docs, standards)
+- Does it align with project architecture and conventions?
+- Does Claude's own analysis support or contradict the suggestion?
 
-Per `shared/references/agent_review_workflow.md` Step: Critical Verification + Debate, section (c).
-
-### Challenge Round 1
-
-1. Build prompt from `shared/agents/prompt_templates/challenge_review.md`
-2. Fill: original suggestion details + Claude's specific counterargument
-3. Save to `.agent-review/{agent}/{id}_{reviewtype}_challenge_{N}_prompt.md`
-4. Read `session_id` from `.agent-review/{agent}/{identifier}_session.json`
-5. Run same agent with `--resume-session {session_id}` + challenge prompt + `--output-file`
-6. Parse response (DEFEND/WITHDRAW/MODIFY)
-
-**Round 1 Resolution:**
-
-| Agent Response | Action |
-|----------------|--------|
-| DEFEND + convincing evidence (convincing) | Accept agent's suggestion |
-| WITHDRAW | Reject (final) |
-| DEFEND + weak evidence | Proceed to Follow-Up Round |
-| MODIFY + acceptable revision | Accept modified version |
-| MODIFY + still disagree | Proceed to Follow-Up Round |
-
-### Follow-Up Round (1 max, only for suggestions not resolved in Round 1)
-
-1. Build prompt from `shared/agents/prompt_templates/challenge_review.md` with updated placeholders:
-   - `{counterargument}` = Claude's specific rejection reason from Round 1, including: what evidence was insufficient, what was checked, why revision was not accepted
-2. Save to `.agent-review/{agent}/{id}_{reviewtype}_followup_{N}_prompt.md`
-3. Read `session_id` from `.agent-review/{agent}/{identifier}_session.json`
-4. Run same agent with `--resume-session {session_id}` + follow-up prompt + `--output-file`
-5. Parse response
-
-**Follow-Up Resolution (final, no further rounds):**
-
-| Agent Response | Action |
-|----------------|--------|
-| DEFEND + new evidence not seen in Round 1 (convincing) | Accept agent's suggestion |
-| DEFEND + same/weaker evidence | Reject (final) |
-| WITHDRAW | Reject (final) |
-| MODIFY + acceptable revision | Accept modified version |
-| MODIFY + still disagree | Reject (final) |
-
-### "Convincing" Criteria
-
-- Agent cites specific standard/RFC/benchmark Claude hadn't considered
-- Agent shows concrete code path Claude missed
-- Claude cannot refute the new evidence
-
-### Debate Limits
-
-**Maximum 2 rounds per suggestion** (1 challenge + 1 follow-up). Follow-up only triggers for non-final rejections in Round 1. WITHDRAW in any round is always final.
+| Evaluation | Action |
+|------------|--------|
+| AGREE — suggestion is correct and valuable | Accept as-is |
+| AGREE with modification — good idea, minor adjustment needed | Accept modified version |
+| REJECT — incorrect, irrelevant, or contradicted by evidence | Reject (final, with reason logged) |
 
 ## Reference Passing Pattern
 
@@ -308,15 +254,11 @@ Standard steps before launching agents (performed inside agent review workers):
 │   └── velvet-giggling-acorn_plan.md
 ├── codex/
 │   ├── arch-proposal_contextreview_prompt.md        # Per-agent prompt (differs by {focus_hint})
-│   ├── arch-proposal_session.json                   # Session tracking for debate resume
+│   ├── arch-proposal_session.json                   # Session tracking for resume
 │   ├── arch-proposal_contextreview_result.md        # Result (written by agent_runner.mjs)
 │   ├── PROJ-123_storyreview_prompt.md
 │   ├── PROJ-123_session.json
 │   ├── PROJ-123_storyreview_result.md
-│   ├── PROJ-123_storyreview_challenge_1_prompt.md   # Round 1 debate (per-agent)
-│   ├── PROJ-123_storyreview_challenge_1_result.md
-│   ├── PROJ-123_storyreview_followup_1_prompt.md    # Follow-up (per-agent)
-│   ├── PROJ-123_storyreview_followup_1_result.md
 │   └── PROJ-123_codereview_result.md
 └── gemini/
     ├── arch-proposal_contextreview_prompt.md        # Per-agent prompt (differs by {focus_hint})
@@ -333,7 +275,7 @@ Standard steps before launching agents (performed inside agent review workers):
 - Debug agent issues by comparing prompt vs result
 - Track review history across multiple Stories
 - Per-agent isolation — easy to compare Codex vs Gemini quality
-- Challenge artifacts show debate reasoning for transparency
+- Review artifacts show verification reasoning for transparency
 
 ## Verdict Escalation Rules
 
@@ -350,9 +292,9 @@ Standard steps before launching agents (performed inside agent review workers):
 | Embed full story/task content in prompt | Pass references (Linear URLs / file paths) |
 | Delete review artifacts after agents complete | Persist per-agent prompts and results in `.agent-review/{agent}/` |
 | Write/rewrite result files from skill | Result files are runner's responsibility; skill only reads them and writes `_session.json` |
-| Trust agent output blindly | Claude critically verifies each suggestion + debates if disagreeing |
+| Trust agent output blindly | Claude critically verifies each suggestion independently |
 | Use agents for project file writes | Agents write only to `-o` output file; analysis-only |
-| Chain multiple agent calls | One call per task; challenge/follow-up use `--resume-session` for context continuity |
+| Chain multiple agent calls | One call per task; use `--resume-session` only for context continuity |
 | Hard-depend on agent availability | Always have Opus fallback |
 | Run health check separately from agent launch | Health check is first step of inline agent review |
 | Kill agent tasks with TaskStop | Runner handles hard timeout internally; TaskStop is forbidden |
@@ -363,5 +305,5 @@ Standard steps before launching agents (performed inside agent review workers):
 | Dump full project context into agent prompts | Inject compact project context (~300 tokens): architecture, principles, tech stack, past rejections. NO full dumps. |
 
 ---
-**Version:** 3.0.0
-**Last Updated:** 2026-02-11
+**Version:** 4.0.0
+**Last Updated:** 2026-03-22

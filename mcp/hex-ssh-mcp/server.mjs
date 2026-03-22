@@ -30,8 +30,11 @@ const flexNum = () => z.preprocess(
 import { diffLines } from "diff";
 import { fnv1a, lineTag, rangeChecksum, parseChecksum } from "./lib/hash.mjs";
 import { executeCommand, validateRemotePath } from "./lib/ssh-client.mjs";
-import { deduplicateLines, smartTruncate, normalizeOutput } from "./lib/normalize.mjs";
+import { shellQuote, assertSafeArg } from "./lib/shell-escape.mjs";
+import { validateCommand } from "./lib/command-policy.mjs";
+import { deduplicateLines, normalizeOutput } from "./lib/normalize.mjs";
 import { coerceParams } from "./lib/coerce.mjs";
+import { validateEditArgs } from "./lib/edit-validation.mjs";
 import { checkForUpdates } from "./lib/update-check.mjs";
 
 // --- SDK ---
@@ -105,8 +108,8 @@ function okResult(text) {
 server.registerTool("remote-ssh", {
     title: "SSH Command",
     description:
-        "Execute SSH commands on remote servers. Returns stdout/stderr/exitCode. " +
-        "Output is normalized and deduplicated for token efficiency.",
+        "Execute shell commands on remote servers. Disabled by default. " +
+        "Set REMOTE_SSH_MODE=open to bypass.",
     inputSchema: {
         ...connProps,
         command: z.string().describe("Shell command to execute"),
@@ -118,6 +121,10 @@ server.registerTool("remote-ssh", {
         if (!args.host || !args.user || !args.command) {
             return errResult("Required: host, user, command");
         }
+
+        assertSafeArg("command", args.command);
+        const blocked = validateCommand(args.command);
+        if (blocked) return errResult(blocked);
 
         const result = await sshExec(args, args.command);
         const output = normalizeOutput(result.output || "", { deduplicate: true });
@@ -138,9 +145,8 @@ server.registerTool("remote-ssh", {
 server.registerTool("ssh-read-lines", {
     title: "SSH Read File",
     description:
-        "Read remote file with FNV-1a hash-annotated lines (tag.lineNum\\tcontent) and range checksums. " +
-        "Use offset/limit for large files. Hashes enable verified editing via ssh-edit-block. " +
-        "ALWAYS prefer over 'remote-ssh cat' -- returns edit-ready hashes.",
+        "Read remote file with hash-annotated lines. Use startLine/maxLines for large files. " +
+        "Returns range checksums for edit verification.",
     inputSchema: {
         ...connProps,
         filePath: z.string().describe("Path to file on remote server"),
@@ -157,6 +163,7 @@ server.registerTool("ssh-read-lines", {
             return errResult("Required: host, user, filePath");
         }
 
+        assertSafeArg("filePath", args.filePath);
         validateRemotePath(args.filePath);
 
         const startLine = args.startLine || 1;
@@ -166,12 +173,12 @@ server.registerTool("ssh-read-lines", {
         // Get total lines + content in one command
         let readCmd;
         if (args.endLine) {
-            readCmd = `wc -l < "${args.filePath}" && sed -n '${startLine},${args.endLine}p' "${args.filePath}"`;
+            readCmd = `wc -l < ${shellQuote(args.filePath)} && sed -n '${startLine},${args.endLine}p' ${shellQuote(args.filePath)}`;
         } else {
-            readCmd = `wc -l < "${args.filePath}" && sed -n '${startLine},$p' "${args.filePath}" | head -${maxLines}`;
+            readCmd = `wc -l < ${shellQuote(args.filePath)} && sed -n '${startLine},$p' ${shellQuote(args.filePath)} | head -${maxLines}`;
         }
 
-        const check = `if [ ! -f "${args.filePath}" ]; then echo "FILE_NOT_FOUND" && exit 1; fi; ${readCmd}`;
+        const check = `if [ ! -f ${shellQuote(args.filePath)} ]; then echo "FILE_NOT_FOUND" && exit 1; fi; ${readCmd}`;
         const result = await sshExec(args, check);
 
         if (result.exitCode !== 0 || result.output === "FILE_NOT_FOUND") {
@@ -182,10 +189,6 @@ server.registerTool("ssh-read-lines", {
         const totalLines = parseInt(outputLines[0].trim(), 10) || 0;
         const contentLines = outputLines.slice(1);
 
-        // Compute actual end line
-        const actualEnd = args.endLine
-            ? Math.min(args.endLine, totalLines)
-            : Math.min(startLine + contentLines.length - 1, totalLines);
 
         // Hash-annotate lines with character cap
         const MAX_OUTPUT_CHARS = 80000;
@@ -246,17 +249,12 @@ server.registerTool("ssh-read-lines", {
 server.registerTool("ssh-edit-block", {
     title: "SSH Edit File",
     description:
-        "Edit text blocks in remote files with hash-verified anchors or text replacement. " +
-        "Anchor-based: provide anchor/startAnchor/endAnchor from ssh-read-lines for precise edits. " +
-        "Text-based: provide oldText/newText (hash-hint returned if multiple matches). " +
-        "Use ssh-read-lines first to get hash anchors and checksums.",
+        "Edit remote files using hash-verified anchors. Use ssh-read-lines first to get hash anchors and checksums.",
     inputSchema: {
         ...connProps,
         filePath: z.string().describe("Path to file on remote server"),
-        oldText: z.string().optional().describe("Text to find and replace (for text-based editing)"),
-        newText: z.string().optional().describe("Replacement text"),
+        newText: z.string().optional().describe("Replacement text (for anchor/range/insert edits)"),
         checksum: z.string().optional().describe("Range checksum from ssh-read-lines (e.g. '1-50:f7e2a1b0'). If provided, verifies file unchanged before edit."),
-        expectedReplacements: flexNum().describe("Expected number of replacements (default: 1)"),
         anchor: z.string().optional().describe("Hash anchor 'ab.42' to set single line (from ssh-read-lines)"),
         startAnchor: z.string().optional().describe("Start hash anchor 'ab.42' for range replace"),
         endAnchor: z.string().optional().describe("End hash anchor 'cd.45' for range replace"),
@@ -269,17 +267,16 @@ server.registerTool("ssh-edit-block", {
         if (!args.host || !args.user || !args.filePath) {
             return errResult("Required: host, user, filePath");
         }
-        const hasAnchor = args.anchor || args.startAnchor || args.insertAfter;
-        if (!hasAnchor && (args.oldText === undefined || args.newText === undefined)) {
-            return errResult("Required: oldText + newText (text-based) or anchor/startAnchor/insertAfter (anchor-based)");
-        }
+        const validationError = validateEditArgs(args);
+        if (validationError) return errResult(validationError);
 
+        assertSafeArg("filePath", args.filePath);
         validateRemotePath(args.filePath);
 
         // If checksum provided, verify file hasn't changed
         if (args.checksum) {
             const parsed = parseChecksum(args.checksum);
-            const readCmd = `sed -n '${parsed.start},${parsed.end}p' "${args.filePath}"`;
+            const readCmd = `sed -n '${parsed.start},${parsed.end}p' ${shellQuote(args.filePath)}`;
             const readResult = await sshExec(args, readCmd);
 
             if (readResult.exitCode !== 0) {
@@ -310,7 +307,7 @@ server.registerTool("ssh-edit-block", {
             }
 
             // Read current content with line context
-            const readResult = await sshExec(args, `cat "${args.filePath}"`);
+            const readResult = await sshExec(args, `cat ${shellQuote(args.filePath)}`);
             if (readResult.exitCode !== 0) {
                 return sshError("FILE_NOT_FOUND", `Cannot read ${args.filePath}`, "Check path exists");
             }
@@ -387,8 +384,9 @@ server.registerTool("ssh-edit-block", {
             }
 
             const updatedContent = updated.join("\n");
-            const marker = "HEX_SSH_EOF_" + Date.now();
-            const writeCmd = `cat > "${args.filePath}" << '${marker}'\n${updatedContent}\n${marker}`;
+            const b64 = Buffer.from(updatedContent, "utf-8").toString("base64");
+            const tmpPath = args.filePath + ".hex-tmp-" + Date.now();
+            const writeCmd = `echo ${shellQuote(b64)} | (base64 -d 2>/dev/null || base64 -D) > ${shellQuote(tmpPath)} && mv ${shellQuote(tmpPath)} ${shellQuote(args.filePath)}`;
             const writeResult = await sshExec(args, writeCmd);
             if (writeResult.exitCode !== 0) {
                 return sshError("WRITE_FAILED", `Write to ${args.filePath} failed: ${writeResult.error || "unknown"}`, "Check permissions and disk space");
@@ -417,155 +415,6 @@ server.registerTool("ssh-edit-block", {
             }
             return okResult(msg);
         }
-
-        // Text-based editing path
-        const readResult = await sshExec(args, `cat "${args.filePath}"`);
-        if (readResult.exitCode !== 0) {
-            return sshError("FILE_NOT_FOUND", `Cannot read ${args.filePath}: ${readResult.error || "unknown error"}`, "Check path exists");
-        }
-
-        const original = readResult.output;
-        const oldNorm = args.oldText.replace(/\r\n/g, "\n");
-        const newNorm = args.newText.replace(/\r\n/g, "\n");
-        const contentNorm = original.replace(/\r\n/g, "\n");
-
-        // Find occurrences
-        let count = 0;
-        let pos = 0;
-        while ((pos = contentNorm.indexOf(oldNorm, pos)) !== -1) {
-            count++;
-            pos += oldNorm.length;
-        }
-
-        if (count === 0) {
-            // Find nearest content via longest common substring
-            const sampleLen = Math.min(oldNorm.length, 100);
-            const sample = oldNorm.slice(0, sampleLen);
-            let bestPos = 0, bestLen = 0;
-            for (let i = 0; i < contentNorm.length && bestLen < sample.length; i++) {
-                let len = 0;
-                for (let j = 0; j < sample.length && i + len < contentNorm.length; j++) {
-                    if (contentNorm[i + len] === sample[j]) len++;
-                    else { if (len > bestLen) { bestLen = len; bestPos = i; } len = 0; }
-                }
-                if (len > bestLen) { bestLen = len; bestPos = i; }
-            }
-
-            // Build hash-annotated snippet around nearest match
-            const allLines = contentNorm.split("\n");
-            let cumLen = 0, targetLine = 0;
-            const anchor = bestLen > 3 ? bestPos : Math.floor(contentNorm.length / 2);
-            for (let i = 0; i < allLines.length; i++) {
-                cumLen += allLines[i].length + 1;
-                if (cumLen > anchor) { targetLine = i; break; }
-            }
-            const start = Math.max(0, targetLine - 3);
-            const end = Math.min(allLines.length, targetLine + 4);
-            const snippet = allLines.slice(start, end).map((line, j) => {
-                const num = start + j + 1;
-                const tag = lineTag(fnv1a(line));
-                return `${tag}.${num}\t${line}`;
-            }).join("\n");
-
-            return sshError(
-                "TEXT_NOT_FOUND",
-                `"${oldNorm.slice(0, 100)}${oldNorm.length > 100 ? "..." : ""}" not found in ${args.filePath}.\n\n` +
-                `Nearest content (lines ${start + 1}-${end}):\n${snippet}`,
-                "Use ssh-read-lines for full hashes, then ssh-edit-block with anchors"
-            );
-        }
-
-        const expected = args.expectedReplacements || 1;
-        if (count !== expected && expected > 0) {
-            // Build hash-hint showing all match locations
-            const allLines = contentNorm.split("\n");
-            const positions = [];
-            let searchPos = 0;
-            while ((searchPos = contentNorm.indexOf(oldNorm, searchPos)) !== -1) {
-                positions.push(searchPos);
-                searchPos += oldNorm.length;
-            }
-
-            const matchLineCount = oldNorm.split("\n").length;
-            const snippets = positions.map((charPos, i) => {
-                let cumLen = 0, matchLine = 0;
-                for (let l = 0; l < allLines.length; l++) {
-                    cumLen += allLines[l].length + 1;
-                    if (cumLen > charPos) { matchLine = l; break; }
-                }
-                const start = Math.max(0, matchLine - 1);
-                const end = Math.min(allLines.length, matchLine + matchLineCount + 1);
-                const lines = allLines.slice(start, end).map((line, j) => {
-                    const num = start + j + 1;
-                    const tag = lineTag(fnv1a(line));
-                    return `${tag}.${num}\t${line}`;
-                });
-                return `Match ${i + 1} (lines ${start + 1}-${end}):\n${lines.join("\n")}`;
-            });
-
-            return errResult(
-                `HASH_HINT: Found ${count} match(es), expected ${expected}. Use anchor-based edit.\n\n` +
-                snippets.join("\n\n") +
-                `\n\nUse ssh-read-lines to get full hashes, then ssh-edit-block with exact context.`
-            );
-        }
-
-        // Apply replacement
-        let updated;
-        if (expected === 1 && count === 1) {
-            const idx = contentNorm.indexOf(oldNorm);
-            updated = contentNorm.slice(0, idx) + newNorm + contentNorm.slice(idx + oldNorm.length);
-        } else {
-            updated = contentNorm.split(oldNorm).join(newNorm);
-        }
-
-        // Write via heredoc to preserve special chars
-        const marker = "HEX_SSH_EOF_" + Date.now();
-        const writeCmd = `cat > "${args.filePath}" << '${marker}'\n${updated}\n${marker}`;
-        const writeResult = await sshExec(args, writeCmd);
-
-        if (writeResult.exitCode !== 0) {
-            return sshError("WRITE_FAILED", `Write to ${args.filePath} failed: ${writeResult.error || "unknown error"}`, "Check permissions and disk space");
-        }
-
-        // Build compact diff with context (Myers via `diff` package)
-        const parts = diffLines(contentNorm + "\n", updated + "\n");
-        const diffParts = [];
-        let oldNum = 1, newNum = 1;
-        let lastChange = false;
-        const ctx = 3;
-        for (let di = 0; di < parts.length; di++) {
-            const part = parts[di];
-            const pLines = part.value.replace(/\n$/, "").split("\n");
-            if (part.added || part.removed) {
-                for (const line of pLines) {
-                    if (part.removed) { diffParts.push(`-${oldNum}| ${line}`); oldNum++; }
-                    else { diffParts.push(`+${newNum}| ${line}`); newNum++; }
-                }
-                lastChange = true;
-            } else {
-                const next = di < parts.length - 1 && (parts[di + 1].added || parts[di + 1].removed);
-                if (lastChange || next) {
-                    let start = 0, end = pLines.length;
-                    if (!lastChange) start = Math.max(0, end - ctx);
-                    if (!next && end - start > ctx) end = start + ctx;
-                    if (start > 0) { diffParts.push('...'); oldNum += start; newNum += start; }
-                    for (let k = start; k < end; k++) {
-                        diffParts.push(` ${oldNum}| ${pLines[k]}`); oldNum++; newNum++;
-                    }
-                    if (end < pLines.length) { diffParts.push('...'); oldNum += pLines.length - end; newNum += pLines.length - end; }
-                } else { oldNum += pLines.length; newNum += pLines.length; }
-                lastChange = false;
-            }
-        }
-
-        let msg = `Updated ${args.filePath} (${count} replacement${count > 1 ? "s" : ""})`;
-        if (diffParts.length > 0) {
-            const diffText = smartTruncate(diffParts.join("\n"), 30, 10);
-            msg += `\n\n\`\`\`diff\n${diffText}\n\`\`\``;
-        }
-
-        return okResult(msg);
     } catch (e) {
         return errResult(e.message);
     }
@@ -577,9 +426,8 @@ server.registerTool("ssh-edit-block", {
 server.registerTool("ssh-search-code", {
     title: "SSH Search",
     description:
-        "Search for patterns in remote files with grep. " +
-        "Output is deduplicated (identical normalized lines collapsed with xN count). " +
-        "Use filePattern to filter by extension.",
+        "Search remote files with grep. Returns hash-annotated matches with deduplication. " +
+        "Use for finding code before ssh-edit-block.",
     inputSchema: {
         ...connProps,
         path: z.string().describe("Directory to search on remote server"),
@@ -597,6 +445,9 @@ server.registerTool("ssh-search-code", {
             return errResult("Required: host, user, path, pattern");
         }
 
+        assertSafeArg("path", args.path);
+        assertSafeArg("pattern", args.pattern);
+        if (args.filePattern) assertSafeArg("filePattern", args.filePattern);
         validateRemotePath(args.path);
 
         const maxResults = args.maxResults || 50;
@@ -608,12 +459,12 @@ server.registerTool("ssh-search-code", {
 
         let includeOpt = "";
         if (args.filePattern) {
-            includeOpt = ` --include="${args.filePattern}"`;
+            includeOpt = ` --include=${shellQuote(args.filePattern)}`;
         }
 
         const cmd = [
-            `if [ ! -d "${args.path}" ]; then echo "DIR_NOT_FOUND" && exit 1; fi`,
-            `grep ${grepOpts}${includeOpt} "${args.pattern}" "${args.path}" 2>/dev/null | head -${maxResults * 2}`,
+            `if [ ! -d ${shellQuote(args.path)} ]; then echo "DIR_NOT_FOUND" && exit 1; fi`,
+            `grep ${grepOpts}${includeOpt} ${shellQuote(args.pattern)} ${shellQuote(args.path)} 2>/dev/null | head -${maxResults * 2}`,
         ].join("; ");
 
         const result = await sshExec(args, cmd);
@@ -662,8 +513,8 @@ server.registerTool("ssh-search-code", {
 server.registerTool("ssh-write-chunk", {
     title: "SSH Write File",
     description:
-        "Write content to remote files (rewrite or append mode). " +
-        "Creates parent directories. For existing files, prefer ssh-edit-block (shows diff, verifies hashes).",
+        "Write or append to remote files. Rewrite mode is atomic (temp file + rename). " +
+        "Append mode is non-atomic (direct >>). Auto-creates parent directories.",
     inputSchema: {
         ...connProps,
         filePath: z.string().describe("Path to file on remote server"),
@@ -678,19 +529,27 @@ server.registerTool("ssh-write-chunk", {
             return errResult("Required: host, user, filePath, content");
         }
 
+        assertSafeArg("filePath", args.filePath);
         validateRemotePath(args.filePath);
 
         const mode = args.mode || "rewrite";
-        const marker = "HEX_SSH_EOF_" + Date.now();
-        const redirect = mode === "append" ? ">>" : ">";
+        const b64 = Buffer.from(args.content, "utf-8").toString("base64");
+        const tmpPath = args.filePath + ".hex-tmp-" + Date.now();
 
-        const cmd = [
-            `mkdir -p "$(dirname "${args.filePath}")"`,
-            `cat ${redirect} "${args.filePath}" << '${marker}'`,
-            args.content,
-            marker,
-            `echo "bytes=$(wc -c < "${args.filePath}") lines=$(wc -l < "${args.filePath}")"`,
-        ].join("\n");
+        let cmd;
+        if (mode === "append") {
+            cmd = [
+                `dir=$(dirname -- ${shellQuote(args.filePath)}) && mkdir -p -- "$dir"`,
+                `echo ${shellQuote(b64)} | (base64 -d 2>/dev/null || base64 -D) >> ${shellQuote(args.filePath)}`,
+                `echo "bytes=$(wc -c < ${shellQuote(args.filePath)}) lines=$(wc -l < ${shellQuote(args.filePath)})"`,
+            ].join(" && ");
+        } else {
+            cmd = [
+                `dir=$(dirname -- ${shellQuote(args.filePath)}) && mkdir -p -- "$dir"`,
+                `echo ${shellQuote(b64)} | (base64 -d 2>/dev/null || base64 -D) > ${shellQuote(tmpPath)} && mv ${shellQuote(tmpPath)} ${shellQuote(args.filePath)}`,
+                `echo "bytes=$(wc -c < ${shellQuote(args.filePath)}) lines=$(wc -l < ${shellQuote(args.filePath)})"`,
+            ].join(" && ");
+        }
 
         const result = await sshExec(args, cmd);
 
@@ -711,8 +570,8 @@ server.registerTool("ssh-write-chunk", {
 server.registerTool("ssh-verify", {
     title: "SSH Verify Checksums",
     description:
-        "Verify range checksums from prior ssh-read-lines calls without re-reading full content. " +
-        "Single-line 'all valid' response when nothing changed. Avoids full re-read for staleness check.",
+        "Check if range checksums still match remote file. Single-line response avoids full re-read. " +
+        "Use before editing after a pause.",
     inputSchema: {
         ...connProps,
         filePath: z.string().describe("Path to file on remote server"),
@@ -726,6 +585,7 @@ server.registerTool("ssh-verify", {
             return errResult("Required: host, user, filePath, checksums");
         }
 
+        assertSafeArg("filePath", args.filePath);
         validateRemotePath(args.filePath);
 
         const checksums = JSON.parse(args.checksums);
@@ -740,10 +600,10 @@ server.registerTool("ssh-verify", {
 
         // Read just the needed range
         const readCmd = [
-            `if [ ! -f "${args.filePath}" ]; then echo "FILE_NOT_FOUND" && exit 1; fi`,
-            `total=$(wc -l < "${args.filePath}")`,
+            `if [ ! -f ${shellQuote(args.filePath)} ]; then echo "FILE_NOT_FOUND" && exit 1; fi`,
+            `total=$(wc -l < ${shellQuote(args.filePath)})`,
             `echo "$total"`,
-            `sed -n '${minLine},${maxLine}p' "${args.filePath}"`,
+            `sed -n '${minLine},${maxLine}p' ${shellQuote(args.filePath)}`,
         ].join("; ");
 
         const result = await sshExec(args, readCmd);

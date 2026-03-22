@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 // ==================== coerce ====================
 
 describe("coerce params", () => {
-    it("maps graph-specific aliases", async () => {
+    it("does not remap aliases in breaking-release mode", async () => {
         const { coerceParams } = await import("../lib/coerce.mjs");
         const result = coerceParams({
             root: "/project",
@@ -13,46 +13,18 @@ describe("coerce params", () => {
             max_depth: 5,
             max_results: 10,
         });
-        assert.equal(result.path, "/project");
-        assert.equal(result.query, "myFunction");
-        assert.equal(result.symbol, "doStuff");
-        assert.equal(result.depth, 5);
-        assert.equal(result.limit, 10);
-        assert.equal(result.root, undefined, "Alias removed");
+        assert.equal(result.root, "/project");
+        assert.equal(result.search, "myFunction");
+        assert.equal(result.fn, "doStuff");
+        assert.equal(result.max_depth, 5);
+        assert.equal(result.max_results, 10);
     });
 
-    it("canonical params not overwritten", async () => {
+    it("returns the same object shape for selector params", async () => {
         const { coerceParams } = await import("../lib/coerce.mjs");
-        const result = coerceParams({ query: "real", search: "alias" });
-        assert.equal(result.query, "real");
-    });
-
-    it("conflicting aliases: first canonical wins", async () => {
-        const { coerceParams } = await import("../lib/coerce.mjs");
-        // symbol is canonical, fn is alias for symbol
-        const result = coerceParams({ symbol: "realFn", fn: "aliasFn" });
-        assert.equal(result.symbol, "realFn", "Canonical wins over alias");
-    });
-
-    it("handles null/undefined params gracefully", async () => {
-        const { coerceParams } = await import("../lib/coerce.mjs");
-        assert.equal(coerceParams(null), null);
-        assert.equal(coerceParams(undefined), undefined);
-        const empty = coerceParams({});
-        assert.deepEqual(empty, {});
-    });
-});
-
-// ==================== flexNum ====================
-
-describe("flexNum in server schema", () => {
-    it("server.mjs loads without errors (flexNum/flexBool integrated)", async () => {
-        // This validates flexNum/flexBool are correctly defined and all
-        // z.coerce.number() replaced — if any remain, Zod schema would fail
-        const { execSync } = await import("node:child_process");
-        execSync("node --check server.mjs", {
-            cwd: "d:/Development/LevNikolaevich/claude-code-skills/mcp/hex-graph-mcp",
-        });
+        const result = coerceParams({ symbol_id: 42, qualified_name: "a.mjs:helper" });
+        assert.equal(result.symbol_id, 42);
+        assert.equal(result.qualified_name, "a.mjs:helper");
     });
 });
 
@@ -64,10 +36,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { indexProject, reindexFile } from "../lib/indexer.mjs";
-import { getStore, getReferences } from "../lib/store.mjs";
+import { getStore, findSymbols, getReferencesBySelector, getSymbol, tracePaths, explainResolution, findImplementationsBySelector, findDataflowsBySelector, getModuleMetricsReport, getArchitectureReport } from "../lib/store.mjs";
 import { findClones } from "../lib/clones.mjs";
 import { findCycles } from "../lib/cycles.mjs";
-import { findUnused } from "../lib/unused.mjs";
+import { findUnusedExports } from "../lib/unused.mjs";
 
 function makeTempDir() {
     return mkdtempSync(join(tmpdir(), "hex-graph-clone-"));
@@ -362,63 +334,9 @@ describe("find_hotspots", () => {
     });
 });
 
-// ==================== impact_of_changes ====================
+// ==================== find_unused_exports ====================
 
-describe("impact_of_changes", () => {
-    it("returns expected shape on real git repo", async () => {
-        const { impactOfChanges } = await import("../lib/impact.mjs");
-        const projectPath = "d:/Development/LevNikolaevich/claude-code-skills/mcp/hex-graph-mcp";
-
-        await indexProject(projectPath);
-        const store = getStore(projectPath);
-
-        const result = impactOfChanges(store, projectPath, { ref: "HEAD", depth: 2 });
-
-        assert.ok(Array.isArray(result.changed), "changed is array");
-        assert.ok(Array.isArray(result.affected), "affected is array");
-        assert.ok(Array.isArray(result.affected_tests), "affected_tests is array");
-        assert.strictEqual(result.confidence, "heuristic", "confidence is heuristic");
-        assert.ok(typeof result.note === "string" && result.note.length > 0, "note is non-empty string");
-
-        store.close();
-    });
-});
-
-describe("find_clones schema validation", () => {
-    it("rejects threshold out of range", async () => {
-        const z = await import("zod");
-        const schema = z.z.object({
-            threshold: z.z.preprocess(v => typeof v === "string" ? Number(v) : v, z.z.number().min(0).max(1).default(0.80)),
-        });
-        // Valid
-        assert.doesNotThrow(() => schema.parse({ threshold: 0.5 }));
-        assert.doesNotThrow(() => schema.parse({ threshold: 0 }));
-        assert.doesNotThrow(() => schema.parse({ threshold: 1 }));
-        // Invalid
-        assert.throws(() => schema.parse({ threshold: -0.1 }));
-        assert.throws(() => schema.parse({ threshold: 1.5 }));
-        assert.throws(() => schema.parse({ threshold: -1 }));
-    });
-
-    it("rejects min_stmts < 1", async () => {
-        const z = await import("zod");
-        const schema = z.z.object({
-            min_stmts: z.z.preprocess(v => typeof v === "string" ? Number(v) : v, z.z.number().int().min(1).optional()),
-        });
-        // Valid
-        assert.doesNotThrow(() => schema.parse({ min_stmts: 1 }));
-        assert.doesNotThrow(() => schema.parse({ min_stmts: 10 }));
-        assert.doesNotThrow(() => schema.parse({})); // optional
-        // Invalid
-        assert.throws(() => schema.parse({ min_stmts: 0 }));
-        assert.throws(() => schema.parse({ min_stmts: -5 }));
-        assert.throws(() => schema.parse({ min_stmts: 2.5 })); // not integer
-    });
-});
-
-// ==================== find_unused ====================
-
-describe("find_unused", () => {
+describe("find_unused_exports", () => {
     it("imported export NOT flagged, unused export IS flagged", async () => {
         const dir = makeTempDir();
         try {
@@ -435,7 +353,7 @@ describe("find_unused", () => {
             await indexProject(dir);
 
             const store = getStore(dir);
-            const result = findUnused(store);
+            const result = findUnusedExports(store);
 
             const unusedNames = result.unused.map(u => u.name);
             assert.ok(unusedNames.includes("bar"), "bar (never imported) is in unused list");
@@ -483,9 +401,9 @@ describe("find_cycles", () => {
     });
 });
 
-// ==================== module_metrics ====================
+// ==================== get_module_metrics ====================
 
-describe("module_metrics", () => {
+describe("get_module_metrics", () => {
     it("Ca/Ce correct for shared module", async () => {
         const dir = makeTempDir();
         try {
@@ -506,15 +424,146 @@ describe("module_metrics", () => {
             await indexProject(dir);
 
             const store = getStore(dir);
-            const rows = store.moduleMetrics({ minCoupling: 0 });
+            const rows = store.moduleMetricRows({ minCoupling: 0 });
+            const report = getModuleMetricsReport({ minCoupling: 0, path: dir });
 
             const sharedMetric = rows.find(r => r.file.includes("shared"));
             assert.ok(sharedMetric, "shared.mjs appears in metrics");
             assert.ok(sharedMetric.ca >= 2, "shared.mjs has Ca >= 2 (imported by a and b)");
             assert.strictEqual(sharedMetric.ce, 0, "shared.mjs has Ce === 0 (imports nothing)");
+            const reportShared = report.result.find(r => r.file.includes("shared"));
+            assert.ok(reportShared, "shared.mjs appears in report");
+            assert.equal(reportShared.ca, sharedMetric.ca, "report Ca matches unified module graph metrics");
+            assert.equal(reportShared.ce, sharedMetric.ce, "report Ce matches unified module graph metrics");
 
             store.close();
         } finally {
+            rmSync(dir, { recursive: true });
+        }
+    });
+});
+
+describe("architecture report", () => {
+    it("reports cross-module edges from unified module layer", async () => {
+        const dir = makeTempDir();
+        try {
+            mkdirSync(join(dir, "app"), { recursive: true });
+            mkdirSync(join(dir, "shared"), { recursive: true });
+            writeFileSync(
+                join(dir, "app", "a.mjs"),
+                'import { shared } from "../shared/shared.mjs";\nshared();\n',
+            );
+            writeFileSync(
+                join(dir, "shared", "shared.mjs"),
+                'export function shared() {}\n',
+            );
+
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const report = getArchitectureReport({ path: dir, limit: 10 });
+            const crossEdge = report.result.cross_module_edges.find(edge =>
+                edge.src_dir === "app" && edge.tgt_dir === "shared"
+            );
+            assert.ok(crossEdge, "architecture report includes app -> shared module edge");
+            assert.ok(crossEdge.count >= 1, "cross-module edge count present");
+        } finally {
+            const store = getStore(dir);
+            store.close();
+            rmSync(dir, { recursive: true });
+        }
+    });
+});
+
+describe("external module boundary", () => {
+    it("materializes unresolved imports as external module nodes and module-layer edges", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(
+                join(dir, "a.mjs"),
+                'import React from "react";\nexport function render() { return React.createElement("div"); }\n',
+            );
+
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const store = getStore(dir);
+            const externalFile = store.externalModuleFile("react");
+            const externalNode = store.findByQualified(`${externalFile}:module`)[0];
+            assert.ok(externalNode, "external module node created");
+            assert.equal(externalNode.kind, "external_module");
+
+            const externalEdge = store.moduleGraphEdges().find(edge =>
+                edge.source_file === "a.mjs" && edge.target_file === externalFile
+            );
+            assert.ok(externalEdge, "moduleGraphEdges includes unresolved external dependency");
+
+            const sourceModule = store.findByQualified("a.mjs:module")[0];
+            const layeredEdge = store.edgesFrom(sourceModule.id).find(edge =>
+                edge.layer === "module" &&
+                edge.target_id === externalNode.id &&
+                edge.kind === "depends_on_external"
+            );
+            assert.ok(layeredEdge, "unified edges include depends_on_external");
+            assert.equal(layeredEdge.origin, "unresolved");
+            assert.equal(layeredEdge.confidence, "low");
+
+            store.close();
+        } finally {
+            rmSync(dir, { recursive: true });
+        }
+    });
+
+    it("materializes unresolved named imports as external symbol nodes with symbol-layer usages", async () => {
+        const dir = makeTempDir();
+        let store;
+        try {
+            writeFileSync(
+                join(dir, "a.mjs"),
+                [
+                    'import { useState } from "react";',
+                    'export function render() {',
+                    '    useState();',
+                    '    return useState;',
+                    '}',
+                    '',
+                ].join("\n"),
+            );
+
+            cleanDb(dir);
+            await indexProject(dir);
+
+            store = getStore(dir);
+            const externalFile = store.externalModuleFile("react");
+            const externalSymbol = store.findByQualified(`${externalFile}:symbol:useState`)[0];
+            assert.ok(externalSymbol, "external symbol node created for unresolved named import");
+            assert.equal(externalSymbol.kind, "external_symbol");
+
+            const importStmt = store.nodesByFile("a.mjs").find(node => node.kind === "import");
+            assert.ok(importStmt, "import statement node exists");
+            const importEdge = store.edgesFrom(importStmt.id).find(edge =>
+                edge.kind === "imports" &&
+                edge.target_id === externalSymbol.id
+            );
+            assert.ok(importEdge, "symbol-layer import edge points to external symbol");
+            assert.equal(importEdge.origin, "unresolved");
+            assert.equal(importEdge.confidence, "low");
+
+            const refs = getReferencesBySelector({ qualified_name: `${externalFile}:symbol:useState` }, { path: dir });
+            assert.equal(refs.result.symbol.kind, "external_symbol");
+            assert.equal(refs.result.total_by_kind.imports, 1, "external symbol sees import usage");
+            assert.equal(refs.result.total_by_kind.calls, 1, "external symbol sees call usage");
+            assert.equal(refs.result.total_by_kind.ref_read, 1, "external symbol sees read usage");
+
+            const traced = tracePaths({ qualified_name: `${externalFile}:symbol:useState` }, {
+                path_kind: "calls",
+                direction: "reverse",
+                depth: 2,
+                path: dir,
+            });
+            assert.ok(traced.result.some(path => path.nodes.some(node => node.name === "render")), "reverse call paths reach local caller");
+        } finally {
+            store?.close();
             rmSync(dir, { recursive: true });
         }
     });
@@ -615,6 +664,11 @@ describe("incremental reindex", () => {
                 e => e.source_file.includes("a.mjs") && e.target_file.includes("b.mjs")
             );
             assert.ok(hasEdge, "module_edge a->b exists after full index");
+            const graphEdgesBefore = store.allLayerEdges("module");
+            const hasGraphEdgeBefore = graphEdgesBefore.some(
+                e => e.kind === "depends_on" && e.file.includes("a.mjs")
+            );
+            assert.ok(hasGraphEdgeBefore, "module-layer graph edge exists after full index");
 
             // Reindex ONLY b.mjs (the target)
             writeFileSync(
@@ -629,6 +683,40 @@ describe("incremental reindex", () => {
                 e => e.source_file.includes("a.mjs") && e.target_file.includes("b.mjs")
             );
             assert.ok(stillHasEdge, "module_edge a->b preserved after reindexing b.mjs");
+            const graphEdgesAfter = store.allLayerEdges("module");
+            const stillHasGraphEdge = graphEdgesAfter.some(
+                e => e.kind === "depends_on" && e.file.includes("a.mjs")
+            );
+            assert.ok(stillHasGraphEdge, "module-layer graph edge preserved after reindexing b.mjs");
+
+            store.close();
+        } finally {
+            rmSync(dir, { recursive: true });
+        }
+    });
+
+    it("resolved semantic edges carry layer, origin, and edge_hash metadata", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(
+                join(dir, "a.mjs"),
+                'export function callee() {}\n',
+            );
+            writeFileSync(
+                join(dir, "b.mjs"),
+                'import { callee } from "./a.mjs";\nexport function caller() { callee(); }\n',
+            );
+
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const store = getStore(dir);
+            const caller = store.findByName("caller")[0];
+            const edges = store.edgesFrom(caller.id).filter(e => e.kind === "calls");
+            assert.equal(edges.length, 1, "caller has one resolved call edge");
+            assert.equal(edges[0].layer, "symbol");
+            assert.equal(edges[0].origin, "resolved");
+            assert.ok(edges[0].edge_hash, "edge_hash present");
 
             store.close();
         } finally {
@@ -659,8 +747,8 @@ describe("barrel re-export", () => {
             assert.ok(reexportNode, "barrel has synthetic reexport node for foo");
             assert.equal(reexportNode.is_exported, 1, "reexport node is exported");
 
-            // find_unused should NOT flag foo in a.mjs
-            const result = findUnused(store);
+            // find_unused_exports should NOT flag foo in a.mjs
+            const result = findUnusedExports(store);
             const fooUnused = result.unused.find(u => u.name === "foo" && u.file === "a.mjs");
             assert.equal(fooUnused, undefined, "foo in a.mjs is used via barrel, not flagged");
 
@@ -685,7 +773,7 @@ describe("namespace import confidence", () => {
         try {
             await indexProject(tmp);
             const store = getStore(tmp);
-            const result = findUnused(store);
+            const result = findUnusedExports(store);
 
             // Both x and y should be reported as low confidence (namespace-only usage)
             const xResult = result.unused.find(u => u.name === "x");
@@ -717,7 +805,7 @@ describe("unused barrel", () => {
         try {
             await indexProject(tmp);
             const store = getStore(tmp);
-            const result = findUnused(store);
+            const result = findUnusedExports(store);
 
             // foo should be flagged as unused (barrel exists but nobody imports from it)
             const fooUnused = result.unused.find(u => u.name === "foo" && u.file === "a.mjs");
@@ -829,7 +917,7 @@ describe("PHP export extraction", () => {
     });
 });
 
-describe("Non-JS find_unused confidence", () => {
+describe("Non-JS find_unused_exports confidence", () => {
     it("Python exports get export_only confidence, not high", async () => {
         const tmp = mkdtempSync(join(tmpdir(), "hex-pyunused-"));
         mkdirSync(join(tmp, ".codegraph"));
@@ -837,7 +925,7 @@ describe("Non-JS find_unused confidence", () => {
         try {
             await indexProject(tmp);
             const store = getStore(tmp);
-            const result = findUnused(store);
+            const result = findUnusedExports(store);
             const helper = result.unused.find(u => u.name === "helper" && u.file === "lib.py");
             assert.ok(helper, "Python export detected");
             assert.equal(helper.confidence, "export_only", "Python gets export_only, not high");
@@ -886,6 +974,306 @@ describe("find_references", () => {
     });
 });
 
+describe("identity-first selector APIs", () => {
+    it("get_symbol resolves by name+file and explain_resolution reports selector strategy", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(join(dir, "a.mjs"), 'export function helper() { return 1; }\n');
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const symbol = getSymbol({ name: "helper", file: "a.mjs" }, { path: dir });
+            assert.equal(symbol.result.symbol.qualified_name, "a.mjs:helper");
+            assert.equal(symbol.reason, "resolved_by_name_file");
+
+            const explained = explainResolution({ qualified_name: "a.mjs:helper" }, { path: dir });
+            assert.equal(explained.result.selector_kind, "qualified_name");
+            assert.equal(explained.result.resolved.qualified_name, "a.mjs:helper");
+        } finally {
+            try { rmSync(dir, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
+        }
+    });
+
+    it("trace_paths returns call paths for canonical selector", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(join(dir, "a.mjs"), 'export function helper() { return 1; }\n');
+            writeFileSync(join(dir, "b.mjs"), 'import { helper } from "./a.mjs";\nexport function caller() { return helper(); }\n');
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const traced = tracePaths({ qualified_name: "a.mjs:helper" }, {
+                path_kind: "calls",
+                direction: "reverse",
+                depth: 2,
+                path: dir,
+            });
+            assert.ok(traced.result.length > 0, "returns at least one path");
+            assert.ok(traced.result.some(p => p.edges.some(e => e.kind === "calls")), "contains call edge");
+
+            const targeted = tracePaths({ qualified_name: "a.mjs:helper" }, {
+                path_kind: "calls",
+                direction: "reverse",
+                depth: 2,
+                path: dir,
+                target: { name: "caller", file: "b.mjs" },
+            });
+            assert.equal(targeted.reason, "targeted_path_lookup");
+            assert.equal(targeted.evidence.target_found, true);
+            assert.ok(targeted.result.length > 0, "returns targeted path");
+            assert.ok(targeted.result.every(p => p.nodes.some(node => node.name === "caller")), "all targeted paths reach caller");
+        } finally {
+            try { rmSync(dir, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
+        }
+    });
+});
+
+describe("identity query error contracts", () => {
+    it("returns NOT_INDEXED for semantic queries before indexing", async () => {
+        const tmp = mkdtempSync(join(tmpdir(), "hex-notindexed-"));
+        try {
+            const freshStore = await import(`../lib/store.mjs?fresh-not-indexed=${Date.now()}`);
+            const queries = [
+                freshStore.getSymbol({ qualified_name: "a.mjs:helper" }, { path: tmp }),
+                freshStore.tracePaths({ qualified_name: "a.mjs:helper" }, { path: tmp }),
+                freshStore.explainResolution({ qualified_name: "a.mjs:helper" }, { path: tmp }),
+                freshStore.getReferencesBySelector({ qualified_name: "a.mjs:helper" }, { path: tmp }),
+                freshStore.findImplementationsBySelector({ qualified_name: "a.mjs:helper" }, { path: tmp }),
+                freshStore.findDataflowsBySelector({ qualified_name: "a.mjs:helper" }, { path: tmp }),
+                freshStore.getModuleMetricsReport({ path: tmp }),
+                freshStore.getArchitectureReport({ path: tmp }),
+            ];
+            for (const result of queries) {
+                assert.equal(result.error?.code, "NOT_INDEXED");
+            }
+        } finally {
+            rmSync(tmp, { recursive: true, force: true });
+        }
+    });
+
+    it("returns SYMBOL_NOT_FOUND for missing canonical selectors", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(join(dir, "a.mjs"), "export function helper() { return 1; }\n");
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const checks = [
+                getSymbol({ name: "missing", file: "a.mjs" }, { path: dir }),
+                tracePaths({ name: "missing", file: "a.mjs" }, { path: dir }),
+                explainResolution({ name: "missing", file: "a.mjs" }, { path: dir }),
+                findImplementationsBySelector({ name: "missing", file: "a.mjs" }, { path: dir }),
+                findDataflowsBySelector({ name: "missing", file: "a.mjs" }, { path: dir }),
+            ];
+            for (const result of checks) {
+                assert.equal(result.error?.code, "SYMBOL_NOT_FOUND");
+            }
+        } finally {
+            try { rmSync(dir, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
+        }
+    });
+});
+
+describe("search_symbols contract", () => {
+    it("returns canonical identities and respects kind filter", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(join(dir, "a.mjs"), [
+                "export function helperAlpha() { return 1; }",
+                "export function helperBeta() { return 2; }",
+                "export class HelperBox {}",
+                "",
+            ].join("\n"));
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const all = findSymbols("helper*", { path: dir, limit: 10 });
+            assert.ok(all.matches.length >= 2, "partial search returns multiple candidates");
+            assert.ok(all.matches.every(match => match.symbol_id && match.qualified_name && match.file), "matches expose canonical identity fields");
+
+            const onlyFns = findSymbols("helper*", { path: dir, kind: "function", limit: 10 });
+            assert.ok(onlyFns.matches.length >= 1, "kind-filtered search returns function");
+            assert.ok(onlyFns.matches.every(match => match.kind === "function"), "kind filter excludes non-functions");
+        } finally {
+            try { rmSync(dir, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
+        }
+    });
+});
+
+describe("trace_paths reference and import layers", () => {
+    it("supports imports and references path kinds", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(join(dir, "a.mjs"), "export function helper() { return 1; }\n");
+            writeFileSync(join(dir, "b.mjs"), 'import { helper } from "./a.mjs";\nexport function consumer() { const fn = helper; return fn; }\n');
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const importPaths = tracePaths({ name: "helper", file: "a.mjs" }, {
+                path_kind: "imports",
+                direction: "reverse",
+                depth: 2,
+                path: dir,
+            });
+            assert.ok(importPaths.result.length > 0, "imports path lookup returns paths");
+            assert.ok(importPaths.result.some(path => path.edges.some(edge => edge.kind === "imports")), "imports path contains imports edge");
+            assert.ok(importPaths.result.every(path => path.edges.every(edge => edge.kind === "imports" || edge.kind === "reexports")), "imports path kind stays within import/reexport edges");
+
+            const referencePaths = tracePaths({ name: "helper", file: "a.mjs" }, {
+                path_kind: "references",
+                direction: "reverse",
+                depth: 3,
+                path: dir,
+            });
+            assert.ok(referencePaths.result.length > 0, "references path lookup returns paths");
+            assert.ok(referencePaths.result.some(path => path.edges.some(edge => edge.kind === "ref_read")), "references path contains read edge");
+            assert.ok(referencePaths.result.some(path => path.edges.some(edge => edge.kind === "imports")), "references path can traverse import edge");
+        } finally {
+            try { rmSync(dir, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
+        }
+    });
+});
+
+describe("type graph and implementations", () => {
+    it("finds extends, implements, and overrides via type-layer edges", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(
+                join(dir, "types.ts"),
+                [
+                    "export interface Service { }",
+                    "export class Base {",
+                    "  ping() { return 1; }",
+                    "}",
+                    "export class Impl extends Base implements Service {",
+                    "  ping() { return 2; }",
+                    "}",
+                    "",
+                ].join("\n"),
+            );
+
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const serviceImpls = findImplementationsBySelector({ name: "Service", file: "types.ts" }, { path: dir });
+            assert.equal(serviceImpls.result.implementations.length, 1, "interface has one implementer");
+            assert.equal(serviceImpls.result.implementations[0].kind, "implements");
+            assert.equal(serviceImpls.result.implementations[0].source.name, "Impl");
+
+            const baseImpls = findImplementationsBySelector({ name: "Base", file: "types.ts" }, { path: dir });
+            assert.equal(baseImpls.result.implementations.length, 1, "base class has one subclass");
+            assert.equal(baseImpls.result.implementations[0].kind, "extends");
+            assert.equal(baseImpls.result.implementations[0].source.name, "Impl");
+
+            const methodImpls = findImplementationsBySelector({ qualified_name: "types.ts:Base.ping" }, { path: dir });
+            assert.equal(methodImpls.result.implementations.length, 1, "base method has one override");
+            assert.equal(methodImpls.result.implementations[0].kind, "overrides");
+            assert.equal(methodImpls.result.implementations[0].source.qualified_name, "types.ts:Impl.ping");
+
+            const traced = tracePaths({ name: "Base", file: "types.ts" }, {
+                path_kind: "type",
+                direction: "reverse",
+                depth: 2,
+                limit: 10,
+                path: dir,
+            });
+            assert.ok(traced.result.some(path => path.edges.some(edge => edge.kind === "extends")), "type trace includes extends edge");
+        } finally {
+            const store = getStore(dir);
+            store.close();
+            rmSync(dir, { recursive: true });
+        }
+    });
+});
+
+describe("flow summaries and dataflows", () => {
+    it("captures local param/return and one-hop call propagation", async () => {
+        const dir = makeTempDir();
+        try {
+            writeFileSync(
+                join(dir, "flow.mjs"),
+                [
+                    "export function passthrough(value) {",
+                    "  return value;",
+                    "}",
+                    "export function relay(input) {",
+                    "  return passthrough(input);",
+                    "}",
+                    "",
+                ].join("\n"),
+            );
+
+            cleanDb(dir);
+            await indexProject(dir);
+
+            const passthroughFlow = findDataflowsBySelector({ name: "passthrough", file: "flow.mjs" }, { path: dir });
+            assert.ok(
+                passthroughFlow.result.summaries.some(summary => summary.kind === "param_to_return" && summary.source_name === "value"),
+                "passthrough has param_to_return summary",
+            );
+
+            const relayFlow = findDataflowsBySelector({ name: "relay", file: "flow.mjs" }, { path: dir, depth: 2, limit: 10 });
+            assert.ok(
+                relayFlow.result.summaries.some(summary => summary.kind === "param_to_call" && summary.source_name === "input" && summary.target_name === "passthrough"),
+                "relay has param_to_call summary",
+            );
+            assert.ok(
+                relayFlow.result.summaries.some(summary => summary.kind === "call_to_return" && summary.target_name === "return"),
+                "relay has call_to_return summary",
+            );
+            assert.ok(
+                relayFlow.result.paths.some(path => path.symbols.some(symbol => symbol.name === "passthrough")),
+                "relay dataflow propagates one hop into passthrough",
+            );
+
+            const tracedFlow = tracePaths({ name: "relay", file: "flow.mjs" }, {
+                path_kind: "flow",
+                direction: "forward",
+                depth: 2,
+                limit: 10,
+                path: dir,
+            });
+            assert.ok(
+                tracedFlow.result.some(path =>
+                    path.nodes.some(node => node.name === "passthrough") &&
+                    path.edges.some(edge => edge.layer === "flow" && edge.kind === "param_to_call"),
+                ),
+                "trace_paths(flow) reaches callee through flow summaries",
+            );
+
+            const tracedMixed = tracePaths({ name: "passthrough", file: "flow.mjs" }, {
+                path_kind: "mixed",
+                direction: "reverse",
+                depth: 2,
+                limit: 10,
+                path: dir,
+            });
+            assert.ok(
+                tracedMixed.result.some(path => path.edges.some(edge => edge.layer === "flow")),
+                "trace_paths(mixed) includes flow-layer hops",
+            );
+
+            const targetedFlow = findDataflowsBySelector({ name: "relay", file: "flow.mjs" }, {
+                path: dir,
+                depth: 2,
+                limit: 10,
+                target: { name: "passthrough", file: "flow.mjs" },
+            });
+            assert.equal(targetedFlow.reason, "targeted_flow_lookup");
+            assert.equal(targetedFlow.evidence.target_found, true);
+            assert.equal(targetedFlow.result.target.name, "passthrough");
+            assert.ok(
+                targetedFlow.result.paths.every(path => path.symbols.some(symbol => symbol.name === "passthrough")),
+                "targeted flow lookup returns only paths that reach target",
+            );
+        } finally {
+            const store = getStore(dir);
+            store.close();
+            rmSync(dir, { recursive: true });
+        }
+    });
+});
+
 // ==================== Bug 1: barrel find_references ====================
 
 describe("find_references through barrel", () => {
@@ -898,10 +1286,10 @@ describe("find_references through barrel", () => {
         try {
             await indexProject(tmp);
             const store = getStore(tmp);
-            const result = getReferences("foo", { path: tmp });
+            const result = getReferencesBySelector({ name: "foo", file: "a.mjs" }, { path: tmp });
             // Should include consumer's call, not just reexport
-            assert.ok(result.total >= 2, `Should have >= 2 refs (got ${result.total}): reexport + consumer call`);
-            const hasConsumerRef = result.references.some(r => r.file.includes("consumer"));
+            assert.ok(result.result.total >= 2, `Should have >= 2 refs (got ${result.result.total}): reexport + consumer call`);
+            const hasConsumerRef = result.result.references.some(r => r.file.includes("consumer"));
             assert.ok(hasConsumerRef, "Consumer usage through barrel is included");
             store.close();
         } finally {
@@ -911,7 +1299,7 @@ describe("find_references through barrel", () => {
 });
 
 describe("find_references ambiguity", () => {
-    it("groups results for same-name symbols across files and honors file filter", async () => {
+    it("requires canonical selector and uses search_symbols to disambiguate", async () => {
         const tmp = mkdtempSync(join(tmpdir(), "hex-ambrefs-"));
         mkdirSync(join(tmp, ".codegraph"));
         writeFileSync(join(tmp, "a.mjs"), 'export function helper() { return 1; }\n');
@@ -922,15 +1310,20 @@ describe("find_references ambiguity", () => {
             await indexProject(tmp);
             const store = getStore(tmp);
 
-            const grouped = getReferences("helper", { path: tmp });
-            assert.equal(grouped.ambiguous, true, "ambiguous lookup returns grouped response");
-            assert.equal(grouped.definitions.length, 2, "both helper definitions returned");
-            assert.equal(grouped.total, 4, "aggregates refs from both definitions");
+            const invalid = getReferencesBySelector({ name: "helper" }, { path: tmp });
+            assert.equal(invalid.error?.code, "INVALID_SELECTOR", "plain name is rejected");
 
-            const aOnly = getReferences("helper", { path: tmp, file: "a.mjs" });
-            assert.equal(aOnly.ambiguous, undefined, "file filter resolves ambiguity");
-            assert.equal(aOnly.definition.file, "a.mjs");
-            assert.equal(aOnly.total, 2, "filtered result only includes a.mjs refs");
+            const candidates = findSymbols("helper", { path: tmp, limit: 10 });
+            const helperDefs = candidates.matches.filter(match =>
+                match.name === "helper" &&
+                match.kind === "function" &&
+                (match.file === "a.mjs" || match.file === "b.mjs")
+            );
+            assert.equal(helperDefs.length, 2, "search_symbols returns both helper definitions");
+
+            const aOnly = getReferencesBySelector({ name: "helper", file: "a.mjs" }, { path: tmp });
+            assert.equal(aOnly.result.symbol.file, "a.mjs");
+            assert.equal(aOnly.result.total, 2, "filtered result only includes a.mjs refs");
 
             store.close();
         } finally {
@@ -961,9 +1354,9 @@ describe("C# public method export", () => {
     });
 });
 
-// ==================== Bug 3: find_unused text reason ====================
+// ==================== Bug 3: find_unused_exports text reason ====================
 
-describe("find_unused text reason", () => {
+describe("find_unused_exports text reason", () => {
     it("text output includes reason for non-JS exports", async () => {
         const tmp = mkdtempSync(join(tmpdir(), "hex-unusedreason-"));
         mkdirSync(join(tmp, ".codegraph"));
@@ -971,7 +1364,7 @@ describe("find_unused text reason", () => {
         try {
             await indexProject(tmp);
             const store = getStore(tmp);
-            const result = findUnused(store);
+            const result = findUnusedExports(store);
             const { formatUnusedText } = await import("../lib/unused.mjs");
             const text = formatUnusedText(result, true);
             assert.ok(text.includes("no_cross_file_resolver"), "Text output shows reason");
@@ -1011,8 +1404,8 @@ describe("no self-edge for top-level references", () => {
             await indexProject(tmp);
             const store = getStore(tmp);
 
-            const refs = getReferences("foo", { path: tmp, file: "a.mjs" });
-            const kinds = refs.references.map(r => r.kind);
+            const refs = getReferencesBySelector({ name: "foo", file: "a.mjs" }, { path: tmp });
+            const kinds = refs.result.references.map(r => r.kind);
             assert.ok(kinds.includes("imports"), "top-level import recorded");
             assert.ok(kinds.includes("calls"), "top-level call recorded");
             assert.ok(kinds.includes("ref_read"), "top-level read recorded");
