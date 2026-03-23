@@ -1,7 +1,7 @@
 // esbuild bundler: inlines hex-common into dist/, keeps npm deps external.
 // Run: node build.mjs
 import { build } from "esbuild";
-import { readFileSync } from "node:fs";
+import { readFileSync, cpSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
 const external = Object.keys(pkg.dependencies || {})
@@ -18,4 +18,7 @@ await build({
   define: { __HEX_VERSION__: JSON.stringify(pkg.version) },
 });
 
-console.log("Built dist/server.mjs");
+// tree-sitter .scm queries are loaded at runtime via readFileSync
+cpSync("lib/queries", "dist/queries", { recursive: true });
+
+console.log("Built dist/server.mjs + dist/queries/");

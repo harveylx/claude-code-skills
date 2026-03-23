@@ -19,7 +19,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: cd mcp && npm install
+        run: cd mcp && npm install --ignore-scripts
 
       - name: Build bundle
         run: cd mcp/hex-ssh-mcp && npm run build

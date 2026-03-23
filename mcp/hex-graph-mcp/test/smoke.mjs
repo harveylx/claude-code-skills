@@ -1456,4 +1456,12 @@ describe("WASM dependency contract", () => {
         });
         assert.deepEqual(missing, [], `WASM files missing for: ${missing.join(", ")}`);
     });
+
+    it("dist/queries/ contains all .scm files after build", () => {
+        const distQueries = resolve(__dirname, "../dist/queries");
+        const expected = ["javascript.scm", "typescript.scm", "python.scm", "c_sharp.scm", "php.scm"];
+        const missing = expected.filter(f => !fs.existsSync(resolve(distQueries, f)));
+        assert.deepEqual(missing, [],
+            `dist/queries/ missing: ${missing.join(", ")} — build.mjs must copy lib/queries/ to dist/queries/`);
+    });
 });
