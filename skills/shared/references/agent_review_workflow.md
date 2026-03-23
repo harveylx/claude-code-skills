@@ -103,6 +103,8 @@ Repeat for each available agent (names from `--list-agents`).
 - Do NOT poll in a sleep-loop — the framework sends background task notifications automatically
 - When each agent completes, immediately output: `"Agent {name} completed ({duration}s). {N} suggestions found."` Then proceed to parse results.
 
+> **BLOCKING MODEL:** Background agents enable foreground work in parallel. But before merging results (Critical Verification step), ALL agents must be **resolved**. "Resolved" = result file exists OR agent confirmed DEAD via Liveness Protocol (all 3 checks). Do NOT begin Critical Verification until this condition is met for every launched agent. Use `TaskOutput` to check background task status if no completion notification has arrived. Proceeding with ANY agent still ALIVE or UNRESOLVED is a PROTOCOL VIOLATION.
+
 
 **Agent Liveness Protocol (MANDATORY before declaring agent failed/timed out):**
 

@@ -43,6 +43,41 @@ const { server, StdioServerTransport } = await createServerRuntime({
 });
 
 
+// --- Shared schemas ---
+
+const replacementPairsSchema = z.array(
+    z.object({ old: z.string().min(1), new: z.string() })
+).min(1);
+
+/** Coerce flat AI-hallucinated edit shapes into canonical nested format. */
+function coerceEdit(e) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) return e;
+    if (e.set_line || e.replace_lines || e.insert_after || e.replace_between || e.replace) return e;
+
+    // Flat set_line: {anchor, new_text/updated_lines/content/line}
+    // Guard: reject if end_anchor/boundary_mode/range_checksum present
+    if (e.anchor && !e.start_anchor && !e.end_anchor && !e.boundary_mode && !e.range_checksum) {
+        const raw = e.new_text ?? e.updated_lines ?? e.content ?? e.line;
+        if (raw !== undefined) {
+            const text = Array.isArray(raw) ? raw.join("\n") : raw;
+            return { set_line: { anchor: e.anchor, new_text: text } };
+        }
+    }
+
+    // Flat replace_between: {start_anchor, end_anchor, new_text, boundary_mode}
+    if (e.start_anchor && e.end_anchor && e.boundary_mode && e.new_text !== undefined) {
+        return { replace_between: { start_anchor: e.start_anchor, end_anchor: e.end_anchor, new_text: e.new_text, boundary_mode: e.boundary_mode } };
+    }
+
+    // Flat replace_lines: {start_anchor, end_anchor, new_text, range_checksum?}
+    if (e.start_anchor && e.end_anchor && e.new_text !== undefined) {
+        return { replace_lines: { start_anchor: e.start_anchor, end_anchor: e.end_anchor, new_text: e.new_text, ...(e.range_checksum ? { range_checksum: e.range_checksum } : {}) } };
+    }
+
+    return e;
+}
+
+
 // ==================== read_file ====================
 
 server.registerTool("read_file", {
@@ -90,12 +125,12 @@ server.registerTool("edit_file", {
         "For text rename/refactor use bulk_replace.",
     inputSchema: z.object({
         path: z.string().describe("File to edit"),
-        edits: z.string().describe(
-            'JSON array. Examples:\n' +
-            '{"set_line":{"anchor":"ab.12","new_text":"new"}} — replace line\n' +
-            '{"replace_lines":{"start_anchor":"ab.10","end_anchor":"cd.15","new_text":"...","range_checksum":"10-15:a1b2c3d4"}} — range\n' +
-            '{"replace_between":{"start_anchor":"ab.10","end_anchor":"cd.40","new_text":"...","boundary_mode":"inclusive"}} — block rewrite\n' +
-            '{"insert_after":{"anchor":"ab.20","text":"inserted"}} — insert below. For text rename use bulk_replace tool.',
+        edits: z.union([z.string(), z.array(z.any())]).describe(
+            'JSON array. Types: set_line, replace_lines, insert_after, replace_between.\n' +
+            '[{"set_line":{"anchor":"ab.12","new_text":"x"}}]\n' +
+            '[{"replace_lines":{"start_anchor":"ab.10","end_anchor":"cd.15","new_text":"x","range_checksum":"10-15:a1b2"}}]\n' +
+            '[{"replace_between":{"start_anchor":"ab.10","end_anchor":"cd.40","new_text":"x","boundary_mode":"inclusive"}}]\n' +
+            '[{"insert_after":{"anchor":"ab.20","text":"x"}}]',
         ),
         dry_run: flexBool().describe("Preview changes without writing"),
         restore_indent: flexBool().describe("Auto-fix indentation to match anchor (default: false)"),
@@ -106,12 +141,15 @@ server.registerTool("edit_file", {
 }, async (rawParams) => {
     const { path: p, edits: json, dry_run, restore_indent, base_revision, conflict_policy } = coerceParams(rawParams);
     try {
-        const parsed = JSON.parse(json);
+        let parsed;
+        try { parsed = typeof json === "string" ? JSON.parse(json) : json; }
+        catch { throw new Error('edits: invalid JSON. Expected: [{"set_line":{"anchor":"xx.N","new_text":"..."}}]'); }
         if (!Array.isArray(parsed) || !parsed.length) throw new Error("Edits: non-empty JSON array required");
+        const normalized = parsed.map(coerceEdit);
         return {
             content: [{
                 type: "text",
-                text: editFile(p, parsed, {
+                text: editFile(p, normalized, {
                     dryRun: dry_run,
                     restoreIndent: restore_indent,
                     baseRevision: base_revision,
@@ -155,10 +193,8 @@ server.registerTool("write_file", {
 server.registerTool("grep_search", {
     title: "Search Files",
     description:
-        "Search file contents with ripgrep. Returns hash-annotated matches with per-group checksums for direct editing. " +
-        "Output modes: content (default, edit-ready hashes+checksums), files (paths only), count (match counts). " +
-        "For single-line edits: grep -> set_line directly. For range edits: use checksum from grep output. " +
-        "ALWAYS prefer over shell grep/rg/findstr.",
+        "Search file contents with ripgrep. Returns hash-annotated matches with checksums. " +
+        "Modes: content (default), files, count. Use checksums with set_line/replace_lines. Prefer over shell grep/rg.",
     inputSchema: z.object({
         pattern: z.string().describe("Search pattern (regex by default, literal if literal:true)"),
         path: z.string().optional().describe("Search dir/file (default: cwd)"),
@@ -199,8 +235,7 @@ server.registerTool("outline", {
     title: "File Outline",
     description:
         "AST-based structural outline: functions, classes, interfaces with line ranges. " +
-        "10-20 lines instead of 500 — 95% token reduction. " +
-        "Use before reading large code files. NOT for .md/.json/.yaml — use read_file.",
+        "Use before reading large code files. Not for .md/.json/.yaml.",
     inputSchema: z.object({
         path: z.string().describe("Source file path"),
     }),
@@ -245,10 +280,8 @@ server.registerTool("verify", {
 server.registerTool("directory_tree", {
     title: "Directory Tree",
     description:
-        "Compact directory tree with root .gitignore support (path-based rules, negation). " +
-        "Supports pattern glob to find files/dirs by name (like find -name). " +
-        "Use to understand repo structure or find specific files/dirs. " +
-        "Skips node_modules, .git, dist by default.",
+        "Directory tree with .gitignore support. Pattern glob to find files/dirs by name. " +
+        "Skips node_modules, .git, dist.",
     inputSchema: z.object({
         path: z.string().describe("Directory path"),
         pattern: z.string().optional().describe('Glob filter on names (e.g. "*-mcp", "*.mjs"). Returns flat match list instead of tree'),
@@ -294,10 +327,7 @@ server.registerTool("get_file_info", {
 server.registerTool("setup_hooks", {
     title: "Setup Hooks",
     description:
-        "Install or uninstall hex-line hooks in CLI agent settings. " +
-        "install: writes hooks to ~/.claude/settings.json, removes old per-project hooks. " +
-        "uninstall: removes hex-line hooks from global settings. " +
-        "Idempotent: re-running produces no changes if already in desired state.",
+        "Install or uninstall hex-line hooks in CLI agent settings. Idempotent.",
     inputSchema: z.object({
         agent: z.string().optional().describe('Target agent: "claude", "gemini", "codex", or "all" (default: "all")'),
         action: z.string().optional().describe('"install" (default) or "uninstall"'),
@@ -318,8 +348,7 @@ server.registerTool("setup_hooks", {
 server.registerTool("changes", {
     title: "Semantic Diff",
     description:
-        "Compare file or directory against git ref (default: HEAD). For files: shows added/removed/modified symbols at AST level. " +
-        "For directories: lists changed files with insertions/deletions stats. Use to understand what changed before committing.",
+        "Compare file or directory against git ref (default: HEAD). Shows added/removed/modified symbols or file stats.",
     inputSchema: z.object({
         path: z.string().describe("File or directory path"),
         compare_against: z.string().optional().describe('Git ref to compare against (default: "HEAD")'),
@@ -343,7 +372,7 @@ server.registerTool("bulk_replace", {
         "Search-and-replace across multiple files. Finds files by glob, applies ordered text replacements, returns per-file diffs. " +
         "Use dry_run:true to preview. For single-file rename, set glob to the filename.",
     inputSchema: z.object({
-        replacements: z.string().describe('JSON array of {old, new} pairs: [{"old":"foo","new":"bar"}]'),
+        replacements: z.union([z.string(), replacementPairsSchema]).describe('JSON array of {old, new} pairs: [{"old":"foo","new":"bar"}]'),
         glob: z.string().optional().describe('File glob (default: "**/*.{md,mjs,json,yml,ts,js}")'),
         path: z.string().optional().describe("Root directory (default: cwd)"),
         dry_run: flexBool().describe("Preview without writing (default: false)"),
@@ -353,8 +382,11 @@ server.registerTool("bulk_replace", {
 }, async (rawParams) => {
     try {
         const params = coerceParams(rawParams);
-        const replacements = JSON.parse(params.replacements);
-        if (!Array.isArray(replacements) || !replacements.length) throw new Error("replacements: non-empty JSON array of {old, new} required");
+        const raw = params.replacements;
+        let replacementsInput;
+        try { replacementsInput = typeof raw === "string" ? JSON.parse(raw) : raw; }
+        catch { throw new Error('replacements: invalid JSON. Expected: [{"old":"text","new":"replacement"}]'); }
+        const replacements = replacementPairsSchema.parse(replacementsInput);
         const result = bulkReplace(
             params.path || process.cwd(),
             params.glob || "**/*.{md,mjs,json,yml,ts,js}",

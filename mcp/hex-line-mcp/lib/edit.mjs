@@ -12,6 +12,7 @@ import { diffLines } from "diff";
 import { fnv1a, lineTag, parseChecksum, parseRef, rangeChecksum } from "@levnikolaevich/hex-common/text-protocol/hash";
 import { validatePath, normalizePath } from "./security.mjs";
 import { getGraphDB, callImpact, getRelativePath } from "./graph-enrich.mjs";
+import { MAX_DIFF_CHARS } from "./format.mjs";
 import {
     buildRangeChecksum,
     computeChangedRanges,
@@ -318,7 +319,9 @@ export function editFile(filePath, edits, opts = {}) {
         return null;
     };
 
-    for (const e of sorted) {
+    for (let _ei = 0; _ei < sorted.length; _ei++) {
+        const e = sorted[_ei];
+        try {
         if (e.set_line) {
             const { tag, line } = parseRef(e.set_line.anchor);
             const idx = locateOrConflict({ tag, line });
@@ -361,7 +364,7 @@ export function editFile(filePath, edits, opts = {}) {
             const actualStart = si + 1;
             const actualEnd = ei + 1;
             const rc = e.replace_lines.range_checksum;
-            if (!rc) throw new Error("range_checksum required for replace_lines. Read the range first via read_file, then pass its checksum.");
+            if (!rc) throw new Error("range_checksum required for replace_lines. Read the range first via read_file, then pass its checksum. The checksum range must cover start-to-end anchors (inclusive).");
 
             if (staleRevision && conflictPolicy === "conservative") {
                 const conflict = ensureRevisionContext(actualStart, actualEnd, si);
@@ -382,7 +385,7 @@ export function editFile(filePath, edits, opts = {}) {
                 if (csStart > actualStart || csEnd < actualEnd) {
                     const snip = buildErrorSnippet(origLines, actualStart - 1);
                     throw new Error(
-                        `CHECKSUM_RANGE_GAP: range ${csStart}-${csEnd} does not cover edit range ${actualStart}-${actualEnd}.\n\n` +
+                        `CHECKSUM_RANGE_GAP: checksum covers lines ${csStart}-${csEnd} but edit spans ${actualStart}-${actualEnd} (inclusive). Checksum range must fully contain the anchor range.\n\n` +
                         `Current content (lines ${snip.start}-${snip.end}):\n${snip.text}\n\n` +
                         `Tip: Use updated hashes above for retry.`
                     );
@@ -391,7 +394,7 @@ export function editFile(filePath, edits, opts = {}) {
                 const actualHex = actual?.split(":")[1];
                 if (!actual || csHex !== actualHex) {
                     const details =
-                        `CHECKSUM_MISMATCH: expected ${rc}, got ${actual}. File changed — re-read lines ${csStart}-${csEnd}.`;
+                        `CHECKSUM_MISMATCH: expected ${rc}, got ${actual}. Content at lines ${csStart}-${csEnd} differs from when you read it \u2014 re-read before editing.`;
                     if (conflictPolicy === "conservative") {
                         return conflictIfNeeded("stale_checksum", csStart - 1, actual, details);
                     }
@@ -444,6 +447,10 @@ export function editFile(filePath, edits, opts = {}) {
             if (txt === "" || txt === null) newLines = [];
             lines.splice(sliceStart, removeCount, ...newLines);
         }
+        } catch (editErr) {
+            if (sorted.length > 1) editErr.message = `Edit ${_ei + 1}/${sorted.length}: ${editErr.message}`;
+            throw editErr;
+        }
     }
 
     let content = lines.join("\n");
@@ -454,15 +461,31 @@ export function editFile(filePath, edits, opts = {}) {
         throw new Error("NOOP_EDIT: File already contains the desired content. No changes needed.");
     }
 
-    let diff = simpleDiff(origLines, content.split("\n"));
-    if (diff && diff.length > 80000) {
-        diff = diff.slice(0, 80000) + `\n... (diff truncated, ${diff.length} chars total)`;
+
+    const fullDiff = simpleDiff(origLines, content.split("\n"));
+    let displayDiff = fullDiff;
+    if (displayDiff && displayDiff.length > MAX_DIFF_CHARS) {
+        displayDiff = displayDiff.slice(0, MAX_DIFF_CHARS) + `\n... (diff truncated, ${displayDiff.length} chars total)`;
+    }
+
+    // Compute changed line range from fullDiff (used by post-edit + call impact)
+    const newLinesAll = content.split("\n");
+    let minLine = Infinity, maxLine = 0;
+    if (fullDiff) {
+        for (const dl of fullDiff.split("\n")) {
+            const m = dl.match(/^[+-](\d+)\|/);
+            if (m) {
+                const n = +m[1];
+                if (n < minLine) minLine = n;
+                if (n > maxLine) maxLine = n;
+            }
+        }
     }
 
     if (opts.dryRun) {
         let msg = `status: ${autoRebased ? "AUTO_REBASED" : "OK"}\nrevision: ${currentSnapshot.revision}\nfile: ${currentSnapshot.fileChecksum}\nDry run: ${filePath} would change (${content.split("\n").length} lines)`;
         if (staleRevision && hasBaseSnapshot) msg += `\nchanged_ranges: ${describeChangedRanges(changedRanges)}`;
-        if (diff) msg += `\n\nDiff:\n\`\`\`diff\n${diff}\n\`\`\``;
+        if (displayDiff) msg += `\n\nDiff:\n\`\`\`diff\n${displayDiff}\n\`\`\``;
         return msg;
     }
 
@@ -477,58 +500,38 @@ export function editFile(filePath, edits, opts = {}) {
         msg += `\nchanged_ranges: ${describeChangedRanges(changedRanges)}`;
     }
     msg += `\nUpdated ${filePath} (${content.split("\n").length} lines)`;
-    if (diff) msg += `\n\nDiff:\n\`\`\`diff\n${diff}\n\`\`\``;
 
+    // Post-edit context (before diff — always visible even if output truncated)
+    if (fullDiff && minLine <= maxLine) {
+        const ctxStart = Math.max(0, minLine - 6);
+        const ctxEnd = Math.min(newLinesAll.length, maxLine + 5);
+        const ctxLines = [];
+        const ctxHashes = [];
+        for (let i = ctxStart; i < ctxEnd; i++) {
+            const h = fnv1a(newLinesAll[i]);
+            ctxHashes.push(h);
+            ctxLines.push(`${lineTag(h)}.${i + 1}\t${newLinesAll[i]}`);
+        }
+        const ctxCs = rangeChecksum(ctxHashes, ctxStart + 1, ctxEnd);
+        msg += `\n\nPost-edit (lines ${ctxStart + 1}-${ctxEnd}):\n${ctxLines.join("\n")}\nchecksum: ${ctxCs}`;
+    }
+
+    // Call impact (before diff — usually visible)
     try {
         const db = getGraphDB(real);
         const relFile = db ? getRelativePath(real) : null;
-        if (db && relFile && diff) {
-            const diffLinesOut = diff.split("\n");
-            let minLine = Infinity, maxLine = 0;
-            for (const dl of diffLinesOut) {
-                const m = dl.match(/^[+-](\d+)\|/);
-                if (m) {
-                    const n = +m[1];
-                    if (n < minLine) minLine = n;
-                    if (n > maxLine) maxLine = n;
-                }
-            }
-            if (minLine <= maxLine) {
-                const affected = callImpact(db, relFile, minLine, maxLine);
-                if (affected.length > 0) {
-                    const list = affected.map(a => `${a.name} (${a.file}:${a.line})`).join(", ");
-                    msg += `\n\n⚠ Call impact: ${affected.length} callers in other files\n  ${list}`;
-                }
+        if (db && relFile && fullDiff && minLine <= maxLine) {
+            const affected = callImpact(db, relFile, minLine, maxLine);
+            if (affected.length > 0) {
+                const list = affected.map(a => `${a.name} (${a.file}:${a.line})`).join(", ");
+                msg += `\n\n\u26a0 Call impact: ${affected.length} callers in other files\n  ${list}`;
             }
         }
     } catch { /* silent */ }
 
-    const newLinesAll = content.split("\n");
-    if (diff) {
-        const diffArr = diff.split("\n");
-        let minLine = Infinity, maxLine = 0;
-        for (const dl of diffArr) {
-            const m = dl.match(/^[+-](\d+)\|/);
-            if (m) {
-                const n = +m[1];
-                if (n < minLine) minLine = n;
-                if (n > maxLine) maxLine = n;
-            }
-        }
-        if (minLine <= maxLine) {
-            const ctxStart = Math.max(0, minLine - 6);
-            const ctxEnd = Math.min(newLinesAll.length, maxLine + 5);
-            const ctxLines = [];
-            const ctxHashes = [];
-            for (let i = ctxStart; i < ctxEnd; i++) {
-                const h = fnv1a(newLinesAll[i]);
-                ctxHashes.push(h);
-                ctxLines.push(`${lineTag(h)}.${i + 1}\t${newLinesAll[i]}`);
-            }
-            const ctxCs = rangeChecksum(ctxHashes, ctxStart + 1, ctxEnd);
-            msg += `\n\nPost-edit (lines ${ctxStart + 1}-${ctxEnd}):\n${ctxLines.join("\n")}\nchecksum: ${ctxCs}`;
-        }
-    }
+    // Diff (last — safe to truncate by Claude Code)
+    if (displayDiff) msg += `\n\nDiff:\n\`\`\`diff\n${displayDiff}\n\`\`\``;
 
     return msg;
 }
+

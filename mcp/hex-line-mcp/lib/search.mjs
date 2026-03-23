@@ -9,13 +9,17 @@
  */
 
 import { spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { resolve, isAbsolute } from "node:path";
+import { existsSync } from "node:fs";
 import { fnv1a, lineTag, rangeChecksum } from "@levnikolaevich/hex-common/text-protocol/hash";
 import { getGraphDB, matchAnnotation, getRelativePath } from "./graph-enrich.mjs";
 import { normalizePath } from "./security.mjs";
 
 let rgBin = "rg";
-try { rgBin = (await import("@vscode/ripgrep")).rgPath; } catch { /* system rg */ }
+try {
+    rgBin = (await import("@vscode/ripgrep")).rgPath;
+    if (isAbsolute(rgBin) && !existsSync(rgBin)) rgBin = "rg";
+} catch { /* system rg */ }
 
 const DEFAULT_LIMIT = 100;
 const MAX_OUTPUT = 10 * 1024 * 1024; // 10 MB
@@ -49,7 +53,16 @@ function spawnRg(args) {
         child.stderr.on("data", (chunk) => { stderrBuf += chunk.toString("utf-8"); });
 
         child.on("error", (err) => {
-            reject(new Error(`rg spawn error: ${err.message}`));
+            if (err.code === "ENOENT") {
+                reject(new Error(
+                    `ripgrep not available. ` +
+                    `Reinstall dependencies so @vscode/ripgrep can provide its binary, ` +
+                    `or install system rg and add it to PATH. ` +
+                    `Attempted binary: "${rgBin}".`
+                ));
+            } else {
+                reject(new Error(`rg spawn error: ${err.message}`));
+            }
         });
 
         child.on("close", (code) => {
