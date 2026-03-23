@@ -193,7 +193,7 @@
         "./skills/ln-011-agent-installer",
         "./skills/ln-012-mcp-configurator",
         "./skills/ln-013-config-syncer",
-        "./skills/ln-014-agent-instructions-auditor",
+        "./skills/ln-014-agent-instructions-manager",
         "./skills/ln-020-codegraph"
       ]
     }

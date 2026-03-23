@@ -25,7 +25,7 @@ Sets up and maintains the multi-agent development environment. Installs CLI agen
 | ln-011-agent-installer | Install or update Codex CLI, Gemini CLI, and Claude Code |
 | ln-012-mcp-configurator | Register MCP servers and analyze token budget |
 | ln-013-config-syncer | Sync settings from Claude to Gemini/Codex |
-| ln-014-agent-instructions-auditor | Audit CLAUDE.md/AGENTS.md/GEMINI.md for quality |
+| ln-014-agent-instructions-manager | Create missing instruction files and audit all for quality |
 | ln-020-codegraph | Code knowledge graph for dependency analysis and impact checking |
 
 ## How it works

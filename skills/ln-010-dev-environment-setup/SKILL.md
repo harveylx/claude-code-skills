@@ -1,6 +1,6 @@
 ---
 name: ln-010-dev-environment-setup
-description: "Installs agents, configures MCP servers, syncs configs, audits instructions. Use after setup or when agents/MCP need alignment."
+description: "Installs agents, configures MCP servers, syncs configs, creates and audits instructions. Use after setup or when agents/MCP need alignment."
 disable-model-invocation: true
 license: MIT
 ---
@@ -12,7 +12,7 @@ license: MIT
 **Type:** L2 Domain Coordinator
 **Category:** 0XX Shared
 
-Single-pass coordinator that installs CLI agents, configures MCP servers, syncs configs across agents, and audits instruction files. Delegates to 4 specialized workers.
+Single-pass coordinator that installs CLI agents, configures MCP servers, syncs configs across agents, and creates/audits instruction files. Delegates to 4 specialized workers. **Runs all phases in one uninterrupted pass — no stopping between workers.**
 
 ## When to Use This Skill
 
@@ -65,15 +65,15 @@ Skill(skill: "ln-011-agent-installer", args: "{OS} {disabled_flags} {dry_run}")
 
 Result: CLI agents (Codex, Gemini, Claude) installed and verified. Status table displayed by worker.
 
-### Phase 2: Configure (sequential)
+### Phase 2: Configure
 
-Invoke 3 workers via Skill tool sequentially. Pass OS info, disabled flags, and dry_run.
+Invoke 3 workers via Skill tool in order. **Do NOT stop between invocations — run the entire pipeline in a single pass.**
 
 | Step | Worker | Responsibility | Args |
 |------|--------|---------------|------|
 | 2a | ln-012-mcp-configurator | Install MCP packages, register servers, hooks, permissions, migrations | `{OS} {dry_run}` |
 | 2b | ln-013-config-syncer | Sync Claude settings to Gemini/Codex via symlinks & format conversion | `{OS} {disabled_flags} {targets} {dry_run}` |
-| 2c | ln-014-agent-instructions-auditor | Audit CLAUDE.md, AGENTS.md, GEMINI.md for quality and consistency | `{instruction_file_list} {dry_run}` |
+| 2c | ln-014-agent-instructions-manager | Create missing instruction files and audit all for quality and consistency | `{instruction_file_list} {dry_run}` |
 
 **Invocation (each step):**
 ```
@@ -116,7 +116,7 @@ Full verification pass after all workers complete. Probes ALL installed componen
 | # | Check | Pass | Fail | Source |
 |---|-------|------|------|--------|
 | 1 | MCP servers <=5 | <=25K tokens | WARN budget exceeded | 3b |
-| 2 | CLAUDE.md exists | Found | SUGGEST creating | 3d |
+| 2 | CLAUDE.md exists | Found | Created by ln-014 | 3d |
 | 3 | CLAUDE.md compact | <100 lines | INFO consider compacting | 3d |
 | 4 | No timestamps in CLAUDE.md | Clean | WARN prompt cache breakage | 3d |
 | 5 | Hooks configured and enabled | All hooks active | WARN missing hooks | 3c |
@@ -168,9 +168,9 @@ State: docs/environment_state.json
 | 1 | ln-011-agent-installer | Shared (Skill tool) — install/update CLI agents |
 | 2a | ln-012-mcp-configurator | Shared (Skill tool) — MCP packages, servers, hooks, permissions |
 | 2b | ln-013-config-syncer | Shared (Skill tool) — sync settings to Gemini/Codex |
-| 2c | ln-014-agent-instructions-auditor | Shared (Skill tool) — audit instruction files |
+| 2c | ln-014-agent-instructions-manager | Shared (Skill tool) — create missing + audit instruction files |
 
-**All workers:** Invoke via Skill tool sequentially — workers see coordinator context.
+**All workers:** Invoke via Skill tool in order. **Do NOT stop or pause between invocations — execute the entire pipeline from Phase 0 to Phase 3 in a single uninterrupted pass.**
 
 **TodoWrite format (mandatory):**
 ```
@@ -178,7 +178,7 @@ State: docs/environment_state.json
 - Invoke ln-011-agent-installer (pending)
 - Invoke ln-012-mcp-configurator (pending)
 - Invoke ln-013-config-syncer (pending)
-- Invoke ln-014-agent-instructions-auditor (pending)
+- Invoke ln-014-agent-instructions-manager (pending)
 - Verify & report (pending)
 ```
 
@@ -192,6 +192,7 @@ State: docs/environment_state.json
 | 4 | Idempotent | Safe to run multiple times. Already-correct state is skipped |
 | 5 | Fail gracefully | One worker failure does not block others. Report per-area status independently |
 | 6 | Verify last | All probes and checks run AFTER workers complete, not before |
+| 7 | Single-pass, no stops | Execute ALL phases (0→3) in one uninterrupted run. Never pause between workers, never ask for confirmation mid-flow. TodoWrite tracks progress but does NOT create stopping points |
 
 ## Anti-Patterns
 
@@ -202,6 +203,7 @@ State: docs/environment_state.json
 | Block on single worker failure | Continue with remaining workers, report failure |
 | Execute worker tasks inline | Invoke workers via Skill tool |
 | Mark worker steps done without Skill invocation | Each worker MUST be invoked via Skill tool |
+| Stop or pause between workers | Execute all phases in one continuous pass |
 
 ## Meta-Analysis
 
@@ -214,7 +216,7 @@ Skill type: `execution-orchestrator`. Analyze this session per protocol §7. Out
 
 - [ ] OS and environment detected (Phase 0)
 - [ ] CLI agents installed and verified via ln-011 (Phase 1)
-- [ ] MCP configured via ln-012, configs synced via ln-013, instructions audited via ln-014 (Phase 2)
+- [ ] MCP configured via ln-012, configs synced via ln-013, instructions created/audited via ln-014 (Phase 2)
 - [ ] Full verification pass completed (Phase 3)
 - [ ] Best practices audit table shown with 9 checks (Phase 3e)
 - [ ] `docs/environment_state.json` written (Phase 3f)

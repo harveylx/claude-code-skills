@@ -48,20 +48,51 @@ Install → Register & Configure → Hooks → Permissions → Migrate → Repor
 
 ### Phase 1: Install & Verify MCP Packages
 
-For each hex MCP package, single pass: install then verify.
+Smart install: check MCP status first, then npm versions. Skip what's already working.
 
-| Package | Install | Verify |
-|---------|---------|--------|
-| hex-line | `npm i -g @levnikolaevich/hex-line-mcp` | `npm ls -g @levnikolaevich/hex-line-mcp --json` |
-| hex-ssh | `npm i -g @levnikolaevich/hex-ssh-mcp` | `npm ls -g @levnikolaevich/hex-ssh-mcp --json` |
-| hex-graph | `npm i -g @levnikolaevich/hex-graph-mcp` | `npm ls -g @levnikolaevich/hex-graph-mcp --json` |
+**Step 1a: Check MCP server status**
+
+Run `claude mcp list` → parse each hex server:
+
+| Server | Status | Action |
+|--------|--------|--------|
+| Registered + Connected | Working | Skip install, go to Step 1b (update check) |
+| Registered + Disconnected | Broken | Reinstall npm package (Step 1c) |
+| Not registered | Missing | Full install (Step 1c) + register in Phase 2 |
+
+**Step 1b: Check for npm updates (connected servers only)**
+
+Run `npm outdated -g @levnikolaevich/{pkg}` for each connected server's package:
+
+| Result | Action |
+|--------|--------|
+| No output (up to date) | SKIP — report "current: vX.Y.Z" |
+| Shows newer version | UPDATE — `npm i -g @levnikolaevich/{pkg}` |
+
+**Step 1c: Install missing / broken packages**
+
+For servers not found or disconnected in Step 1a:
+1. `npm i -g @levnikolaevich/{pkg}`
+2. Verify: `npm ls -g @levnikolaevich/{pkg} --json`
+
+**Decision flow per server:**
+
+```
+claude mcp list → connected? ─── yes ──→ npm outdated → outdated? ── yes ──→ npm i -g (update)
+                       │                                    │
+                       no                                   no → SKIP
+                       │
+                       ▼
+                 npm i -g (install)
+```
 
 **Skip conditions:**
 
 | Condition | Action |
-|-----------|--------|
+|-----------|---------|
 | `disabled: true` | SKIP |
-| `dry_run: true` | Show planned command |
+| `dry_run: true` | Show planned commands |
+| Connected + up to date | SKIP, report version |
 
 ### Phase 2: Register & Configure
 

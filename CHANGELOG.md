@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-03-23
+
+- **ln-014 auditor → manager** — renamed ln-014-agent-instructions-auditor to ln-014-agent-instructions-manager; new Phase 2 creates missing CLAUDE.md (from ln-111 template), AGENTS.md and GEMINI.md (derived with transformation rules)
+- **ln-010 non-stop execution** — new Critical Rule #7 and Anti-Pattern enforce single-pass pipeline with no pausing between workers
+- **ln-012 smart MCP install** — Phase 1 now checks `claude mcp list` first; connected servers skip install, only `npm outdated` for updates; full install only for missing/broken servers
+
 ## 2026-03-22
 
 - **GitHub Pages MCP section** — hex-line, hex-ssh, hex-graph MCP servers showcased on site index with dedicated detail pages (`site/mcp/`)

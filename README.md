@@ -571,7 +571,7 @@ claude-code-skills/                      # MARKETPLACE
 |   |-- ln-011-agent-installer/        # Install/update Codex, Gemini & Claude CLI
 |   |-- ln-012-mcp-configurator/       # MCP server setup & budget analysis
 |   |-- ln-013-config-syncer/          # Sync settings to Gemini/Codex
-|   |-- ln-014-agent-instructions-auditor/ # Audit CLAUDE.md/AGENTS.md/GEMINI.md
+|   |-- ln-014-agent-instructions-manager/ # Create + audit CLAUDE.md/AGENTS.md/GEMINI.md
 |-- ln-020-codegraph/                  # Code knowledge graph for dependency analysis & impact checking
 |
 |  └──────────────────────────────────────────────┘
