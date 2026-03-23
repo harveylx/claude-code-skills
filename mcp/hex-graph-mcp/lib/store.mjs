@@ -9,7 +9,7 @@
 
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { existsSync, unlinkSync, mkdirSync } from "node:fs";
 
 const SCHEMA_VERSION = 1;
@@ -984,15 +984,29 @@ class Store {
 
 export function resolveStore(path) {
     if (path) {
-        const store = _stores.get(path);
+        const abs = resolve(path);
+        // 1. Exact match in memory
+        const store = _stores.get(abs);
         if (store) return store;
+        // 2. Prefix match: abs is subdirectory of indexed project
         for (const [key, s] of _stores) {
-            if (path.startsWith(key) || key.startsWith(path)) return s;
+            if (abs.startsWith(key + "/") || abs.startsWith(key + "\\")) return s;
+        }
+        // 3. Auto-open persisted DB from disk (readonly probe first)
+        const dbPath = join(abs, ".codegraph", "index.db");
+        if (existsSync(dbPath)) {
+            try {
+                const probe = new Database(dbPath, { readonly: true });
+                const ver = probe.pragma("user_version", { simple: true });
+                probe.close();
+                if (ver === SCHEMA_VERSION) {
+                    return getStore(abs);
+                }
+            } catch { /* corrupt DB — return null, don't delete */ }
         }
     }
-    const first = [..._stores.values()][0];
-    if (!first) return null;
-    return first;
+    // 4. Fallback: first available store (for tools that omit path)
+    return _stores.values().next().value ?? null;
 }
 
 function serializeNode(node) {

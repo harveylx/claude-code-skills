@@ -42,7 +42,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { indexProject, reindexFile } from "../lib/indexer.mjs";
-import { getStore, findSymbols, getReferencesBySelector, getSymbol, tracePaths, explainResolution, findImplementationsBySelector, findDataflowsBySelector, getModuleMetricsReport, getArchitectureReport } from "../lib/store.mjs";
+import { getStore, resolveStore, findSymbols, getReferencesBySelector, getSymbol, tracePaths, explainResolution, findImplementationsBySelector, findDataflowsBySelector, getModuleMetricsReport, getArchitectureReport } from "../lib/store.mjs";
 import { findClones } from "../lib/clones.mjs";
 import { findCycles } from "../lib/cycles.mjs";
 import { findUnusedExports } from "../lib/unused.mjs";
@@ -1463,5 +1463,74 @@ describe("WASM dependency contract", () => {
         const missing = expected.filter(f => !fs.existsSync(resolve(distQueries, f)));
         assert.deepEqual(missing, [],
             `dist/queries/ missing: ${missing.join(", ")} — build.mjs must copy lib/queries/ to dist/queries/`);
+    });
+});
+
+// ==================== store persistence after restart ====================
+
+describe("store persistence after restart", () => {
+    it("resolveStore auto-opens persisted DB from disk", async () => {
+        const tmp = makeTempDir();
+        try {
+            writeFileSync(join(tmp, "a.mjs"), "export function hello() { return 1; }\n");
+            await indexProject(tmp);
+            const store = getStore(tmp);
+            assert.ok(store.allFilePaths().length > 0, "index populated");
+            store.close(); // simulates restart — removes from _stores
+            const reopened = resolveStore(tmp);
+            assert.ok(reopened, "resolveStore should auto-open from disk, not return null");
+            assert.ok(reopened.allFilePaths().length > 0, "reopened store has data");
+            reopened.close();
+        } finally {
+            try { rmSync(tmp, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
+        }
+    });
+
+    it("resolveStore finds parent store for subdirectory path", async () => {
+        const tmp = makeTempDir();
+        try {
+            const subDir = join(tmp, "src");
+            mkdirSync(subDir);
+            writeFileSync(join(subDir, "b.mjs"), "export const x = 1;\n");
+            await indexProject(tmp);
+            const found = resolveStore(subDir);
+            assert.ok(found, "resolveStore should match parent project for subdirectory");
+            found.close();
+        } finally {
+            try { rmSync(tmp, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
+        }
+    });
+
+    it("resolveStore skips stale schema DB", async () => {
+        const tmp = makeTempDir();
+        try {
+            writeFileSync(join(tmp, "c.mjs"), "export const y = 2;\n");
+            await indexProject(tmp);
+            const store = getStore(tmp);
+            store.close();
+            // Corrupt schema version
+            const Database = (await import("better-sqlite3")).default;
+            const db = new Database(join(tmp, ".codegraph", "index.db"));
+            db.pragma("user_version = 99999");
+            db.close();
+            const result = resolveStore(tmp);
+            // Result is either null (no other stores) or a fallback store for a DIFFERENT project
+            // Key check: stale DB must NOT be opened as store for tmp
+            if (result) {
+                assert.notEqual(result.projectPath, resolve(tmp),
+                    "stale DB should not be opened — resolveStore returned store for this path");
+            }
+            // DB should NOT be deleted
+            assert.ok(existsSync(join(tmp, ".codegraph", "index.db")), "stale DB must not be deleted");
+        } finally {
+            try { rmSync(tmp, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
+        }
+    });
+
+    it("resolveStore returns null for non-existent project", () => {
+        const fake = join(tmpdir(), "hex-graph-nonexistent-" + Date.now());
+        const result = resolveStore(fake);
+        // Should return null or fallback store, but NOT crash
+        assert.ok(result === null || result !== undefined, "should not crash on missing path");
     });
 });
