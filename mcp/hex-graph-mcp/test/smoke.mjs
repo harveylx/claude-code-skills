@@ -1,5 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ==================== coerce ====================
 
@@ -1420,5 +1426,34 @@ describe("no self-edge for top-level references", () => {
         } finally {
             try { rmSync(tmp, { recursive: true, force: true }); } catch { /* Windows WAL lock */ }
         }
+    });
+});
+
+// ==================== WASM dependency contract ====================
+
+describe("WASM dependency contract", () => {
+    it("package.json declares tree-sitter runtime deps", () => {
+        const pkg = JSON.parse(fs.readFileSync(
+            resolve(__dirname, "../package.json"), "utf8"
+        ));
+        const deps = pkg.dependencies || {};
+        assert.ok(deps["web-tree-sitter"],
+            "web-tree-sitter missing from dependencies — index_project will fail after npm install");
+        assert.ok(deps["tree-sitter-wasms"],
+            "tree-sitter-wasms missing from dependencies — WASM grammars unavailable after npm install");
+    });
+
+    it("WASM files exist for all supported grammars", () => {
+        const require = createRequire(import.meta.url);
+        const pkgPath = require.resolve("tree-sitter-wasms/package.json");
+        const grammars = [
+            "javascript", "typescript", "tsx", "python", "go", "rust",
+            "java", "c", "cpp", "c_sharp", "ruby", "php", "kotlin", "swift", "bash"
+        ];
+        const missing = grammars.filter(g => {
+            const wasm = resolve(pkgPath, "..", "out", `tree-sitter-${g}.wasm`);
+            return !fs.existsSync(wasm);
+        });
+        assert.deepEqual(missing, [], `WASM files missing for: ${missing.join(", ")}`);
     });
 });

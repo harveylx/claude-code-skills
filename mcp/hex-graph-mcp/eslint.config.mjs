@@ -1,4 +1,5 @@
 export default [
+    { ignores: ["dist/", "benchmark/"] },
     {
         files: ["**/*.mjs"],
         languageOptions: {

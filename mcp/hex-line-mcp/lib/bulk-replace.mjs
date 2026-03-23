@@ -1,4 +1,4 @@
-import { writeFileSync, readdirSync, statSync } from "node:fs";
+import { writeFileSync, readdirSync } from "node:fs";
 import { resolve, relative, join } from "node:path";
 import { simpleDiff } from "./edit.mjs";
 import { normalizePath } from "./security.mjs";

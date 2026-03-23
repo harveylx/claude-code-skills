@@ -141,7 +141,7 @@ export function computeChangedRanges(oldLines, newLines) {
             continue;
         }
 
-        oldNum += count;
+        oldNum += count; // eslint-disable-line no-unused-vars -- tracks position in old text
         newNum += count;
     }
 

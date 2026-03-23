@@ -14,7 +14,7 @@
  */
 
 import { z } from "zod";
-const version = typeof __HEX_VERSION__ !== "undefined" ? __HEX_VERSION__
+const version = typeof __HEX_VERSION__ !== "undefined" ? __HEX_VERSION__ // eslint-disable-line no-undef
   : (await import("node:module")).createRequire(import.meta.url)("./package.json").version;
 import { createServerRuntime } from "@levnikolaevich/hex-common/runtime/mcp-bootstrap";
 import { flexBool, flexNum } from "@levnikolaevich/hex-common/runtime/schema";

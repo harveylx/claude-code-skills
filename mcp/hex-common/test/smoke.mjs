@@ -5,6 +5,10 @@ import { fnv1a, lineTag, rangeChecksum, parseChecksum, parseRef } from "../src/t
 import { deduplicateLines, smartTruncate } from "../src/output/normalize.mjs";
 import { coerceParams } from "../src/runtime/coerce.mjs";
 import { grammarForExtension, isSupportedExtension } from "../src/parser/languages.mjs";
+import { getParser, getLanguage } from "../src/parser/tree-sitter.mjs";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { resolve } from "node:path";
 
 test("hash protocol stays stable", () => {
     const hash = fnv1a("const x = 1;");
@@ -22,4 +26,29 @@ test("runtime and parser helpers are stable", () => {
     assert.equal(coerceParams({ path: "a" }).path, "a");
     assert.equal(grammarForExtension(".ts"), "typescript");
     assert.equal(isSupportedExtension(".tsx"), true);
+});
+
+test("tree-sitter-wasms: WASM files exist for all supported grammars", () => {
+    const require = createRequire(import.meta.url);
+    const pkgPath = require.resolve("tree-sitter-wasms/package.json");
+    const grammars = [
+        "javascript", "typescript", "tsx", "python", "go", "rust",
+        "java", "c", "cpp", "c_sharp", "ruby", "php", "kotlin", "swift", "bash"
+    ];
+    const missing = grammars.filter(g => {
+        const wasm = resolve(pkgPath, "..", "out", `tree-sitter-${g}.wasm`);
+        return !existsSync(wasm);
+    });
+    assert.deepEqual(missing, [], `WASM files missing for: ${missing.join(", ")}`);
+});
+
+test("tree-sitter: parser loads and parses JS source", async () => {
+    const parser = await getParser();
+    assert.ok(parser, "getParser() returned null");
+    const lang = await getLanguage("javascript");
+    assert.ok(lang, "getLanguage('javascript') returned null");
+    parser.setLanguage(lang);
+    const tree = parser.parse("const x = 1;");
+    assert.ok(tree.rootNode, "parse returned no rootNode");
+    assert.equal(tree.rootNode.type, "program");
 });

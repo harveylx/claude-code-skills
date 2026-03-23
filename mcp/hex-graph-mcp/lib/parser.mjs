@@ -18,7 +18,7 @@ import {
     normalizeTokens, computeRawHash, computeNormHash,
     ngrams, minhashSignature, lshBands,
 } from "./clone-hash.mjs";
-import { resolve, extname, dirname, join } from "node:path";
+import { extname, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // --- Language configs ---
