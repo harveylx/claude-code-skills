@@ -14,11 +14,32 @@ import { rememberSnapshot } from "./revisions.mjs";
 
 const DEFAULT_LIMIT = 2000;
 
+function parseRangeEntry(entry, total) {
+    if (typeof entry === "string") {
+        const match = entry.trim().match(/^(\d+)(?:-(\d*)?)?$/);
+        if (!match) throw new Error(`Invalid range "${entry}". Use "10", "10-25", or "10-"`);
+        const start = Number(match[1]);
+        const end = match[2] === undefined || match[2] === "" ? total : Number(match[2]);
+        return { start, end };
+    }
+
+    if (!entry || typeof entry !== "object") {
+        throw new Error("ranges entries must be strings or {start,end} objects");
+    }
+
+    const start = Number(entry.start ?? 1);
+    const end = entry.end === undefined || entry.end === null ? total : Number(entry.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+        throw new Error("ranges entries must contain numeric start/end values");
+    }
+    return { start, end };
+}
+
 /**
  * Read a file with hash-annotated lines.
  *
  * @param {string} filePath
- * @param {object} opts - { offset, limit, plain, ranges }
+ * @param {object} opts - { offset, limit, plain, ranges, includeGraph }
  * @returns {string} formatted output
  */
 export function readFile(filePath, opts = {}) {
@@ -39,10 +60,13 @@ export function readFile(filePath, opts = {}) {
     // Determine ranges to read
     let ranges;
     if (opts.ranges && opts.ranges.length > 0) {
-        ranges = opts.ranges.map((r) => ({
-            start: Math.max(1, r.start || 1),
-            end: Math.min(total, r.end || total),
-        }));
+        ranges = opts.ranges.map((entry) => {
+            const parsed = parseRangeEntry(entry, total);
+            return {
+                start: Math.max(1, parsed.start),
+                end: Math.min(total, parsed.end),
+            };
+        });
     } else {
         const startLine = Math.max(1, opts.offset || 1);
         const maxLines = (opts.limit && opts.limit > 0) ? opts.limit : DEFAULT_LIMIT;
@@ -86,28 +110,27 @@ export function readFile(filePath, opts = {}) {
 
         // Range checksum (only for lines actually shown)
         const cs = rangeChecksum(lineHashes, range.start, actualEnd);
-        parts.push(`\nchecksum: ${cs}`);
+        parts.push(`checksum: ${cs}`);
 
         if (cappedAtLine) break;
     }
 
     // Header
     const sizeKB = (stat.size / 1024).toFixed(1);
-    const mtime = stat.mtime;
-    const ago = relativeTime(mtime);
-    let header = `File: ${filePath} (${total} lines, ${sizeKB}KB, ${ago})`;
+    const ago = relativeTime(stat.mtime);
+    let meta = `${total} lines, ${sizeKB}KB, ${ago}`;
     if (ranges.length === 1) {
         const r = ranges[0];
         if (r.start > 1 || r.end < total) {
-            header += ` [showing ${r.start}-${r.end}]`;
+            meta += `, showing ${r.start}-${r.end}`;
         }
         if (r.end < total) {
-            header += ` (${total - r.end} more below)`;
+            meta += `, ${total - r.end} more below`;
         }
     }
 
-    // Graph enrichment (optional — silent if no DB)
-    const db = getGraphDB(real);
+    // Graph enrichment (opt-in)
+    const db = opts.includeGraph ? getGraphDB(real) : null;
     const relFile = db ? getRelativePath(real) : null;
     let graphLine = "";
     if (db && relFile) {
@@ -122,12 +145,7 @@ export function readFile(filePath, opts = {}) {
     }
 
     let result =
-        `${header}${graphLine}\nrevision: ${snapshot.revision}\nfile: ${snapshot.fileChecksum}\n\n\`\`\`\n${parts.join("\n")}\n\`\`\``;
-
-    // Auto-hint for large files read from start without offset
-    if (total > 200 && (!opts.offset || opts.offset <= 1) && !cappedAtLine) {
-        result += `\n\n\u26A1 Tip: This file has ${total} lines. Use outline first, then read_file with offset/limit for 75% fewer tokens.`;
-    }
+        `File: ${filePath}${graphLine}\nmeta: ${meta}\nrevision: ${snapshot.revision}\nfile: ${snapshot.fileChecksum}\n\n${parts.join("\n\n")}`;
 
     // Character cap notice
     if (cappedAtLine) {

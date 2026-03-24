@@ -304,9 +304,51 @@ describe("edit business logic", () => {
 
             assert.ok(result.includes("status: AUTO_REBASED"), "Auto-rebase status returned");
             assert.ok(result.includes("changed_ranges:"), "Changed ranges included");
+            assert.ok(result.includes("remapped_refs:"), "Remapped refs returned");
+            assert.ok(result.includes(`${startTag}.3 -> ${startTag}.4`), "Old anchor mapped to relocated line");
             const written = fs.readFileSync(tmp, "utf-8");
             assert.ok(written.includes("inserted"), "Prior insert preserved");
             assert.ok(written.includes("updatedB"), "Target block updated without reread");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("conflict output includes remapped refs when some anchors relocate before conflict", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const { fnv1a, lineTag, rangeChecksum } = await import("../lib/hash.mjs");
+        const tmp = "d:/tmp/hex-test-conflict-remap.js";
+        const content = "head1\nhead2\ntargetA\ntargetB\ntail\n";
+        fs.writeFileSync(tmp, content);
+        try {
+            const lines = content.split("\n");
+            const baseRead = readFile(tmp, { offset: 1, limit: 5 });
+            const baseRevision = baseRead.match(/revision: (\S+)/)?.[1];
+            assert.ok(baseRevision, "read_file returns revision");
+
+            const headTag = lineTag(fnv1a(lines[0]));
+            const targetBTag = lineTag(fnv1a(lines[3]));
+            editFile(tmp, [
+                { insert_after: { anchor: `${headTag}.1`, text: "inserted" } },
+                { set_line: { anchor: `${targetBTag}.4`, new_text: "changedTargetB" } },
+            ]);
+
+            const startTag = lineTag(fnv1a(lines[2]));
+            const endTag = lineTag(fnv1a(lines[3]));
+            const rc = rangeChecksum([fnv1a(lines[2]), fnv1a(lines[3])], 3, 4);
+            const result = editFile(tmp, [{
+                replace_lines: {
+                    start_anchor: `${startTag}.3`,
+                    end_anchor: `${endTag}.4`,
+                    new_text: "targetA\nupdatedB",
+                    range_checksum: rc,
+                }
+            }], { baseRevision, conflictPolicy: "conservative" });
+
+            assert.ok(result.includes("status: CONFLICT"), "Conflict status returned");
+            assert.ok(result.includes("remapped_refs:"), "Conflict shows relocated refs");
+            assert.ok(result.includes(`${startTag}.3 -> ${startTag}.4`), "Relocated start anchor reported");
         } finally {
             fs.unlinkSync(tmp);
         }
@@ -377,6 +419,30 @@ describe("edit business logic", () => {
             const written = fs.readFileSync(tmp, "utf-8");
             assert.ok(written.includes("return 42;"), "New block content written");
             assert.ok(!written.includes("const b = 2;"), "Old interior removed");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("sanitizes noisy LLM edit payload before apply", async () => {
+        const { editFile } = await import("../lib/edit.mjs");
+        const { fnv1a, lineTag } = await import("../lib/hash.mjs");
+        const tmp = "d:/tmp/hex-test-cleanup.js";
+        const content = "const one = 1;\nconst two = 2;\n";
+        fs.writeFileSync(tmp, content);
+        try {
+            const lines = content.split("\n");
+            const anchor = `${lineTag(fnv1a(lines[0]))}.1`;
+            editFile(tmp, [{
+                insert_after: {
+                    anchor,
+                    text: "+ab.2\tconst inserted = 3;\n+cd.3\tconst total = one + two + inserted;",
+                }
+            }]);
+            const written = fs.readFileSync(tmp, "utf-8");
+            assert.ok(written.includes("const inserted = 3;"), "Anchor prefix removed");
+            assert.ok(written.includes("const total = one + two + inserted;"), "Diff markers removed");
+            assert.ok(!written.includes("ab.2\t"), "No anchor echo remains");
         } finally {
             fs.unlinkSync(tmp);
         }
@@ -458,8 +524,11 @@ describe("read_file output", () => {
         fs.writeFileSync(tmp, "const x = 1;\n");
         try {
             const result = readFile(tmp);
+            assert.match(result, /^File: .+/m, "Read includes file header");
+            assert.match(result, /^meta: .+/m, "Read includes compact metadata");
             assert.match(result, /revision: \S+/, "Read includes revision");
             assert.match(result, /file: 1-\d+:[0-9a-f]{8}/, "Read includes file checksum");
+            assert.ok(!result.includes("```"), "Read output is compact text, not fenced block");
         } finally {
             fs.unlinkSync(tmp);
         }
@@ -487,27 +556,16 @@ describe("read_file output", () => {
         assert.ok(!result.includes("OUTPUT_CAPPED"), "No cap for normal file");
     });
 
-    it("auto-hint for large files read from start", async () => {
+    it("supports string and object ranges", async () => {
         const { readFile } = await import("../lib/read.mjs");
-        const tmp = "d:/tmp/hex-test-large.js";
-        // 300 short lines — over 200 threshold
-        fs.writeFileSync(tmp, Array.from({ length: 300 }, (_, i) => `line ${i}`).join("\n"));
+        const tmp = "d:/tmp/hex-test-ranges.js";
+        fs.writeFileSync(tmp, Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n"));
         try {
-            const result = readFile(tmp);
-            assert.ok(result.includes("Tip:"), "Auto-hint present for 300-line file");
-            assert.ok(result.includes("outline"), "Hint mentions outline");
-        } finally {
-            fs.unlinkSync(tmp);
-        }
-    });
-
-    it("no auto-hint when using offset", async () => {
-        const { readFile } = await import("../lib/read.mjs");
-        const tmp = "d:/tmp/hex-test-offset.js";
-        fs.writeFileSync(tmp, Array.from({ length: 300 }, (_, i) => `line ${i}`).join("\n"));
-        try {
-            const result = readFile(tmp, { offset: 50, limit: 20 });
-            assert.ok(!result.includes("Tip:"), "No hint when using offset");
+            const result = readFile(tmp, { ranges: ["2-3", { start: 10, end: 11 }] });
+            assert.ok(result.includes(".2\tline 2"), "String range is included");
+            assert.ok(result.includes(".10\tline 10"), "Object range is included");
+            const checksumMatches = result.match(/checksum: \d+-\d+:[0-9a-f]{8}/g) || [];
+            assert.equal(checksumMatches.length, 2, "Each range gets its own checksum");
         } finally {
             fs.unlinkSync(tmp);
         }
@@ -541,7 +599,7 @@ describe("graph enrichment", () => {
         try {
             await indexGraphRepo(repo);
 
-            const readResult = readFile(join(repo, "a.mjs"));
+            const readResult = readFile(join(repo, "a.mjs"), { includeGraph: true });
             assert.ok(readResult.includes("\nGraph:"), "Graph header present");
             assert.ok(readResult.includes("foo [function 0↓ 1↑]"), "Graph header uses annotation contract");
 
@@ -578,8 +636,8 @@ describe("graph enrichment", () => {
             await indexGraphRepo(repoB);
             _resetGraphDBCache();
 
-            const readA = readFile(join(repoA, "a.mjs"));
-            const readB = readFile(join(repoB, "b.mjs"));
+            const readA = readFile(join(repoA, "a.mjs"), { includeGraph: true });
+            const readB = readFile(join(repoB, "b.mjs"), { includeGraph: true });
 
             assert.ok(readA.includes("alpha [function 0↓ 1↑]"), "Repo A uses its own graph");
             assert.ok(!readA.includes("beta [function"), "Repo A does not leak repo B graph");
@@ -622,13 +680,14 @@ describe("grep_search output modes", () => {
     it("files mode returns only paths, count mode returns counts", async () => {
         const { grepSearch } = await import("../lib/search.mjs");
         const files = await grepSearch("export", { path: CWD + "/lib", output: "files" });
-        assert.ok(files.includes("```"), "should be in code fence");
+        assert.ok(!files.includes("```"), "files mode is plain text");
         assert.ok(!files.includes(">>"), "files mode has no hash annotations");
         assert.ok(files.includes("search.mjs") || files.includes("hash.mjs"), "should list files");
 
         const count = await grepSearch("export", { path: CWD + "/lib", output: "count" });
         assert.ok(count.includes(":"), "count mode has file:N format");
         assert.ok(!count.includes(">>"), "count mode has no hash annotations");
+        assert.ok(!count.includes("```"), "count mode is plain text");
     });
 
     it("content mode returns checksums per group", async () => {
@@ -678,8 +737,8 @@ describe("grep_search new params", () => {
         // '.' in regex matches any char; in literal mode matches only '.'
         const regex = await grepSearch(".", { path: CWD + "/lib/hash.mjs", plain: true });
         const literal = await grepSearch(".", { path: CWD + "/lib/hash.mjs", plain: true, literal: true });
-        const regexCount = regex.split("\n").filter(l => l.trim() && !l.startsWith("```")).length;
-        const litCount = literal.split("\n").filter(l => l.trim() && !l.startsWith("```")).length;
+        const regexCount = regex.split("\n").filter(l => l.trim()).length;
+        const litCount = literal.split("\n").filter(l => l.trim()).length;
         assert.ok(regexCount > litCount, `regex (${regexCount}) should match more than literal (${litCount})`);
     });
 });
@@ -940,6 +999,26 @@ describe("hook — Read config exception", () => {
         const r = await runHook("PreToolUse", "Read", { file_path: "src/index.ts" });
         assert.notEqual(r.code, 0);
     });
+    it("allows partial built-in Read on a small file", async () => {
+        const tmp = `d:/tmp/hex-hook-small-read-${Date.now()}.ts`;
+        fs.writeFileSync(tmp, "line 1\nline 2\nline 3\n");
+        try {
+            const r = await runHook("PreToolUse", "Read", { file_path: tmp, offset: 1, limit: 2 });
+            assert.equal(r.code, 0);
+        } finally {
+            fs.rmSync(tmp, { force: true });
+        }
+    });
+    it("blocks full built-in Read on a large file", async () => {
+        const tmp = `d:/tmp/hex-hook-large-read-${Date.now()}.ts`;
+        fs.writeFileSync(tmp, Array.from({ length: 1000 }, () => "const value = 1234567890;").join("\n"));
+        try {
+            const r = await runHook("PreToolUse", "Read", { file_path: tmp });
+            assert.notEqual(r.code, 0);
+        } finally {
+            fs.rmSync(tmp, { force: true });
+        }
+    });
     it("allows image.png (binary)", async () => {
         const r = await runHook("PreToolUse", "Read", { file_path: "image.png" });
         assert.equal(r.code, 0);
@@ -973,6 +1052,41 @@ describe("hook — regressions", () => {
     it("allows # hex-confirmed bypass", async () => {
         const r = await runHook("PreToolUse", "Bash", { command: "rm -rf / # hex-confirmed" });
         assert.equal(r.code, 0);
+    });
+    it("allows small built-in Edit on a small file", async () => {
+        const tmp = `d:/tmp/hex-hook-small-edit-${Date.now()}.ts`;
+        fs.writeFileSync(tmp, "const value = 1;\n");
+        try {
+            const r = await runHook("PreToolUse", "Edit", {
+                file_path: tmp,
+                old_string: "value = 1",
+                new_string: "value = 2",
+            });
+            assert.equal(r.code, 0);
+        } finally {
+            fs.rmSync(tmp, { force: true });
+        }
+    });
+    it("blocks replace_all built-in Edit on a large file", async () => {
+        const tmp = `d:/tmp/hex-hook-large-edit-${Date.now()}.ts`;
+        fs.writeFileSync(tmp, Array.from({ length: 1200 }, () => "const item = oldValue;").join("\n"));
+        try {
+            const r = await runHook("PreToolUse", "Edit", {
+                file_path: tmp,
+                old_string: "oldValue",
+                new_string: "newValue",
+                replace_all: true,
+            });
+            assert.notEqual(r.code, 0);
+        } finally {
+            fs.rmSync(tmp, { force: true });
+        }
+    });
+    it("SessionStart injects direct tool workflow guidance", async () => {
+        const r = await runHook("SessionStart", "", {});
+        assert.equal(r.code, 0);
+        assert.ok(r.stdout.includes("Hex-line MCP available"), "SessionStart announces hex-line");
+        assert.ok(r.stdout.includes("Do not use ToolSearch"), "SessionStart suppresses tool discovery loops");
     });
 });
 

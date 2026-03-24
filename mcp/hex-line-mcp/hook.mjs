@@ -25,7 +25,7 @@
  */
 
 import { normalizeOutput } from "@levnikolaevich/hex-common/output/normalize";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 
@@ -139,12 +139,38 @@ const CMD_PATTERNS = [
 const LINE_THRESHOLD = 50;
 const HEAD_LINES = 15;
 const TAIL_LINES = 15;
+const LARGE_FILE_BYTES = 15 * 1024;
+const LARGE_EDIT_CHARS = 1200;
 
 // ---- Helpers ----
 
 function extOf(filePath) {
     const dot = filePath.lastIndexOf(".");
     return dot !== -1 ? filePath.slice(dot).toLowerCase() : "";
+}
+
+function getFilePath(toolInput) {
+    return toolInput.file_path || toolInput.path || "";
+}
+
+function resolveToolPath(filePath) {
+    if (!filePath) return "";
+    if (filePath.startsWith("~/")) return resolve(homedir(), filePath.slice(2));
+    return resolve(process.cwd(), filePath);
+}
+
+function getFileSize(filePath) {
+    if (!filePath) return null;
+    try {
+        return statSync(resolveToolPath(filePath)).size;
+    } catch {
+        return null;
+    }
+}
+
+function isPartialRead(toolInput) {
+    return [toolInput.offset, toolInput.limit, toolInput.start_line, toolInput.end_line, toolInput.ranges]
+        .some((value) => value !== undefined && value !== null && value !== "");
 }
 
 function detectCommandType(cmd) {
@@ -226,7 +252,8 @@ function handlePreToolUse(data) {
     // Tool redirect: Read / Edit / Write / Grep
     const hintKey = TOOL_REDIRECT_MAP[toolName];
     if (hintKey) {
-        const filePath = toolInput.file_path || toolInput.path || "";
+        const filePath = getFilePath(toolInput);
+        const fileSize = getFileSize(filePath);
 
         // Skip binary extensions
         if (BINARY_EXT.has(extOf(filePath))) {
@@ -258,11 +285,37 @@ function handlePreToolUse(data) {
             }
         }
 
-        // Block with redirect — include extracted path for instant retry
-        const hint = TOOL_HINTS[hintKey];
-        const toolName2 = hint.split(" (")[0];
-        const pathNote = filePath ? ` with path="${filePath}"` : "";
-        block(`Use ${toolName2}${pathNote}`, hint);
+        if (toolName === "Read") {
+            if (isPartialRead(toolInput) || (fileSize !== null && fileSize <= LARGE_FILE_BYTES)) {
+                process.exit(0);
+            }
+            const target = filePath
+                ? `Use mcp__hex-line__outline or mcp__hex-line__read_file with path="${filePath}"`
+                : "Use mcp__hex-line__directory_tree or mcp__hex-line__read_file";
+            block(target, "For large or unknown full reads: call outline first, then read_file with offset/limit or ranges. Do not use built-in Read here.");
+        }
+
+        if (toolName === "Edit") {
+            const oldText = String(toolInput.old_string || "");
+            const isLargeEdit = Boolean(toolInput.replace_all) || oldText.length > LARGE_EDIT_CHARS || (fileSize !== null && fileSize > LARGE_FILE_BYTES);
+            if (!isLargeEdit) {
+                process.exit(0);
+            }
+            const target = filePath
+                ? `Use mcp__hex-line__grep_search or mcp__hex-line__read_file, then mcp__hex-line__edit_file with path="${filePath}"`
+                : "Use mcp__hex-line__grep_search or mcp__hex-line__read_file, then mcp__hex-line__edit_file";
+            block(target, "For large or repeated edits: locate anchors/checksums first, then call edit_file once with batched edits.");
+        }
+
+        if (toolName === "Write") {
+            const pathNote = filePath ? ` with path="${filePath}"` : "";
+            block(`Use mcp__hex-line__write_file${pathNote}`, TOOL_HINTS.Write);
+        }
+
+        if (toolName === "Grep") {
+            const pathNote = filePath ? ` with path="${filePath}"` : "";
+            block(`Use mcp__hex-line__grep_search${pathNote}`, TOOL_HINTS.Grep);
+        }
     }
 
     // Bash tool checks
@@ -408,24 +461,17 @@ function handleSessionStart() {
         } catch { /* file missing or invalid */ }
     }
 
-    if (styleActive) {
-        process.stdout.write(JSON.stringify({ systemMessage: "hex-line Output Style active." }));
-        process.exit(0);
-    }
-
-    // Full hints when output style is not active
-    const seen = new Set();
-    const lines = [];
-    for (const hint of Object.values(TOOL_HINTS)) {
-        const tool = hint.split(" ")[0];
-        if (!seen.has(tool)) {
-            seen.add(tool);
-            lines.push(`- ${hint}`);
-        }
-    }
-    lines.push("Exceptions: images, PDFs, notebooks, .claude/settings.json, .claude/settings.local.json \u2192 built-in Read; Glob always OK");
-    lines.push("Bash OK for: npm/node/git/docker/curl, pipes, scripts");
-    const msg = "Hex-line MCP available. Workflow:\n- Discovery: read_file, grep_search, outline, directory_tree\n- Same-file edits: prefer ONE edit_file call per file, carry revision/base_revision\n- Hash edits: edit_file (set_line, replace_lines, insert_after, replace_between)\n- Large rewrites: replace_between instead of reciting old blocks\n- Text rename: bulk_replace (multi-file search-replace)\n- Verify staleness: verify before considering reread\n- Write new: write_file\n" + lines.join("\n");
+    const prefix = styleActive ? "Hex-line MCP available. Output style active.\n" : "Hex-line MCP available.\n";
+    const msg = prefix +
+        "Call hex-line tools directly. Do not use ToolSearch for hex-line tools.\n" +
+        "Workflow:\n" +
+        "- Discovery: outline for large code files, read_file for targeted reads, grep_search for symbol/text lookup\n" +
+        "- Read cheaply: prefer offset/limit or ranges; avoid full-file Read on large files\n" +
+        "- Edit safely: read/grep first, then one batched edit_file call per file with base_revision when available\n" +
+        "- Verify before reread: use verify to check checksums or revision freshness\n" +
+        "- Multi-file rename/refactor: use bulk_replace\n" +
+        "- New files: use write_file\n" +
+        "Exceptions: images, PDFs, notebooks, .claude/settings.json, .claude/settings.local.json use built-in Read. Glob is always OK.";
     process.stdout.write(JSON.stringify({ systemMessage: msg }));
     process.exit(0);
 }

@@ -31,6 +31,7 @@ import { executeCommand, validateRemotePath } from "./lib/ssh-client.mjs";
 import { shellQuote, assertSafeArg } from "./lib/shell-escape.mjs";
 import { validateCommand } from "./lib/command-policy.mjs";
 import { validateEditArgs } from "./lib/edit-validation.mjs";
+import { resolveHost } from "./lib/config-resolver.mjs";
 
 const { server, StdioServerTransport } = await createServerRuntime({
     name: "hex-ssh-mcp",
@@ -40,22 +41,27 @@ const { server, StdioServerTransport } = await createServerRuntime({
 // --- Common connection args for reuse ---
 
 const connProps = {
-    host: z.string().describe("Remote server hostname or IP"),
-    user: z.string().describe("SSH username"),
-    privateKeyPath: z.string().optional().describe("Path to SSH private key (optional, falls back to SSH_PRIVATE_KEY env or ~/.ssh/id_*)"),
+    host: z.string().describe("SSH host - alias from ~/.ssh/config or hostname/IP"),
+    user: z.string().optional().describe("SSH username (optional if set in ~/.ssh/config)"),
+    privateKeyPath: z.string().optional().describe("Path to SSH private key (optional)"),
     port: flexNum().describe("SSH port (default: 22)"),
 };
 
 /**
- * Build connection params from tool args with defaults.
+ * Build connection params from tool args with SSH config resolution.
  */
 function connParams(args) {
-    return {
-        host: args.host,
+    const resolved = resolveHost(args.host, {
         user: args.user,
-        privateKeyPath: args.privateKeyPath || undefined,
-        port: args.port || 22,
-    };
+        port: args.port,
+        privateKeyPath: args.privateKeyPath,
+    });
+    if (!resolved.user) {
+        throw new Error(
+            `No user for host "${args.host}". Provide user param or set User in ~/.ssh/config.`
+        );
+    }
+    return resolved;
 }
 
 /**
@@ -102,8 +108,8 @@ server.registerTool("remote-ssh", {
 }, async (rawArgs) => {
     const args = coerceParams(rawArgs);
     try {
-        if (!args.host || !args.user || !args.command) {
-            return errResult("Required: host, user, command");
+        if (!args.host || !args.command) {
+            return errResult("Required: host, command");
         }
 
         assertSafeArg("command", args.command);
@@ -143,8 +149,8 @@ server.registerTool("ssh-read-lines", {
 }, async (rawArgs) => {
     const args = coerceParams(rawArgs);
     try {
-        if (!args.host || !args.user || !args.filePath) {
-            return errResult("Required: host, user, filePath");
+        if (!args.host || !args.filePath) {
+            return errResult("Required: host, filePath");
         }
 
         assertSafeArg("filePath", args.filePath);
@@ -248,8 +254,8 @@ server.registerTool("ssh-edit-block", {
 }, async (rawArgs) => {
     const args = coerceParams(rawArgs);
     try {
-        if (!args.host || !args.user || !args.filePath) {
-            return errResult("Required: host, user, filePath");
+        if (!args.host || !args.filePath) {
+            return errResult("Required: host, filePath");
         }
         const validationError = validateEditArgs(args);
         if (validationError) return errResult(validationError);
@@ -428,8 +434,8 @@ server.registerTool("ssh-search-code", {
 }, async (rawArgs) => {
     const args = coerceParams(rawArgs);
     try {
-        if (!args.host || !args.user || !args.path || !args.pattern) {
-            return errResult("Required: host, user, path, pattern");
+        if (!args.host || !args.path || !args.pattern) {
+            return errResult("Required: host, path, pattern");
         }
 
         assertSafeArg("path", args.path);
@@ -512,8 +518,8 @@ server.registerTool("ssh-write-chunk", {
 }, async (rawArgs) => {
     const args = coerceParams(rawArgs);
     try {
-        if (!args.host || !args.user || !args.filePath || args.content === undefined) {
-            return errResult("Required: host, user, filePath, content");
+        if (!args.host || !args.filePath || args.content === undefined) {
+            return errResult("Required: host, filePath, content");
         }
 
         assertSafeArg("filePath", args.filePath);
@@ -568,8 +574,8 @@ server.registerTool("ssh-verify", {
 }, async (rawArgs) => {
     const args = coerceParams(rawArgs);
     try {
-        if (!args.host || !args.user || !args.filePath || !args.checksums) {
-            return errResult("Required: host, user, filePath, checksums");
+        if (!args.host || !args.filePath || !args.checksums) {
+            return errResult("Required: host, filePath, checksums");
         }
 
         assertSafeArg("filePath", args.filePath);

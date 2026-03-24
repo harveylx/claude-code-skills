@@ -1,113 +1,287 @@
-#!/usr/bin/env node
-// Parse two stream-json benchmark logs and produce comparison report.
-// Usage: node parse-results.mjs builtin.jsonl hexline.jsonl [output.md]
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-const [,, builtinFile, hexlineFile, outputFile] = process.argv;
-if (!builtinFile || !hexlineFile) {
-    process.stderr.write("Usage: node parse-results.mjs <builtin.jsonl> <hexline.jsonl> [output.md]\n");
+const [,, resultsDir, expectationsFile, date, outputFile] = process.argv;
+if (!resultsDir || !expectationsFile || !date) {
+    process.stderr.write("Usage: node parse-results.mjs <results-dir> <expectations.json> <date> [output.md]\n");
     process.exit(1);
 }
 
-function parseSession(file) {
-    const lines = readFileSync(file, "utf8").trim().split("\n");
-    const events = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+function safeRead(file) {
+    return existsSync(file) ? readFileSync(file, "utf8") : "";
+}
 
-    const result = events.find(e => e.type === "result");
-    if (!result) return { error: "No result event found" };
+function safeJson(file) {
+    const text = safeRead(file);
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
 
-    // Count tool calls from assistant content blocks
-    const toolCounts = {};
-    for (const e of events) {
-        if (e.type === "assistant" && e.message?.content) {
-            for (const block of e.message.content) {
-                if (block.type === "tool_use") {
-                    const name = block.name;
-                    toolCounts[name] = (toolCounts[name] || 0) + 1;
-                }
+function parseChangedFiles(diffText) {
+    const files = new Set();
+    for (const match of diffText.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)) {
+        files.add(match[2]);
+    }
+    return [...files].sort();
+}
+
+function parseSession(jsonlFile, kind, preflight) {
+    const raw = safeRead(jsonlFile).trim();
+    const events = raw
+        ? raw.split("\n").map((line) => {
+            try {
+                return JSON.parse(line);
+            } catch {
+                return null;
             }
+        }).filter(Boolean)
+        : [];
+
+    const result = events.find((event) => event.type === "result");
+    const init = events.find((event) => event.type === "system" && event.subtype === "init");
+    const sessionStart = events.find((event) =>
+        event.type === "system" &&
+        event.subtype === "hook_response" &&
+        event.hook_event === "SessionStart"
+    );
+
+    const toolCounts = {};
+    const uses = [];
+    const bashCommands = [];
+    let assistantTurn = 0;
+    for (const event of events) {
+        if (event.type !== "assistant" || !event.message?.content) continue;
+        assistantTurn++;
+        for (const block of event.message.content) {
+            if (block.type !== "tool_use") continue;
+            toolCounts[block.name] = (toolCounts[block.name] || 0) + 1;
+            uses.push({ name: block.name, assistantTurn });
+            if (block.name === "Bash" && block.input?.command) bashCommands.push(block.input.command);
         }
     }
 
-    const totalTools = Object.values(toolCounts).reduce((a, b) => a + b, 0);
+    const firstHexUse = uses.find((entry) => entry.name.startsWith("mcp__hex-line__"));
+    const firstToolSearch = uses.find((entry) => entry.name === "ToolSearch");
+    const invalidReasons = [];
+    if (!result) invalidReasons.push("missing result event");
+    if (!init) invalidReasons.push("missing init event");
+    if (kind === "hexline") {
+        const tools = init?.tools || [];
+        const servers = init?.mcp_servers || [];
+        const hexServer = servers.find((server) => server.name === "hex-line");
+        if (!tools.some((tool) => tool.startsWith("mcp__hex-line__"))) invalidReasons.push("hex-line tools missing from init");
+        if (!hexServer || hexServer.status !== "connected") invalidReasons.push("hex-line MCP not connected");
+        if (!sessionStart) invalidReasons.push("missing SessionStart hook response");
+        if (!firstHexUse) invalidReasons.push("no hex-line tool call observed");
+        if (preflight?.sessionStartOk === false) invalidReasons.push("SessionStart preflight failed");
+    }
 
     return {
-        turns: result.num_turns,
-        duration_ms: result.duration_ms,
-        duration_api_ms: result.duration_api_ms,
-        cost: result.total_cost_usd,
-        is_error: result.is_error,
-        output_tokens: result.usage?.output_tokens || 0,
-        cache_creation: result.usage?.cache_creation_input_tokens || 0,
-        cache_read: result.usage?.cache_read_input_tokens || 0,
+        valid: invalidReasons.length === 0,
+        invalidReasons,
+        turns: result?.num_turns ?? 0,
+        durationMs: result?.duration_ms ?? 0,
+        durationApiMs: result?.duration_api_ms ?? 0,
+        cost: result?.total_cost_usd ?? 0,
+        outputTokens: result?.usage?.output_tokens ?? 0,
+        cacheCreation: result?.usage?.cache_creation_input_tokens ?? 0,
+        cacheRead: result?.usage?.cache_read_input_tokens ?? 0,
         toolCounts,
-        totalTools,
-        result_text: result.result || "",
+        totalTools: Object.values(toolCounts).reduce((sum, count) => sum + count, 0),
+        sessionStartOk: Boolean(sessionStart),
+        firstHexToolTurn: firstHexUse?.assistantTurn ?? null,
+        firstToolSearchTurn: firstToolSearch?.assistantTurn ?? null,
+        activationSuccess: kind === "hexline" ? invalidReasons.length === 0 && Boolean(firstHexUse) : true,
+        toolMisuseDetected: kind === "hexline" && Boolean(firstToolSearch && (!firstHexUse || firstToolSearch.assistantTurn <= firstHexUse.assistantTurn)),
+        taskCompleted: Boolean(result && !result.is_error),
+        resultText: result?.result || "",
+        bashCommands,
     };
 }
 
-function delta(a, b) {
-    if (a === 0) return "N/A";
-    return ((b - a) / a * 100).toFixed(0) + "%";
+function evaluateScenario(session, scenario, diffText) {
+    const changedFiles = parseChangedFiles(diffText);
+    const reasons = [];
+    const expectedFiles = scenario.expectedChangedFiles || [];
+    const forbiddenFiles = scenario.forbiddenChangedFiles || [];
+    const requiredDiffPatterns = scenario.requiredDiffPatterns || [];
+    const forbiddenDiffPatterns = scenario.forbiddenDiffPatterns || [];
+    const requiredResultPatterns = scenario.requiredResultPatterns || [];
+    const requiredCommands = scenario.requiredCommands || [];
+
+    if (!session.valid) reasons.push(`invalid run: ${session.invalidReasons.join("; ")}`);
+    if (!session.taskCompleted) reasons.push("session did not complete successfully");
+
+    for (const file of expectedFiles) {
+        if (!changedFiles.includes(file)) reasons.push(`missing changed file: ${file}`);
+    }
+    if (scenario.exactChangedFiles === true) {
+        const extras = changedFiles.filter((file) => !expectedFiles.includes(file));
+        if (extras.length > 0) reasons.push(`unexpected changed files: ${extras.join(", ")}`);
+    }
+    for (const file of forbiddenFiles) {
+        if (changedFiles.includes(file)) reasons.push(`forbidden changed file: ${file}`);
+    }
+
+    for (const pattern of requiredDiffPatterns) {
+        if (!new RegExp(pattern, "m").test(diffText)) reasons.push(`missing diff pattern: ${pattern}`);
+    }
+    for (const pattern of forbiddenDiffPatterns) {
+        if (new RegExp(pattern, "m").test(diffText)) reasons.push(`forbidden diff pattern: ${pattern}`);
+    }
+    for (const pattern of requiredResultPatterns) {
+        if (!new RegExp(pattern, "im").test(session.resultText)) reasons.push(`missing result pattern: ${pattern}`);
+    }
+    for (const pattern of requiredCommands) {
+        if (!session.bashCommands.some((command) => new RegExp(pattern, "i").test(command))) {
+            reasons.push(`missing command: ${pattern}`);
+        }
+    }
+
+    return {
+        pass: reasons.length === 0,
+        reasons,
+        changedFiles,
+    };
 }
 
-const A = parseSession(builtinFile);
-const B = parseSession(hexlineFile);
+function loadScenarioResults(scenarios, preflight) {
+    return scenarios.map((scenario) => {
+        const builtinBase = resolve(resultsDir, `${date}-${scenario.id}-builtin`);
+        const hexlineBase = resolve(resultsDir, `${date}-${scenario.id}-hexline`);
+        const builtinSession = parseSession(`${builtinBase}.jsonl`, "builtin", preflight);
+        const hexlineSession = parseSession(`${hexlineBase}.jsonl`, "hexline", preflight);
+        const builtinDiff = safeRead(`${builtinBase}.diff.txt`);
+        const hexlineDiff = safeRead(`${hexlineBase}.diff.txt`);
+        return {
+            scenario,
+            builtin: {
+                ...builtinSession,
+                diffText: builtinDiff,
+                evaluation: evaluateScenario(builtinSession, scenario, builtinDiff),
+            },
+            hexline: {
+                ...hexlineSession,
+                diffText: hexlineDiff,
+                evaluation: evaluateScenario(hexlineSession, scenario, hexlineDiff),
+            },
+        };
+    });
+}
 
-// Merge all tool names
-const allTools = new Set([...Object.keys(A.toolCounts), ...Object.keys(B.toolCounts)]);
-const toolRows = [...allTools].sort().map(t =>
-    `| ${t} | ${A.toolCounts[t] || "-"} | ${B.toolCounts[t] || "-"} |`
+function boolLabel(value) {
+    return value ? "PASS" : "FAIL";
+}
+
+function delta(base, candidate, digits = 0) {
+    if (!Number.isFinite(base) || base === 0) return "N/A";
+    return `${(((candidate - base) / base) * 100).toFixed(digits)}%`;
+}
+
+function sum(items, selector) {
+    return items.reduce((total, item) => total + selector(item), 0);
+}
+
+const expectations = safeJson(expectationsFile);
+if (!expectations?.scenarios?.length) {
+    throw new Error("expectations.json must contain a non-empty scenarios array");
+}
+
+const preflight = safeJson(resolve(resultsDir, `${date}-hexline.preflight.json`));
+const scenarioResults = loadScenarioResults(expectations.scenarios, preflight);
+
+const builtinTotals = {
+    turns: sum(scenarioResults, (item) => item.builtin.turns),
+    durationMs: sum(scenarioResults, (item) => item.builtin.durationMs),
+    durationApiMs: sum(scenarioResults, (item) => item.builtin.durationApiMs),
+    cost: sum(scenarioResults, (item) => item.builtin.cost),
+    outputTokens: sum(scenarioResults, (item) => item.builtin.outputTokens),
+    cacheCreation: sum(scenarioResults, (item) => item.builtin.cacheCreation),
+    cacheRead: sum(scenarioResults, (item) => item.builtin.cacheRead),
+    totalTools: sum(scenarioResults, (item) => item.builtin.totalTools),
+};
+
+const hexlineTotals = {
+    turns: sum(scenarioResults, (item) => item.hexline.turns),
+    durationMs: sum(scenarioResults, (item) => item.hexline.durationMs),
+    durationApiMs: sum(scenarioResults, (item) => item.hexline.durationApiMs),
+    cost: sum(scenarioResults, (item) => item.hexline.cost),
+    outputTokens: sum(scenarioResults, (item) => item.hexline.outputTokens),
+    cacheCreation: sum(scenarioResults, (item) => item.hexline.cacheCreation),
+    cacheRead: sum(scenarioResults, (item) => item.hexline.cacheRead),
+    totalTools: sum(scenarioResults, (item) => item.hexline.totalTools),
+};
+
+const scenarioRows = scenarioResults.map((item) => {
+    const builtinReasons = item.builtin.evaluation.reasons.join("; ") || "-";
+    const hexlineReasons = item.hexline.evaluation.reasons.join("; ") || "-";
+    const builtinFiles = item.builtin.evaluation.changedFiles.join(", ") || "-";
+    const hexlineFiles = item.hexline.evaluation.changedFiles.join(", ") || "-";
+    return `| ${item.scenario.title} | ${boolLabel(item.builtin.evaluation.pass)} | ${boolLabel(item.hexline.evaluation.pass)} | ${builtinFiles} | ${hexlineFiles} | ${builtinReasons} | ${hexlineReasons} |`;
+}).join("\n");
+
+const activationRows = scenarioResults.map((item) =>
+    `| ${item.scenario.title} | ${boolLabel(item.builtin.activationSuccess)} | ${boolLabel(item.hexline.activationSuccess)} | ${item.hexline.firstHexToolTurn ?? "-"} | ${item.hexline.firstToolSearchTurn ?? "-"} |`
 ).join("\n");
 
-const date = new Date().toISOString().split("T")[0];
 const report = `# Benchmark: Built-in vs Hex-line - ${date}
 
-## 1. Correctness
+## 1. Scenario Outcomes
 
-| Session | Completed | Error |
-|---------|-----------|-------|
-| Built-in | ${A.is_error ? "FAIL" : "PASS"} | ${A.is_error} |
-| Hex-line | ${B.is_error ? "FAIL" : "PASS"} | ${B.is_error} |
+| Scenario | Built-in | Hex-line | Built-in changed files | Hex-line changed files | Built-in reasons | Hex-line reasons |
+|----------|----------|----------|--------------------|--------------------|------------------|------------------|
+${scenarioRows}
 
-## 2. Time
+## 2. Activation
 
-| Metric | Built-in | Hex-line | Delta |
-|--------|----------|----------|-------|
-| Wall time | ${(A.duration_ms/1000).toFixed(1)}s | ${(B.duration_ms/1000).toFixed(1)}s | ${delta(A.duration_ms, B.duration_ms)} |
-| API time | ${(A.duration_api_ms/1000).toFixed(1)}s | ${(B.duration_api_ms/1000).toFixed(1)}s | ${delta(A.duration_api_ms, B.duration_api_ms)} |
+| Scenario | Built-in activation | Hex-line activation | First hex tool turn | First ToolSearch turn |
+|----------|---------------------|---------------------|---------------------|-----------------------|
+${activationRows}
 
-## 3. Cost
+## 3. Time
 
 | Metric | Built-in | Hex-line | Delta |
 |--------|----------|----------|-------|
-| Total cost | $${A.cost.toFixed(4)} | $${B.cost.toFixed(4)} | ${delta(A.cost, B.cost)} |
+| Wall time | ${(builtinTotals.durationMs / 1000).toFixed(1)}s | ${(hexlineTotals.durationMs / 1000).toFixed(1)}s | ${delta(builtinTotals.durationMs, hexlineTotals.durationMs)} |
+| API time | ${(builtinTotals.durationApiMs / 1000).toFixed(1)}s | ${(hexlineTotals.durationApiMs / 1000).toFixed(1)}s | ${delta(builtinTotals.durationApiMs, hexlineTotals.durationApiMs)} |
+| Turns | ${builtinTotals.turns} | ${hexlineTotals.turns} | ${delta(builtinTotals.turns, hexlineTotals.turns)} |
 
-## 4. Tool Calls
+## 4. Cost
 
-| Tool | Built-in | Hex-line |
-|------|----------|----------|
-${toolRows}
-| **Total** | **${A.totalTools}** | **${B.totalTools}** |
+| Metric | Built-in | Hex-line | Delta |
+|--------|----------|----------|-------|
+| Total cost | $${builtinTotals.cost.toFixed(4)} | $${hexlineTotals.cost.toFixed(4)} | ${delta(builtinTotals.cost, hexlineTotals.cost)} |
 
 ## 5. Tokens
 
 | Metric | Built-in | Hex-line | Delta |
 |--------|----------|----------|-------|
-| Output tokens | ${A.output_tokens} | ${B.output_tokens} | ${delta(A.output_tokens, B.output_tokens)} |
-| Cache creation | ${A.cache_creation} | ${B.cache_creation} | ${delta(A.cache_creation, B.cache_creation)} |
-| Cache read | ${A.cache_read} | ${B.cache_read} | ${delta(A.cache_read, B.cache_read)} |
+| Output tokens | ${builtinTotals.outputTokens} | ${hexlineTotals.outputTokens} | ${delta(builtinTotals.outputTokens, hexlineTotals.outputTokens)} |
+| Cache creation | ${builtinTotals.cacheCreation} | ${hexlineTotals.cacheCreation} | ${delta(builtinTotals.cacheCreation, hexlineTotals.cacheCreation)} |
+| Cache read | ${builtinTotals.cacheRead} | ${hexlineTotals.cacheRead} | ${delta(builtinTotals.cacheRead, hexlineTotals.cacheRead)} |
+
+## 6. Tool Totals
+
+| Metric | Built-in | Hex-line | Delta |
+|--------|----------|----------|-------|
+| Total tool calls | ${builtinTotals.totalTools} | ${hexlineTotals.totalTools} | ${delta(builtinTotals.totalTools, hexlineTotals.totalTools)} |
+
+## 7. Validity
+
+Server syntax preflight: ${preflight?.serverSyntaxOk ? "PASS" : "FAIL"}
+
+Hook syntax preflight: ${preflight?.hookSyntaxOk ? "PASS" : "FAIL"}
+
+SessionStart preflight: ${preflight?.sessionStartOk ? "PASS" : "FAIL"}
 `;
 
 if (outputFile) {
     writeFileSync(outputFile, report, "utf8");
-    process.stdout.write("Report saved to " + outputFile + "\n");
+    process.stdout.write(`Report saved to ${outputFile}\n`);
 } else {
     process.stdout.write(report);
 }
-
-// Also print summary to stdout
-process.stdout.write("\n--- Summary ---\n");
-process.stdout.write("Built-in: " + A.turns + " turns, $" + A.cost.toFixed(2) + ", " + (A.duration_ms/1000).toFixed(0) + "s, " + A.totalTools + " tool calls\n");
-process.stdout.write("Hex-line: " + B.turns + " turns, $" + B.cost.toFixed(2) + ", " + (B.duration_ms/1000).toFixed(0) + "s, " + B.totalTools + " tool calls\n");
-

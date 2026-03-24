@@ -1,42 +1,54 @@
-# Benchmark Goals v2 — hex-line-mcp
+# Benchmark Goals - hex-line-mcp
 
-Run each scenario independently. Do not skip steps. Show your work.
+Run the scenarios independently. Do not make unrelated changes. Show your work and keep the repository in a valid state after each scenario.
 
-## Scenario S1: Navigate a large file
+## Scenario A: Small Focused Edit
 
-File `server.mjs` (408 lines) registers 11 tool handlers. Without reading the entire file:
+File `lib/search.mjs` defines the ripgrep timeout.
 
-1. Find which line the `verify` tool is registered on and what function it calls from lib/
-2. Find which line the `bulk_replace` tool is registered on and what function it calls
-3. Find where the `directory_tree` handler reads `max_depth` parameter and what default it uses
-4. Report: tool name, registration line, imported handler function, default values
+1. Find the timeout constant in `lib/search.mjs` and report its current line number and value.
+2. Change the timeout from `30000` milliseconds to `45000`.
+3. Update the nearby inline comment so it matches the new timeout.
+4. Verify the file with `node --check lib/search.mjs`.
+5. Report exactly what changed.
 
-## Scenario S2: Rename across many files
+## Scenario B: Small Feature In Existing Module
 
-The function `readText` is defined in `lib/format.mjs` and imported in multiple other files.
+File `lib/verify.mjs` already exports `verifyChecksums`, and `server.mjs` imports it.
 
-1. Find where `readText` is defined
-2. Find ALL files that import or call `readText`
-3. Rename it to `readFileText` everywhere — definition, all imports, all call sites
-4. Verify no file still contains the old name `readText`
-5. Show the diff of every changed file
+1. Read `lib/verify.mjs` and understand the current verification flow.
+2. Add a new exported function `verifyRevision(filePath, baseRevision)` that:
+   - reads the current snapshot with `readSnapshot(filePath)`
+   - reads the prior snapshot with `getSnapshotByRevision(baseRevision)`
+   - returns `{ fresh: true, revision: current.revision }` when the revisions match
+   - otherwise returns `{ fresh: false, revision: current.revision, changed: describeChangedRanges(...) }`
+   - returns `{ fresh: false, revision: current.revision, changed: "unavailable (base revision evicted)" }` when the base revision is missing
+3. Update `server.mjs` so the import from `./lib/verify.mjs` includes `verifyRevision`.
+4. Verify both files with `node --check`.
+5. Report the new function signature and the files you changed.
 
-## Scenario S3: Three sequential edits with verification
+## Scenario C: Common Rename Refactor
 
-In `lib/edit.mjs` (537 lines), make these 3 changes one at a time:
+The helper `readText` is defined in `lib/format.mjs` and reused in several internal modules.
 
-1. In function `simpleDiff` (line ~114): change the default `ctx = 3` to `ctx = 5`
-2. In function `editFile` (line ~217): change the default conflict policy from `"conservative"` to `"strict"`  
-3. In function `buildErrorSnippet` (line ~45): change `radius = 5` to `radius = 3`
+1. Find where `readText` is defined and report the file, line number, and signature.
+2. Find every import and call site under `lib/`.
+3. Rename `readText` to `loadTextFile` everywhere under `lib/`.
+4. Verify that no file under `lib/` still contains the string `readText`.
+5. Run `node --check` on every changed `.mjs` file.
+6. Report every changed file.
 
-After EACH individual change, verify the file is still syntactically valid. After all 3 changes, confirm the final state with `node -c lib/edit.mjs`.
+## Scenario D: Codebase Inventory Document
 
-## Scenario S4: Codebase exploration and documentation
+Create a concise inventory document for the `lib/` directory.
 
-Analyze the `lib/` directory which contains 19 source files.
-
-1. List all files with their sizes (lines and bytes)
-2. For the 5 largest files, list their exported functions with parameter signatures
-3. Build a dependency map: which file imports from which other file in lib/
-4. Identify any files that are never imported by another file in lib/ (leaf modules)
-5. Write the complete analysis to `lib/MODULES.md`
+1. Inspect `lib/` and list all `.mjs` files with their line counts and byte sizes.
+2. Identify the 5 largest files in `lib/`.
+3. For each of those 5 files, list every exported function with its parameter signature only.
+4. Build a dependency map showing which `lib/` files import other `lib/` files.
+5. Identify leaf modules in `lib/` that are not imported by any sibling `lib/` file.
+6. Write the final result to `lib/MODULES.md` with exactly these headings:
+   - `## File Inventory`
+   - `## Largest Modules`
+   - `## Internal Imports`
+   - `## Leaf Modules`

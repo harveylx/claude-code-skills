@@ -48,6 +48,23 @@ const replacementPairsSchema = z.array(
     z.object({ old: z.string().min(1), new: z.string() })
 ).min(1);
 
+const readRangeSchema = z.union([
+    z.string(),
+    z.object({
+        start: flexNum().optional(),
+        end: flexNum().optional(),
+    }),
+]);
+
+function parseReadRanges(rawRanges) {
+    if (!rawRanges) return undefined;
+    const parsed = Array.isArray(rawRanges) ? rawRanges : JSON.parse(rawRanges);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+        throw new Error("ranges must be a non-empty array");
+    }
+    return parsed;
+}
+
 /** Coerce flat AI-hallucinated edit shapes into canonical nested format. */
 function coerceEdit(e) {
     if (!e || typeof e !== "object" || Array.isArray(e)) return e;
@@ -81,25 +98,26 @@ function coerceEdit(e) {
 
 server.registerTool("read_file", {
     title: "Read File",
-    description:
-        "Read a file with hash-annotated lines, range checksums, and current revision. " +
-        "Use offset/limit for targeted reads; use outline first for large code files.",
+    description: "Read file lines with hashes, checksums, and revision metadata.",
     inputSchema: z.object({
         path: z.string().optional().describe("File or directory path"),
         paths: z.array(z.string()).optional().describe("Array of file paths to read (batch mode)"),
         offset: flexNum().describe("Start line (1-indexed, default: 1)"),
         limit: flexNum().describe("Max lines (default: 2000, 0 = all)"),
+        ranges: z.union([z.string(), z.array(readRangeSchema)]).optional().describe('Line ranges, e.g. ["10-25", {"start":40,"end":55}]'),
+        include_graph: flexBool().describe("Include graph annotations"),
         plain: flexBool().describe("Omit hashes (lineNum|content)"),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
 }, async (rawParams) => {
-    const { path: p, paths: multi, offset, limit, plain } = coerceParams(rawParams);
+    const { path: p, paths: multi, offset, limit, ranges: rawRanges, include_graph, plain } = coerceParams(rawParams);
     try {
+        const ranges = parseReadRanges(rawRanges);
         if (multi && multi.length > 0 && !p) {
             const results = [];
             for (const fp of multi) {
                 try {
-                    results.push(readFile(fp, { offset, limit, plain }));
+                    results.push(readFile(fp, { offset, limit, ranges, includeGraph: include_graph, plain }));
                 } catch (e) {
                     results.push(`File: ${fp}\n\nERROR: ${e.message}`);
                 }
@@ -107,7 +125,7 @@ server.registerTool("read_file", {
             return { content: [{ type: "text", text: results.join("\n\n---\n\n") }] };
         }
         if (!p) throw new Error("Either 'path' or 'paths' is required");
-        return { content: [{ type: "text", text: readFile(p, { offset, limit, plain }) }] };
+        return { content: [{ type: "text", text: readFile(p, { offset, limit, ranges, includeGraph: include_graph, plain }) }] };
     } catch (e) {
         return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -118,10 +136,7 @@ server.registerTool("read_file", {
 
 server.registerTool("edit_file", {
     title: "Edit File",
-    description:
-        "Apply revision-aware partial edits to one file. " +
-        "Prefer one batched call per file. Supports set_line, replace_lines, insert_after, and replace_between. " +
-        "For text rename/refactor use bulk_replace.",
+    description: "Apply verified partial edits to one file.",
     inputSchema: z.object({
         path: z.string().describe("File to edit"),
         edits: z.union([z.string(), z.array(z.any())]).describe(
@@ -191,9 +206,7 @@ server.registerTool("write_file", {
 
 server.registerTool("grep_search", {
     title: "Search Files",
-    description:
-        "Search file contents with ripgrep. Returns hash-annotated matches with checksums. " +
-        "Modes: content (default), files, count. Use checksums with set_line/replace_lines. Prefer over shell grep/rg.",
+    description: "Search file contents with ripgrep and return edit-ready matches.",
     inputSchema: z.object({
         pattern: z.string().describe("Search pattern (regex by default, literal if literal:true)"),
         path: z.string().optional().describe("Search dir/file (default: cwd)"),
@@ -254,20 +267,20 @@ server.registerTool("outline", {
 
 server.registerTool("verify", {
     title: "Verify Checksums",
-    description:
-        "Check whether held checksums and optional base_revision are still current, without rereading the file.",
+    description: "Verify held checksums without rereading the file.",
     inputSchema: z.object({
         path: z.string().describe("File path"),
-        checksums: z.string().describe('JSON array of checksum strings, e.g. ["1-50:f7e2a1b0", "51-100:abcd1234"]'),
+        checksums: z.array(z.string()).describe('Checksum strings, e.g. ["1-50:f7e2a1b0", "51-100:abcd1234"]'),
         base_revision: z.string().optional().describe("Optional prior revision to compare against latest state."),
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
 }, async (rawParams) => {
     const { path: p, checksums, base_revision } = coerceParams(rawParams);
     try {
-        const parsed = JSON.parse(checksums);
-        if (!Array.isArray(parsed)) throw new Error("checksums must be a JSON array of strings");
-        return { content: [{ type: "text", text: verifyChecksums(p, parsed, { baseRevision: base_revision }) }] };
+        if (!Array.isArray(checksums) || checksums.length === 0) {
+            throw new Error("checksums must be a non-empty array of strings");
+        }
+        return { content: [{ type: "text", text: verifyChecksums(p, checksums, { baseRevision: base_revision }) }] };
     } catch (e) {
         return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -367,10 +380,7 @@ server.registerTool("changes", {
 
 server.registerTool("bulk_replace", {
     title: "Bulk Replace",
-    description:
-        "Search-and-replace across multiple files. Finds files by glob, applies ordered text replacements. " +
-        "Default format is compact (summary only); use format:'full' for capped diffs. " +
-        "Use dry_run:true to preview. For single-file rename, set glob to the filename.",
+    description: "Search-and-replace across multiple files with compact or full diff output.",
     inputSchema: z.object({
         replacements: z.union([z.string(), replacementPairsSchema]).describe('JSON array of {old, new} pairs: [{"old":"foo","new":"bar"}]'),
         glob: z.string().optional().describe('File glob (default: "**/*.{md,mjs,json,yml,ts,js}")'),

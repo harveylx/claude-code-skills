@@ -1,4 +1,4 @@
-import { writeFileSync, readdirSync } from "node:fs";
+import { writeFileSync, readdirSync, renameSync, unlinkSync } from "node:fs";
 import { resolve, relative, join } from "node:path";
 import { simpleDiff } from "./edit.mjs";
 import { normalizePath } from "./security.mjs";
@@ -84,7 +84,18 @@ export function bulkReplace(rootDir, globPattern, replacements, opts = {}) {
             if (content === original) { skipped++; continue; }
 
             if (!dryRun) {
-                writeFileSync(file, content, "utf-8");
+                const tempPath = `${file}.hexline-tmp-${process.pid}`;
+                try {
+                    writeFileSync(tempPath, content, "utf-8");
+                    renameSync(tempPath, file);
+                } catch (error) {
+                    try {
+                        unlinkSync(tempPath);
+                    } catch {
+                        // Best-effort temp cleanup.
+                    }
+                    throw error;
+                }
             }
 
             const relPath = relative(abs, file).replace(/\\/g, "/");

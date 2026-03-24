@@ -1,21 +1,68 @@
 #!/usr/bin/env bash
-# Run A/B benchmark: built-in vs hex-line
-# Usage: bash scripts/run-benchmark.sh [goals-file]
 set -euo pipefail
 
-# Resolve paths
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$SKILL_DIR/../.." && pwd)"
 MCP_DIR="$REPO_ROOT/mcp/hex-line-mcp"
+HOOK_PATH="$MCP_DIR/hook.mjs"
+SERVER_PATH="$MCP_DIR/server.mjs"
 RESULTS_DIR="$MCP_DIR/benchmark/results"
 GOALS="${1:-$MCP_DIR/benchmark/goals.md}"
+EXPECTATIONS="${2:-$MCP_DIR/benchmark/expectations.json}"
 DATE=$(date +%Y-%m-%d)
 BENCH_DIR="${BENCH_DIR:-d:/tmp}"
+PROMPTS_DIR="$RESULTS_DIR/.prompts-$DATE"
+MANIFEST_PATH="$PROMPTS_DIR/manifest.json"
 
 mkdir -p "$RESULTS_DIR"
 
-# Generate mcp config with ABSOLUTE server path (worktrees lack node_modules)
+cleanup_worktree() {
+  local path="$1"
+  if [ -d "$path" ]; then
+    git -C "$REPO_ROOT" worktree remove --force "$path" >/dev/null 2>&1 || rm -rf "$path"
+  fi
+}
+
+sync_current_tree() {
+  local destination="$1"
+  (
+    cd "$REPO_ROOT"
+    tar \
+      --exclude='.git' \
+      --exclude='node_modules' \
+      --exclude='mcp/hex-line-mcp/benchmark/results' \
+      --exclude='mcp/hex-line-mcp/.tmp' \
+      -cf - .
+  ) | (
+    cd "$destination"
+    tar -xf -
+  )
+}
+
+checkpoint_worktree() {
+  local path="$1"
+  if [ -n "$(git -C "$path" status --porcelain)" ]; then
+    git -C "$path" add -A
+    git -C "$path" -c user.name='Benchmark Runner' -c user.email='benchmark@example.invalid' \
+      commit --quiet --no-gpg-sign --no-verify -m 'benchmark baseline'
+  fi
+}
+
+hex_json_escape() {
+  node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$1"
+}
+
+echo "=== Prerequisites ==="
+claude --version || { echo "ERROR: claude not found"; exit 1; }
+git --version > /dev/null || { echo "ERROR: git not found"; exit 1; }
+test -f "$GOALS" || { echo "ERROR: Goals file not found: $GOALS"; exit 1; }
+test -f "$EXPECTATIONS" || { echo "ERROR: Expectations file not found: $EXPECTATIONS"; exit 1; }
+node --check "$SERVER_PATH" > /dev/null || { echo "ERROR: server syntax check failed"; exit 1; }
+node --check "$HOOK_PATH" > /dev/null || { echo "ERROR: hook syntax check failed"; exit 1; }
+node --check "$SCRIPT_DIR/extract-scenarios.mjs" > /dev/null || { echo "ERROR: extract-scenarios syntax check failed"; exit 1; }
+node --check "$SCRIPT_DIR/parse-results.mjs" > /dev/null || { echo "ERROR: parse-results syntax check failed"; exit 1; }
+
 MCP_CFG="$RESULTS_DIR/.mcp-bench-resolved.json"
 node -e "console.log(JSON.stringify({
   mcpServers: {
@@ -26,8 +73,7 @@ node -e "console.log(JSON.stringify({
   }
 }, null, 2))" "$REPO_ROOT" > "$MCP_CFG"
 
-# Build hex-line settings: outputStyle + PreToolUse hook
-HOOK_CMD="node $REPO_ROOT/mcp/hex-line-mcp/hook.mjs"
+HOOK_CMD="node $HOOK_PATH"
 HEX_SETTINGS=$(node -e "console.log(JSON.stringify({
   outputStyle: 'hex-line',
   hooks: {
@@ -38,76 +84,104 @@ HEX_SETTINGS=$(node -e "console.log(JSON.stringify({
   }
 }))" "$HOOK_CMD")
 
-# Validate prerequisites
-echo "=== Prerequisites ==="
-claude --version || { echo "ERROR: claude not found"; exit 1; }
-git --version > /dev/null || { echo "ERROR: git not found"; exit 1; }
-test -f "$GOALS" || { echo "ERROR: Goals file not found: $GOALS"; exit 1; }
+SESSION_START_OUTPUT=$(printf '%s' '{"hook_event_name":"SessionStart"}' | node "$HOOK_PATH")
+SESSION_START_OK=false
+if printf '%s' "$SESSION_START_OUTPUT" | grep -q "Hex-line MCP available"; then
+  SESSION_START_OK=true
+fi
+
+cat > "$RESULTS_DIR/${DATE}-hexline.preflight.json" <<EOF
+{
+  "serverSyntaxOk": true,
+  "hookSyntaxOk": true,
+  "sessionStartOk": $SESSION_START_OK,
+  "sessionStartOutput": $(hex_json_escape "$SESSION_START_OUTPUT")
+}
+EOF
+
+if [ "$SESSION_START_OK" != "true" ]; then
+  echo "ERROR: SessionStart preflight failed"
+  exit 1
+fi
+
 echo "Goals: $GOALS"
-echo "MCP config: $MCP_CFG"
+echo "Expectations: $EXPECTATIONS"
 echo "Results: $RESULTS_DIR"
 
-# Phase 2: Create worktrees
-echo ""
-echo "=== Phase 2: Creating worktrees ==="
-git -C "$REPO_ROOT" worktree add "$BENCH_DIR/bench-builtin" HEAD 2>&1 || true
-git -C "$REPO_ROOT" worktree add "$BENCH_DIR/bench-hexline" HEAD 2>&1 || true
-git -C "$REPO_ROOT" worktree list
+mkdir -p "$PROMPTS_DIR"
+node "$SCRIPT_DIR/extract-scenarios.mjs" "$GOALS" "$EXPECTATIONS" "$PROMPTS_DIR" > "$MANIFEST_PATH"
 
-# Phase 3: Session A (built-in only)
-echo ""
-echo "=== Phase 3: Session A (built-in only) ==="
-(
-  cd "$BENCH_DIR/bench-builtin/mcp/hex-line-mcp"
-  claude -p \
-    --verbose \
-    --strict-mcp-config \
-    --settings '{"disableAllHooks":true}' \
-    --dangerously-skip-permissions \
-    --output-format stream-json \
-    --max-turns 50 \
-    < "$GOALS" \
-    > "$RESULTS_DIR/${DATE}-builtin.jsonl" 2>&1
-) &
-PID_A=$!
-echo "PID: $PID_A"
+mapfile -t SCENARIOS < <(node -e '
+const manifest = require(process.argv[1]);
+for (const scenario of manifest.scenarios) {
+  process.stdout.write(scenario.id + "|" + scenario.promptFile + "|" + scenario.title + "\n");
+}
+' "$MANIFEST_PATH")
 
-# Phase 4: Session B (hex-line)
-echo ""
-echo "=== Phase 4: Session B (hex-line) ==="
-(
-  cd "$BENCH_DIR/bench-hexline/mcp/hex-line-mcp"
-  claude -p \
-    --verbose \
-    --mcp-config "$MCP_CFG" \
-    --settings "$HEX_SETTINGS" \
-    --dangerously-skip-permissions \
-    --output-format stream-json \
-    --max-turns 50 \
-    < "$GOALS" \
-    > "$RESULTS_DIR/${DATE}-hexline.jsonl" 2>&1
-) &
-PID_B=$!
-echo "PID: $PID_B"
+for row in "${SCENARIOS[@]}"; do
+  IFS='|' read -r SCENARIO_ID PROMPT_FILE SCENARIO_TITLE <<< "$row"
+  BUILTIN_WT="$BENCH_DIR/bench-${SCENARIO_ID}-builtin"
+  HEXLINE_WT="$BENCH_DIR/bench-${SCENARIO_ID}-hexline"
 
-# Wait for both
-echo ""
-echo "=== Waiting for both sessions ==="
-wait $PID_A; STATUS_A=$?; echo "Session A finished (exit: $STATUS_A)"
-wait $PID_B; STATUS_B=$?; echo "Session B finished (exit: $STATUS_B)"
+  echo ""
+  echo "=== Scenario: $SCENARIO_TITLE ($SCENARIO_ID) ==="
+  cleanup_worktree "$BUILTIN_WT"
+  cleanup_worktree "$HEXLINE_WT"
+  git -C "$REPO_ROOT" worktree add "$BUILTIN_WT" HEAD >/dev/null
+  git -C "$REPO_ROOT" worktree add "$HEXLINE_WT" HEAD >/dev/null
+  sync_current_tree "$BUILTIN_WT"
+  sync_current_tree "$HEXLINE_WT"
+  checkpoint_worktree "$BUILTIN_WT"
+  checkpoint_worktree "$HEXLINE_WT"
 
-# Phase 5: Parse results
+  (
+    cd "$BUILTIN_WT/mcp/hex-line-mcp"
+    claude -p \
+      --verbose \
+      --strict-mcp-config \
+      --settings '{"disableAllHooks":true}' \
+      --dangerously-skip-permissions \
+      --output-format stream-json \
+      --max-turns 50 \
+      < "$PROMPT_FILE" \
+      > "$RESULTS_DIR/${DATE}-${SCENARIO_ID}-builtin.jsonl" 2>&1
+  ) &
+  PID_A=$!
+
+  (
+    cd "$HEXLINE_WT/mcp/hex-line-mcp"
+    claude -p \
+      --verbose \
+      --mcp-config "$MCP_CFG" \
+      --settings "$HEX_SETTINGS" \
+      --dangerously-skip-permissions \
+      --output-format stream-json \
+      --max-turns 50 \
+      < "$PROMPT_FILE" \
+      > "$RESULTS_DIR/${DATE}-${SCENARIO_ID}-hexline.jsonl" 2>&1
+  ) &
+  PID_B=$!
+
+  set +e
+  wait $PID_A; STATUS_A=$?
+  wait $PID_B; STATUS_B=$?
+  set -e
+  echo "Built-in exit: $STATUS_A | Hex-line exit: $STATUS_B"
+
+  git -C "$BUILTIN_WT" diff --no-ext-diff --stat --patch > "$RESULTS_DIR/${DATE}-${SCENARIO_ID}-builtin.diff.txt" || true
+  git -C "$HEXLINE_WT" diff --no-ext-diff --stat --patch > "$RESULTS_DIR/${DATE}-${SCENARIO_ID}-hexline.diff.txt" || true
+  cleanup_worktree "$BUILTIN_WT"
+  cleanup_worktree "$HEXLINE_WT"
+done
+
 echo ""
-echo "=== Phase 5: Parsing results ==="
+echo "=== Parsing results ==="
 node "$SCRIPT_DIR/parse-results.mjs" \
-  "$RESULTS_DIR/${DATE}-builtin.jsonl" \
-  "$RESULTS_DIR/${DATE}-hexline.jsonl" \
+  "$RESULTS_DIR" \
+  "$EXPECTATIONS" \
+  "$DATE" \
   "$RESULTS_DIR/${DATE}-comparison.md"
 
 echo ""
 echo "=== Done ==="
 echo "Report: $RESULTS_DIR/${DATE}-comparison.md"
-echo ""
-echo "Worktrees left for inspection. Remove with:"
-echo "  git -C $REPO_ROOT worktree remove --force $BENCH_DIR/bench-builtin"
-echo "  git -C $REPO_ROOT worktree remove --force $BENCH_DIR/bench-hexline"

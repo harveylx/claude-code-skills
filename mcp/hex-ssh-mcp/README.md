@@ -43,6 +43,42 @@ Requires Node.js >= 18.0.0.
 
 Linux/POSIX hosts with standard coreutils (grep, sed, wc, base64).
 
+
+## SSH Config Support
+
+hex-ssh automatically reads `~/.ssh/config` to resolve host aliases, usernames, ports, and identity files. Just use your SSH alias:
+
+```
+host: "contabo"  // resolves HostName, User, Port, IdentityFile from config
+```
+
+### Resolution Priority
+
+| Priority | Source | Example |
+|----------|--------|---------|
+| 1 (highest) | Explicit tool args | `user: "admin"` overrides config |
+| 2 | `~/.ssh/config` | `Host contabo` block |
+| 3 | ENV vars | `SSH_PRIVATE_KEY` |
+| 4 (lowest) | Defaults | port 22, `~/.ssh/id_*` |
+
+### Connection Reuse
+
+Connections are pooled and reused across tool calls to the same host with the same auth identity. Idle connections close after 60 seconds. Max 10 pooled connections.
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `SSH_CONFIG_PATH` | Override `~/.ssh/config` path |
+| `ALLOWED_HOSTS` | Comma-separated resolved hostnames/IPs (not aliases) |
+
+### Unsupported Directives (v1)
+
+`ProxyJump` and `ProxyCommand` return an explicit `UNSUPPORTED_SSH_CONFIG` error. ssh2 does not support native proxy tunneling.
+
+### Multi-Key Auth
+
+When SSH config provides multiple `IdentityFile` entries, hex-ssh tries each key in order (like OpenSSH). If the server rejects a key, the next one is attempted automatically.
 ## Security
 
 ### Host Key Verification

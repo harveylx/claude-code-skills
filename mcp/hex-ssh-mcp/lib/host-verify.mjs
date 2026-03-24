@@ -14,11 +14,13 @@ function fingerprint(keyBuf) {
 /**
  * Build hostVerifier callback for ssh2.
  * Sources (checked in order):
- *   1. ALLOWED_HOST_FINGERPRINTS env — comma-separated "SHA256:<base64>" values
- *   2. ~/.ssh/known_hosts — parsed, fingerprints computed from stored keys
- * If neither has a match → reject (fail-closed).
+ *   1. ALLOWED_HOST_FINGERPRINTS env - comma-separated "SHA256:<base64>" values
+ *   2. ~/.ssh/known_hosts - parsed, fingerprints computed from stored keys
+ * If neither has a match -> reject (fail-closed).
+ * @param {string} lookupHost - Host to match in known_hosts (HostKeyAlias or resolved host)
+ * @param {number} [targetPort=22] - SSH port
  */
-export function buildHostVerifier(targetHost, targetPort = 22) {
+export function buildHostVerifier(lookupHost, targetPort = 22) {
     const allowed = new Set();
 
     // Source 1: env var
@@ -39,9 +41,9 @@ export function buildHostVerifier(targetHost, targetPort = 22) {
             const hostMatch = hosts.some(h => {
                 if (h.startsWith("[")) {
                     const m = h.match(/^\[(.+)\]:(\d+)$/);
-                    return m && m[1] === targetHost && parseInt(m[2]) === targetPort;
+                    return m && m[1] === lookupHost && parseInt(m[2]) === targetPort;
                 }
-                return h === targetHost && targetPort === 22;
+                return h === lookupHost && targetPort === 22;
             });
             if (hostMatch) {
                 // Compute fingerprint from stored base64 key

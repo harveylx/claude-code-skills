@@ -112,7 +112,7 @@ async function filesMode(pattern, target, opts) {
 
     const lines = stdout.trimEnd().split("\n").filter(Boolean);
     const normalized = lines.map(l => l.replace(/\\/g, "/"));
-    return `\`\`\`\n${normalized.join("\n")}\n\`\`\``;
+    return normalized.join("\n");
 }
 
 /**
@@ -135,7 +135,7 @@ async function countMode(pattern, target, opts) {
 
     const lines = stdout.trimEnd().split("\n").filter(Boolean);
     const normalized = lines.map(l => l.replace(/\\/g, "/"));
-    return `\`\`\`\n${normalized.join("\n")}\n\`\`\``;
+    return normalized.join("\n");
 }
 
 /**
@@ -269,7 +269,7 @@ async function contentMode(pattern, target, opts, plain, totalLimit) {
             if (totalLimit > 0 && matchCount >= totalLimit) {
                 flushGroup();
                 formatted.push(`--- total_limit reached (${totalLimit}) ---`);
-                return `\`\`\`\n${formatted.join("\n")}\n\`\`\``;
+                return formatted.join("\n");
             }
         }
     }
@@ -277,5 +277,5 @@ async function contentMode(pattern, target, opts, plain, totalLimit) {
     // Flush last group
     flushGroup();
 
-    return `\`\`\`\n${formatted.join("\n")}\n\`\`\``;
+    return formatted.join("\n");
 }

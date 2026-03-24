@@ -86,6 +86,29 @@ function extractOutline(rootNode, config, sourceLines) {
     return { entries, skippedRanges };
 }
 
+function fallbackOutline(sourceLines) {
+    const entries = [];
+    for (let index = 0; index < sourceLines.length; index++) {
+        const line = sourceLines[index];
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        const match = trimmed.match(
+            /^(?:export\s+)?(?:async\s+)?function\s+[\w$]+|^(?:export\s+)?(?:const|let|var)\s+[\w$]+\s*=|^(?:export\s+)?class\s+[\w$]+|^(?:export\s+)?interface\s+[\w$]+|^(?:export\s+)?type\s+[\w$]+\s*=|^(?:export\s+)?enum\s+[\w$]+|^(?:export\s+default\s+)?[\w$]+\s*=>/
+        );
+        if (!match) continue;
+
+        entries.push({
+            start: index + 1,
+            end: index + 1,
+            depth: 0,
+            text: trimmed.slice(0, 120),
+            name: trimmed.match(/([\w$]+)/)?.[1] || null,
+        });
+    }
+    return entries;
+}
+
 export async function outlineFromContent(content, ext) {
     const config = LANG_CONFIGS[ext];
     const grammar = grammarForExtension(ext);
@@ -106,8 +129,10 @@ export async function outlineFromContent(content, ext) {
     return extractOutline(tree.rootNode, config, sourceLines);
 }
 
-function formatOutline(entries, skippedRanges, sourceLineCount, db, relFile) {
+function formatOutline(entries, skippedRanges, sourceLineCount, db, relFile, note = "") {
     const lines = [];
+
+    if (note) lines.push(note, "");
 
     if (skippedRanges.length > 0) {
         const first = skippedRanges[0].start;
@@ -139,7 +164,13 @@ export async function fileOutline(filePath) {
 
     const content = readUtf8Normalized(real);
     const result = await outlineFromContent(content, ext);
+    const entries = result.entries.length > 0
+        ? result.entries
+        : fallbackOutline(content.split("\n"));
+    const note = result.entries.length > 0 || entries.length === 0
+        ? ""
+        : "Fallback outline: heuristic symbols shown because parser returned no structural entries.";
     const db = getGraphDB(real);
     const relFile = db ? getRelativePath(real) : null;
-    return `File: ${filePath}\n\n${formatOutline(result.entries, result.skippedRanges, content.split("\n").length, db, relFile)}`;
+    return `File: ${filePath}\n\n${formatOutline(entries, result.skippedRanges, content.split("\n").length, db, relFile, note)}`;
 }

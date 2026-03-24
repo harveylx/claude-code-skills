@@ -32,10 +32,10 @@ Advanced / occasional:
 
 | Tool | Description | Key Feature |
 |------|-------------|-------------|
-| `read_file` | Read file with hash-annotated lines, checksums, and revision | Partial reads via `offset`/`limit` |
+| `read_file` | Read file with hash-annotated lines, checksums, and revision | Partial reads via `offset`/`limit` or `ranges`, compact output by default |
 | `edit_file` | Revision-aware anchor edits (`set_line`, `replace_lines`, `insert_after`, `replace_between`) | Batched same-file edits + conservative auto-rebase |
 | `write_file` | Create new file or overwrite, auto-creates parent dirs | Path validation, no hash overhead |
-| `grep_search` | Search with ripgrep, 3 output modes, per-group checksums | Edit-ready: grep -> edit directly with checksums |
+| `grep_search` | Search with ripgrep, 3 output modes, per-group checksums | Plain `files`/`count`, compact edit-ready `content` |
 | `outline` | AST-based structural overview via tree-sitter WASM | 95% token reduction (10 lines instead of 500) |
 | `verify` | Check if held checksums / revision are still current | Staleness check without full re-read |
 | `directory_tree` | Compact directory tree with root .gitignore support | Skips node_modules/.git, shows file sizes |
@@ -48,10 +48,10 @@ Advanced / occasional:
 
 | Event | Trigger | Action |
 |-------|---------|--------|
-| **PreToolUse** | Read/Edit/Write/Grep on text files | Blocks built-in, forces hex-line tools |
+| **PreToolUse** | Read/Edit/Write/Grep on text files | Size-aware redirect: cheap small operations may pass, expensive ones are redirected |
 | **PreToolUse** | Bash with dangerous commands | Blocks `rm -rf /`, `git push --force`, etc. Agent must confirm with user |
 | **PostToolUse** | Bash with 50+ lines output | RTK: deduplicates, truncates, shows filtered summary to Claude as feedback |
-| **SessionStart** | Session begins | Injects full tool preference list into agent context |
+| **SessionStart** | Session begins | Injects a short no-discovery workflow for hex-line tools |
 
 
 ### Bash Redirects
@@ -90,17 +90,17 @@ The `setup_hooks` tool automatically installs the output style to `~/.claude/out
 
 ## Benchmarking
 
-Two-tier benchmark architecture:
+Two benchmark layers:
 
-- `/benchmark-compare` — real 1:1 comparison (runs inside Claude Code, calls BOTH built-in and hex-line tools on same files)
-- `npm run benchmark` — hex-line standalone metrics (Node.js, all real library calls, no simulations)
+- `/benchmark-compare` — balanced built-in vs hex-line comparison inside Claude Code, validated by scenario manifests and saved diffs
+- `npm run benchmark` — hex-line standalone workflow metrics (Node.js, all real library calls, no simulations)
 
 ```bash
 npm run benchmark -- --repo /path/to/repo
 npm run benchmark:diagnostic -- --repo /path/to/repo
 ```
 
-Current hex-line workflow metrics on the `hex-line-mcp` repo (all real library calls):
+Current standalone workflow metrics on the `hex-line-mcp` repo (all real library calls):
 
 | # | Workflow | Hex-line output | Ops |
 |---|----------|---------:|----:|
@@ -110,7 +110,7 @@ Current hex-line workflow metrics on the `hex-line-mcp` repo (all real library c
 | W4 | Inspect large smoke test before edit | 2,322 chars | 3 |
 | W5 | Follow-up edit after unrelated line shift | 1,267 chars | 3 |
 
-Workflow total: `6,403` chars across `12` ops. Run `/benchmark-compare` in Claude Code for full built-in vs hex-line comparison with real tool calls on both sides.
+Workflow total: `6,403` chars across `12` ops. Run `/benchmark-compare` for the balanced scenario suite with activation checks and diff-based correctness.
 
 ### Optional Graph Enrichment
 
@@ -152,7 +152,7 @@ Use `bulk_replace` for text rename patterns across one or more files. Returns co
 
 ### read_file
 
-Read a file with FNV-1a hash-annotated lines, range checksums, file checksum, and revision. Supports directory listing.
+Read a file with FNV-1a hash-annotated lines, range checksums, file checksum, and revision. Supports batch reads, multi-range reads, and directory listing.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -160,17 +160,22 @@ Read a file with FNV-1a hash-annotated lines, range checksums, file checksum, an
 | `paths` | string[] | no | Array of file paths to read (batch mode) |
 | `offset` | number | no | Start line, 1-indexed (default: 1) |
 | `limit` | number | no | Max lines to return (default: 2000, 0 = all) |
+| `ranges` | array | no | Explicit line ranges, e.g. `[{ "start": 10, "end": 30 }]` |
+| `include_graph` | boolean | no | Opt in to graph annotations when the graph index exists |
 | `plain` | boolean | no | Omit hashes, output `lineNum\|content` instead |
 
-Output format:
+Default output is compact:
 
 ```
+File: lib/search.mjs
+meta: lines 1-20 of 282
+revision: rev-12-a1b2c3d4
+file: 1-282:beefcafe
+
 ab.1    import { resolve } from "node:path";
 cd.2    import { readFileSync } from "node:fs";
 ...
 checksum: 1-50:f7e2a1b0
-revision: rev-12-a1b2c3d4
-file: 1-120:beefcafe
 ```
 
 ### edit_file
@@ -203,6 +208,7 @@ Result footer includes:
 - `revision: ...`
 - `file: ...`
 - `changed_ranges: ...` when relevant
+- `remapped_refs: ...` when stale anchors were uniquely relocated
 - `retry_checksum: ...` on local conflicts
 
 ### write_file
@@ -216,7 +222,7 @@ Create a new file or overwrite an existing one. Creates parent directories autom
 
 ### grep_search
 
-Search file contents using ripgrep. Three output modes: `content` (hash-annotated with checksums), `files` (paths only), `count` (match counts).
+Search file contents using ripgrep. Three output modes: `content` (hash-annotated with checksums), `files` (plain path list), `count` (plain `file:count` list).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -236,7 +242,7 @@ Search file contents using ripgrep. Three output modes: `content` (hash-annotate
 | `total_limit` | number | no | Total match events across all files; multiline matches count as 1 (0 = unlimited) |
 | `plain` | boolean | no | Omit hash tags, return `file:line:content` |
 
-**Content mode** returns per-group checksums enabling direct `replace_lines` from grep results without intermediate `read_file`.
+`content` mode returns per-group checksums enabling direct `replace_lines` from grep results without intermediate `read_file`.
 
 ### outline
 
@@ -257,7 +263,7 @@ Check if range checksums from a prior read are still valid, optionally relative 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `path` | string | yes | File path |
-| `checksums` | string | yes | JSON array of checksum strings, e.g. `["1-50:f7e2a1b0"]` |
+| `checksums` | string[] | yes | Array of checksum strings, e.g. `["1-50:f7e2a1b0"]` |
 | `base_revision` | string | no | Prior revision to compare against latest state |
 
 Returns a single-line confirmation or lists changed ranges.
@@ -318,7 +324,7 @@ Configuration constants in `hook.mjs`:
 
 ### SessionStart: Tool Preferences
 
-Injects hex-line tool preference list into agent context at session start.
+Injects a short operational workflow into agent context at session start: no `ToolSearch`, prefer `outline -> read_file -> edit_file -> verify`, and use targeted reads over full-file reads.
 
 ## Architecture
 

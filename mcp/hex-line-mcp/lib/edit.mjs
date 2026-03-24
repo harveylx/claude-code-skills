@@ -53,6 +53,28 @@ function buildErrorSnippet(lines, centerIdx, radius = 5) {
     return { start: start + 1, end, text };
 }
 
+function stripAnchorOrDiffPrefix(line) {
+    let next = line;
+    next = next.replace(/^\s*(?:>>|  )?[a-z2-7]{2}\.\d+\t/, "");
+    next = next.replace(/^.+:(?:>>|  )[a-z2-7]{2}\.\d+\t/, "");
+    next = next.replace(/^[ +-]\d+\|\s?/, "");
+    return next;
+}
+
+function sanitizeEditText(text) {
+    const original = String(text ?? "");
+    const hadTrailingNewline = original.endsWith("\n");
+    let lines = original.split("\n");
+    const nonEmpty = lines.filter((line) => line.length > 0);
+    if (nonEmpty.length > 0 && nonEmpty.every((line) => /^\+(?!\+)/.test(line))) {
+        lines = lines.map((line) => line.startsWith("+") && !line.startsWith("++") ? line.slice(1) : line);
+    }
+    lines = lines.map(stripAnchorOrDiffPrefix);
+    let cleaned = lines.join("\n");
+    if (hadTrailingNewline && !cleaned.endsWith("\n")) cleaned += "\n";
+    return cleaned;
+}
+
 /**
  * Find line by tag.lineNum reference with fuzzy matching (+-5 lines).
  * Falls back to global hash relocation via hashIndex before throwing.
@@ -172,6 +194,7 @@ function buildConflictMessage({
     centerIdx,
     changedRanges,
     retryChecksum,
+    remaps,
     details,
 }) {
     const safeCenter = Math.max(0, Math.min(lines.length - 1, centerIdx));
@@ -183,6 +206,7 @@ function buildConflictMessage({
         `file: ${fileChecksum}`;
     if (changedRanges) msg += `\nchanged_ranges: ${describeChangedRanges(changedRanges)}`;
     if (retryChecksum) msg += `\nretry_checksum: ${retryChecksum}`;
+    if (remaps?.length) msg += `\nremapped_refs:\n${remaps.map(({ from, to }) => `${from} -> ${to}`).join("\n")}`;
     msg += `\n\n${details}\n\nCurrent content (lines ${snip.start}-${snip.end}):\n${snip.text}`;
     msg += `\n\nTip: Retry from the fresh local snippet above.`;
     if (filePath) msg += `\npath: ${filePath}`;
@@ -222,6 +246,8 @@ export function editFile(filePath, edits, opts = {}) {
     const hadTrailingNewline = original.endsWith("\n");
     const hashIndex = currentSnapshot.uniqueTagIndex;
     let autoRebased = false;
+    const remaps = [];
+    const remapKeys = new Set();
 
     const anchored = [];
     for (const e of edits) {
@@ -283,13 +309,26 @@ export function editFile(filePath, edits, opts = {}) {
             centerIdx,
             changedRanges: staleRevision && hasBaseSnapshot ? changedRanges : null,
             retryChecksum,
+            remaps,
             details,
         });
     };
 
+    const trackRemap = (ref, idx) => {
+        const actualRef = `${lineTag(fnv1a(lines[idx]))}.${idx + 1}`;
+        const expectedRef = `${ref.tag}.${ref.line}`;
+        if (actualRef === expectedRef) return;
+        const key = `${expectedRef}->${actualRef}`;
+        if (remapKeys.has(key)) return;
+        remapKeys.add(key);
+        remaps.push({ from: expectedRef, to: actualRef });
+    };
+
     const locateOrConflict = (ref, reason = "stale_anchor") => {
         try {
-            return findLine(lines, ref.line, ref.tag, hashIndex);
+            const idx = findLine(lines, ref.line, ref.tag, hashIndex);
+            trackRemap(ref, idx);
+            return idx;
         } catch (e) {
             if (conflictPolicy !== "conservative" || !staleRevision) throw e;
             const centerIdx = Math.max(0, Math.min(lines.length - 1, ref.line - 1));
@@ -334,7 +373,7 @@ export function editFile(filePath, edits, opts = {}) {
                 lines.splice(idx, 1);
             } else {
                 const origLine = [lines[idx]];
-                const raw = String(txt).split("\n");
+                const raw = sanitizeEditText(txt).split("\n");
                 const newLines = opts.restoreIndent ? restoreIndent(origLine, raw) : raw;
                 lines.splice(idx, 1, ...newLines);
             }
@@ -348,7 +387,7 @@ export function editFile(filePath, edits, opts = {}) {
             const conflict = ensureRevisionContext(idx + 1, idx + 1, idx);
             if (conflict) return conflict;
 
-            let insertLines = e.insert_after.text.split("\n");
+            let insertLines = sanitizeEditText(e.insert_after.text).split("\n");
             if (opts.restoreIndent) insertLines = restoreIndent([lines[idx]], insertLines);
             lines.splice(idx + 1, 0, ...insertLines);
             continue;
@@ -412,7 +451,7 @@ export function editFile(filePath, edits, opts = {}) {
                 lines.splice(si, ei - si + 1);
             } else {
                 const origRange = lines.slice(si, ei + 1);
-                let newLines = String(txt).split("\n");
+                let newLines = sanitizeEditText(txt).split("\n");
                 if (opts.restoreIndent) newLines = restoreIndent(origRange, newLines);
                 lines.splice(si, ei - si + 1, ...newLines);
             }
@@ -439,7 +478,7 @@ export function editFile(filePath, edits, opts = {}) {
             if (conflict) return conflict;
 
             const txt = e.replace_between.new_text;
-            let newLines = String(txt ?? "").split("\n");
+            let newLines = sanitizeEditText(txt ?? "").split("\n");
             const sliceStart = boundaryMode === "exclusive" ? si + 1 : si;
             const removeCount = boundaryMode === "exclusive" ? Math.max(0, ei - si - 1) : (ei - si + 1);
             const origRange = lines.slice(sliceStart, sliceStart + removeCount);
@@ -499,6 +538,9 @@ export function editFile(filePath, edits, opts = {}) {
     if (autoRebased && staleRevision && hasBaseSnapshot) {
         msg += `\nchanged_ranges: ${describeChangedRanges(changedRanges)}`;
     }
+    if (remaps.length > 0) {
+        msg += `\nremapped_refs:\n${remaps.map(({ from, to }) => `${from} -> ${to}`).join("\n")}`;
+    }
     msg += `\nUpdated ${filePath} (${content.split("\n").length} lines)`;
 
     // Post-edit context (before diff — always visible even if output truncated)
@@ -534,4 +576,3 @@ export function editFile(filePath, edits, opts = {}) {
 
     return msg;
 }
-
