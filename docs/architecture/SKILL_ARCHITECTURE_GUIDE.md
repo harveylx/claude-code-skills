@@ -277,7 +277,7 @@ Move detailed content to `references/` to stay within limits.
 | **Format** | WHAT it does + WHEN to use (specific triggers) | skill-development |
 | **Trigger phrases** | Include exact user phrases that activate skill | skill-development |
 | **YAML quoting** | If description contains `:`, MUST wrap in double quotes | skill-creator |
-| **Allowed fields** | name, description (+ license, allowed-tools, metadata for plugins) | skill-creator |
+| **Allowed fields** | name, description (+ license, allowed-tools, metadata for plugins). Include MCP tools in allowed-tools alongside built-ins | skill-creator |
 | **Negative triggers** | "Not for X" when overlapping domains exist | skill-development |
 | **Name format** | hyphen-case, 3-64 chars, no leading/trailing hyphens | skill-creator |
 | **Side-effect guard** | Destructive skills MUST have `disable-model-invocation: true` | frontmatter_reference |

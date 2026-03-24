@@ -52,8 +52,7 @@
         "mcp/hex-line-mcp/lib/bulk-replace.mjs",
         "mcp/hex-line-mcp/lib/changes.mjs",
         "mcp/hex-line-mcp/lib/format.mjs",
-        "mcp/hex-line-mcp/lib/read.mjs",
-        "mcp/hex-line-mcp/lib/revisions.mjs"
+        "mcp/hex-line-mcp/lib/snapshot.mjs"
       ],
       "forbiddenChangedFiles": [],
       "requiredDiffPatterns": [
@@ -64,7 +63,6 @@
         "loadTextFile"
       ],
       "requiredCommands": [
-        "rg .*readText.* lib",
         "node (?:-c|--check) lib/format\\.mjs"
       ],
       "exactChangedFiles": true

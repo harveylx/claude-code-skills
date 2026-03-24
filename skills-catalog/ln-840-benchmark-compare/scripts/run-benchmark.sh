@@ -7,9 +7,9 @@ REPO_ROOT="$(cd "$SKILL_DIR/../.." && pwd)"
 MCP_DIR="$REPO_ROOT/mcp/hex-line-mcp"
 HOOK_PATH="$MCP_DIR/hook.mjs"
 SERVER_PATH="$MCP_DIR/server.mjs"
-RESULTS_DIR="$MCP_DIR/benchmark/results"
-GOALS="${1:-$MCP_DIR/benchmark/goals.md}"
-EXPECTATIONS="${2:-$MCP_DIR/benchmark/expectations.json}"
+RESULTS_DIR="$SKILL_DIR/results"
+GOALS="${1:-$SKILL_DIR/references/goals.md}"
+EXPECTATIONS="${2:-$SKILL_DIR/references/expectations.json}"
 DATE=$(date +%Y-%m-%d)
 BENCH_DIR="${BENCH_DIR:-d:/tmp}"
 PROMPTS_DIR="$RESULTS_DIR/.prompts-$DATE"
@@ -31,7 +31,7 @@ sync_current_tree() {
     tar \
       --exclude='.git' \
       --exclude='node_modules' \
-      --exclude='mcp/hex-line-mcp/benchmark/results' \
+      --exclude='skills-catalog/ln-840-benchmark-compare/results' \
       --exclude='mcp/hex-line-mcp/.tmp' \
       -cf - .
   ) | (

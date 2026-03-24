@@ -487,56 +487,27 @@
     </div>
   </section>
 
-  <!-- Benchmark -->
+  <!-- Validation -->
   <section>
     <div class="container">
-      <h2>Workflow Benchmarking</h2>
-      <p class="section-desc">Public benchmark mode now reports only session-derived comparative workflows against built-in tools.</p>
+      <h2>Validation</h2>
+      <p class="section-desc">hex-line-mcp is validated with smoke tests, lint/check gates, and internal scenario fixtures. Comparative built-in vs hex-line benchmarks live outside this package.</p>
 
       <div class="workflow-block">
         <p><strong style="color: var(--text-primary);">Commands</strong></p>
-        <p><code>npm run benchmark -- --repo /path/to/repo</code></p>
-        <p><code>npm run benchmark:diagnostic -- --repo /path/to/repo</code></p>
-        <p><code>npm run benchmark:diagnostic:graph -- --repo /path/to/repo</code></p>
-      </div>
-
-      <div class="table-wrap" style="margin-top: 28px;">
-        <table>
-          <thead>
-            <tr><th>ID</th><th>Workflow</th><th>Built-in</th><th>Hex-line</th><th>Savings</th><th>Ops</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>W1</td>
-              <td class="tool-desc">Debug hook file-listing redirect</td>
-              <td>23,143 ch</td><td>882 ch</td><td class="savings-high">96%</td><td class="tool-desc">3&rarr;2</td>
-            </tr>
-            <tr>
-              <td>W2</td>
-              <td class="tool-desc">Adjust <code>setup_hooks</code> guidance and verify</td>
-              <td>24,877 ch</td><td>1,637 ch</td><td class="savings-high">93%</td><td class="tool-desc">3&rarr;3</td>
-            </tr>
-            <tr>
-              <td>W3</td>
-              <td class="tool-desc">Repo-wide benchmark wording refresh</td>
-              <td>137,796 ch</td><td>38,918 ch</td><td class="savings-high">72%</td><td class="tool-desc">15&rarr;1</td>
-            </tr>
-            <tr>
-              <td>W4</td>
-              <td class="tool-desc">Inspect large smoke test before edit</td>
-              <td>49,566 ch</td><td>2,104 ch</td><td class="savings-high">96%</td><td class="tool-desc">3&rarr;3</td>
-            </tr>
-          </tbody>
-        </table>
+        <p><code>npm test</code></p>
+        <p><code>npm run lint</code></p>
+        <p><code>npm run check</code></p>
       </div>
 
       <div class="summary-box">
-        Workflow summary: <strong>89% average token savings</strong> &mdash; 24&rarr;9 tool calls (63% fewer)
+        Package gates: <strong>tests + lint + syntax checks</strong> before release.
       </div>
 
       <div class="workflow-block" style="margin-top: 24px;">
-        <p>These workflows are derived from recent real Claude sessions, but executed against reproducible local fixtures in the repository.</p>
-        <p>Tool-level synthetic comparisons still exist under diagnostics for engineering inspection, but they are no longer the public benchmark headline.</p>
+        <p>Maintainers can also run the internal scenario harness for reproducible repo-local workflow regressions.</p>
+        <p><code>npm run scenarios -- --repo /path/to/repo</code></p>
+        <p><code>npm run scenarios:diagnostic -- --repo /path/to/repo</code></p>
       </div>
     </div>
   </section>

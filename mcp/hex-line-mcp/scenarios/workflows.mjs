@@ -21,7 +21,7 @@ import { verifyChecksums } from "../lib/verify.mjs";
 import { editFile } from "../lib/edit.mjs";
 import { bulkReplace } from "../lib/bulk-replace.mjs";
 import { fileOutline } from "../lib/outline.mjs";
-import { getFileLines, runN } from "../lib/benchmark-helpers.mjs";
+import { getFileLines, runN } from "../lib/scenario-helpers.mjs";
 
 function ensureLine(lines, matcher, label) {
     const idx = lines.findIndex((line) => matcher(line));
@@ -135,9 +135,9 @@ export async function runWorkflows(config) {
         const fixtureFiles = [
             "README.md",
             "package.json",
-            "benchmark/index.mjs",
-            "benchmark/atomic.mjs",
-            "benchmark/workflows.mjs",
+            "scenarios/index.mjs",
+            "scenarios/atomic.mjs",
+            "scenarios/workflows.mjs",
         ];
         const copiedFiles = fixtureFiles.map((relPath) => copyIntoTemp(tempRoot, repoRoot, relPath));
         const replacements = [{ old: "benchmark", new: "workflow benchmark" }];

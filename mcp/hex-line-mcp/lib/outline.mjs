@@ -9,7 +9,8 @@
 import { extname } from "node:path";
 import { getParser, getLanguage } from "@levnikolaevich/hex-common/parser/tree-sitter";
 import { grammarForExtension, supportedExtensions } from "@levnikolaevich/hex-common/parser/languages";
-import { readUtf8Normalized } from "@levnikolaevich/hex-common/text/file-text";
+import { lineTag } from "@levnikolaevich/hex-common/text-protocol/hash";
+import { readSnapshot } from "./snapshot.mjs";
 import { validatePath, normalizePath } from "./security.mjs";
 import { getGraphDB, symbolAnnotation, getRelativePath } from "./graph-enrich.mjs";
 
@@ -33,6 +34,8 @@ const LANG_CONFIGS = {
     ".swift": { outline: ["function_declaration", "class_declaration", "struct_declaration", "protocol_declaration"], skip: ["import_declaration"], recurse: ["class_body"] },
     ".sh":   { outline: ["function_definition"], skip: [], recurse: [] },
     ".bash": { outline: ["function_definition"], skip: [], recurse: [] },
+    ".md":   { outline: [], skip: [], recurse: [] },
+    ".mdx":  { outline: [], skip: [], recurse: [] },
 };
 
 function extractOutline(rootNode, config, sourceLines) {
@@ -109,6 +112,40 @@ function fallbackOutline(sourceLines) {
     return entries;
 }
 
+function markdownOutline(sourceLines) {
+    const entries = [];
+    let activeFence = null;
+    for (let index = 0; index < sourceLines.length; index++) {
+        const line = sourceLines[index];
+        const fenceMatch = line.match(/^\s{0,3}(```+|~~~+).*$/);
+        if (fenceMatch) {
+            const marker = fenceMatch[1][0];
+            const length = fenceMatch[1].length;
+            if (!activeFence) {
+                activeFence = { marker, length };
+                continue;
+            }
+            if (activeFence.marker === marker && length >= activeFence.length) {
+                activeFence = null;
+                continue;
+            }
+        }
+        if (activeFence) continue;
+        const match = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+        if (!match) continue;
+        const level = match[1].length;
+        const title = match[2].trim();
+        entries.push({
+            start: index + 1,
+            end: index + 1,
+            depth: level - 1,
+            text: title.slice(0, 120),
+            name: title.split(/\s+/)[0] || null,
+        });
+    }
+    return entries;
+}
+
 export async function outlineFromContent(content, ext) {
     const config = LANG_CONFIGS[ext];
     const grammar = grammarForExtension(ext);
@@ -129,7 +166,7 @@ export async function outlineFromContent(content, ext) {
     return extractOutline(tree.rootNode, config, sourceLines);
 }
 
-function formatOutline(entries, skippedRanges, sourceLineCount, db, relFile, note = "") {
+function formatOutline(entries, skippedRanges, sourceLineCount, snapshot, db, relFile, note = "") {
     const lines = [];
 
     if (note) lines.push(note, "");
@@ -145,7 +182,11 @@ function formatOutline(entries, skippedRanges, sourceLineCount, db, relFile, not
         const indent = "  ".repeat(e.depth);
         const anno = db ? symbolAnnotation(db, relFile, e.name) : null;
         const suffix = anno ? `  ${anno}` : "";
-        lines.push(`${indent}${e.start}-${e.end}: ${e.text}${suffix}`);
+        const tag = snapshot && snapshot.lineHashes[e.start - 1]
+            ? lineTag(snapshot.lineHashes[e.start - 1])
+            : null;
+        const prefix = tag ? `${tag}.` : "";
+        lines.push(`${indent}${prefix}${e.start}-${e.end}: ${e.text}${suffix}`);
     }
 
     lines.push("");
@@ -162,15 +203,22 @@ export async function fileOutline(filePath) {
         return `Outline unavailable for ${ext} files. Use read_file directly for non-code files (markdown, config, text). Supported code extensions: ${supportedExtensions().join(", ")}`;
     }
 
-    const content = readUtf8Normalized(real);
-    const result = await outlineFromContent(content, ext);
-    const entries = result.entries.length > 0
-        ? result.entries
-        : fallbackOutline(content.split("\n"));
-    const note = result.entries.length > 0 || entries.length === 0
-        ? ""
-        : "Fallback outline: heuristic symbols shown because parser returned no structural entries.";
+    const snapshot = readSnapshot(real);
+    const isMarkdown = ext === ".md" || ext === ".mdx";
+    const result = isMarkdown ? null : await outlineFromContent(snapshot.content, ext);
+    let entries;
+    let skippedRanges = [];
+    let note = "";
+    if (result && result.entries.length > 0) {
+        entries = result.entries;
+        skippedRanges = result.skippedRanges;
+    } else if (isMarkdown) {
+        entries = markdownOutline(snapshot.lines);
+    } else {
+        entries = fallbackOutline(snapshot.lines);
+        if (entries.length > 0) note = "Fallback outline: heuristic symbols shown because parser returned no structural entries.";
+    }
     const db = getGraphDB(real);
     const relFile = db ? getRelativePath(real) : null;
-    return `File: ${filePath}\n\n${formatOutline(entries, result.skippedRanges, content.split("\n").length, db, relFile, note)}`;
+    return `File: ${filePath}\n\n${formatOutline(entries, skippedRanges, snapshot.lines.length, snapshot, db, relFile, note)}`;
 }

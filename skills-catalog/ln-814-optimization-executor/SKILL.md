@@ -1,6 +1,7 @@
 ---
 name: ln-814-optimization-executor
 description: "Executes optimization hypotheses with keep/discard testing loop. Use when applying validated performance improvements."
+allowed-tools: Read, Grep, Glob, Bash, mcp__hex-line__outline, mcp__hex-line__verify, mcp__hex-line__changes
 license: MIT
 ---
 

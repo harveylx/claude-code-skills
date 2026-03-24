@@ -65,40 +65,11 @@ function parseReadRanges(rawRanges) {
     return parsed;
 }
 
-/** Coerce flat AI-hallucinated edit shapes into canonical nested format. */
-function coerceEdit(e) {
-    if (!e || typeof e !== "object" || Array.isArray(e)) return e;
-    if (e.set_line || e.replace_lines || e.insert_after || e.replace_between || e.replace) return e;
-
-    // Flat set_line: {anchor, new_text/updated_lines/content/line}
-    // Guard: reject if end_anchor/boundary_mode/range_checksum present
-    if (e.anchor && !e.start_anchor && !e.end_anchor && !e.boundary_mode && !e.range_checksum) {
-        const raw = e.new_text ?? e.updated_lines ?? e.content ?? e.line;
-        if (raw !== undefined) {
-            const text = Array.isArray(raw) ? raw.join("\n") : raw;
-            return { set_line: { anchor: e.anchor, new_text: text } };
-        }
-    }
-
-    // Flat replace_between: {start_anchor, end_anchor, new_text, boundary_mode}
-    if (e.start_anchor && e.end_anchor && e.boundary_mode && e.new_text !== undefined) {
-        return { replace_between: { start_anchor: e.start_anchor, end_anchor: e.end_anchor, new_text: e.new_text, boundary_mode: e.boundary_mode } };
-    }
-
-    // Flat replace_lines: {start_anchor, end_anchor, new_text, range_checksum?}
-    if (e.start_anchor && e.end_anchor && e.new_text !== undefined) {
-        return { replace_lines: { start_anchor: e.start_anchor, end_anchor: e.end_anchor, new_text: e.new_text, ...(e.range_checksum ? { range_checksum: e.range_checksum } : {}) } };
-    }
-
-    return e;
-}
-
-
 // ==================== read_file ====================
 
 server.registerTool("read_file", {
     title: "Read File",
-    description: "Read file lines with hashes, checksums, and revision metadata.",
+    description: "Read file with hash-annotated lines, checksums, and revision metadata. Default: edit-ready output. Use plain:true for non-edit workflows.",
     inputSchema: z.object({
         path: z.string().optional().describe("File or directory path"),
         paths: z.array(z.string()).optional().describe("Array of file paths to read (batch mode)"),
@@ -140,11 +111,11 @@ server.registerTool("edit_file", {
     inputSchema: z.object({
         path: z.string().describe("File to edit"),
         edits: z.union([z.string(), z.array(z.any())]).describe(
-            'JSON array. Types: set_line, replace_lines, insert_after, replace_between.\n' +
+            'JSON array of canonical edits.\n' +
             '[{"set_line":{"anchor":"ab.12","new_text":"x"}}]\n' +
             '[{"replace_lines":{"start_anchor":"ab.10","end_anchor":"cd.15","new_text":"x","range_checksum":"10-15:a1b2"}}]\n' +
-            '[{"replace_between":{"start_anchor":"ab.10","end_anchor":"cd.40","new_text":"x","boundary_mode":"inclusive"}}]\n' +
-            '[{"insert_after":{"anchor":"ab.20","text":"x"}}]',
+            '[{"insert_after":{"anchor":"ab.20","text":"x"}}]\n' +
+            '[{"replace_between":{"start_anchor":"ab.10","end_anchor":"cd.40","new_text":"x","boundary_mode":"inclusive"}}]',
         ),
         dry_run: flexBool().describe("Preview changes without writing"),
         restore_indent: flexBool().describe("Auto-fix indentation to match anchor (default: false)"),
@@ -159,11 +130,10 @@ server.registerTool("edit_file", {
         try { parsed = typeof json === "string" ? JSON.parse(json) : json; }
         catch { throw new Error('edits: invalid JSON. Expected: [{"set_line":{"anchor":"xx.N","new_text":"..."}}]'); }
         if (!Array.isArray(parsed) || !parsed.length) throw new Error("Edits: non-empty JSON array required");
-        const normalized = parsed.map(coerceEdit);
         return {
             content: [{
                 type: "text",
-                text: editFile(p, normalized, {
+                text: editFile(p, parsed, {
                     dryRun: dry_run,
                     restoreIndent: restore_indent,
                     baseRevision: base_revision,
@@ -206,7 +176,7 @@ server.registerTool("write_file", {
 
 server.registerTool("grep_search", {
     title: "Search Files",
-    description: "Search file contents with ripgrep and return edit-ready matches.",
+    description: "Search file contents with ripgrep. Default: edit-ready blocks with hashes and checksums. Use output:'files' or 'count' for non-edit workflows. With graph DB: results ranked by importance.",
     inputSchema: z.object({
         pattern: z.string().describe("Search pattern (regex by default, literal if literal:true)"),
         path: z.string().optional().describe("Search dir/file (default: cwd)"),
@@ -246,8 +216,8 @@ server.registerTool("grep_search", {
 server.registerTool("outline", {
     title: "File Outline",
     description:
-        "AST-based structural outline: functions, classes, interfaces with line ranges. " +
-        "Use before reading large code files. Not for .md/.json/.yaml.",
+        "AST-based structural outline with hash anchors for direct edit_file usage. " +
+        "Supports code files (JS/TS/Python/Go/Rust/Java/C/C++/C#/Ruby/PHP/Kotlin/Swift/Bash) and markdown headings (.md/.mdx, fence-aware).",
     inputSchema: z.object({
         path: z.string().describe("Source file path"),
     }),

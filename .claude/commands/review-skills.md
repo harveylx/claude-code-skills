@@ -169,6 +169,6 @@ Then list all FAIL/WARN items grouped by severity, with file paths and fix descr
 
 ## Step 4: Meta-Analysis
 
-**MANDATORY READ:** Load `skills/shared/references/meta_analysis_protocol.md`
+**MANDATORY READ:** Load `skills-catalog/shared/references/meta_analysis_protocol.md`
 
 Analyze this session per protocol §7. Output per protocol format.

@@ -1,16 +1,20 @@
 /**
- * File read with FNV-1a hash annotations and range checksums.
- *
- * Output format: {tag}.{lineNum}\t{content}
- * Appends: checksum: {start}-{end}:{8hex}
+ * File read over the canonical edit-ready block protocol.
  */
 
 import { statSync } from "node:fs";
-import { fnv1a, lineTag, rangeChecksum } from "@levnikolaevich/hex-common/text-protocol/hash";
 import { validatePath, normalizePath } from "./security.mjs";
 import { getGraphDB, fileAnnotations, getRelativePath } from "./graph-enrich.mjs";
-import { relativeTime, listDirectory, readText, MAX_OUTPUT_CHARS } from "./format.mjs";
-import { rememberSnapshot } from "./revisions.mjs";
+import { formatSize, relativeTime, listDirectory, MAX_OUTPUT_CHARS } from "./format.mjs";
+import { readSnapshot } from "./snapshot.mjs";
+import {
+    buildDiagnosticBlock,
+    buildEditReadyBlock,
+    createSnapshotEntries,
+    serializeDiagnosticBlock,
+    serializeReadBlock,
+    serializeReadEntry,
+} from "./block-protocol.mjs";
 
 const DEFAULT_LIMIT = 2000;
 
@@ -35,13 +39,69 @@ function parseRangeEntry(entry, total) {
     return { start, end };
 }
 
-/**
- * Read a file with hash-annotated lines.
- *
- * @param {string} filePath
- * @param {object} opts - { offset, limit, plain, ranges, includeGraph }
- * @returns {string} formatted output
- */
+function normalizeRange(entry, total) {
+    const parsed = parseRangeEntry(entry, total);
+    if (!Number.isInteger(parsed.start) || !Number.isInteger(parsed.end)) {
+        throw new Error("ranges entries must resolve to integer start/end values");
+    }
+    if (parsed.start > parsed.end) {
+        return buildDiagnosticBlock({
+            kind: "invalid_range",
+            message: `Requested range ${parsed.start}-${parsed.end} has start greater than end.`,
+            requestedStartLine: parsed.start,
+            requestedEndLine: parsed.end,
+        });
+    }
+    if (parsed.end < 1 || parsed.start > total) {
+        return buildDiagnosticBlock({
+            kind: "invalid_range",
+            message: `Requested range ${parsed.start}-${parsed.end} is outside file length ${total}.`,
+            requestedStartLine: parsed.start,
+            requestedEndLine: parsed.end,
+        });
+    }
+    return {
+        requestedStartLine: parsed.start,
+        requestedEndLine: parsed.end,
+        startLine: Math.max(1, parsed.start),
+        endLine: Math.min(total, parsed.end),
+    };
+}
+
+function buildReadBlock(snapshot, range, plain, remainingChars) {
+    const entries = [];
+    let nextBudget = remainingChars;
+    let cappedAtLine = 0;
+    for (let lineNumber = range.startLine; lineNumber <= range.endLine; lineNumber++) {
+        const entry = createSnapshotEntries(snapshot, lineNumber, lineNumber)[0];
+        const rendered = serializeReadEntry(entry, { plain });
+        const nextCost = rendered.length + 1;
+        if (entries.length > 0 && nextBudget - nextCost < 0) {
+            cappedAtLine = lineNumber;
+            break;
+        }
+        entries.push(entry);
+        nextBudget -= nextCost;
+    }
+    if (entries.length === 0) {
+        const entry = createSnapshotEntries(snapshot, range.startLine, range.startLine)[0];
+        entries.push(entry);
+        nextBudget -= serializeReadEntry(entry, { plain }).length + 1;
+        if (range.endLine > range.startLine) cappedAtLine = range.startLine + 1;
+    }
+    return {
+        block: buildEditReadyBlock({
+            path: snapshot.path,
+            kind: "read_range",
+            entries,
+            requestedStartLine: range.requestedStartLine,
+            requestedEndLine: range.requestedEndLine,
+        }),
+        remainingChars: nextBudget,
+        cappedAtLine,
+    };
+}
+
 export function readFile(filePath, opts = {}) {
     filePath = normalizePath(filePath);
     const real = validatePath(filePath);
@@ -53,83 +113,58 @@ export function readFile(filePath, opts = {}) {
         return `Directory: ${filePath}\n\n\`\`\`\n${text}\n\`\`\``;
     }
 
-    const snapshot = rememberSnapshot(real, readText(real), { mtimeMs: stat.mtimeMs, size: stat.size });
-    const lines = snapshot.lines;
-    const total = lines.length;
+    const snapshot = readSnapshot(real);
+    const total = snapshot.lines.length;
 
-    // Determine ranges to read
-    let ranges;
+    let requestedRanges;
     if (opts.ranges && opts.ranges.length > 0) {
-        ranges = opts.ranges.map((entry) => {
-            const parsed = parseRangeEntry(entry, total);
-            return {
-                start: Math.max(1, parsed.start),
-                end: Math.min(total, parsed.end),
-            };
-        });
+        requestedRanges = opts.ranges;
     } else {
         const startLine = Math.max(1, opts.offset || 1);
         const maxLines = (opts.limit && opts.limit > 0) ? opts.limit : DEFAULT_LIMIT;
-        ranges = [{ start: startLine, end: Math.min(total, startLine - 1 + maxLines) }];
+        requestedRanges = [{ start: startLine, end: Math.min(total, startLine - 1 + maxLines) }];
     }
 
-    const parts = [];
-
+    const blocks = [];
+    const diagnostics = [];
+    let remainingChars = MAX_OUTPUT_CHARS;
     let cappedAtLine = 0;
-
-    for (const range of ranges) {
-        const selected = lines.slice(range.start - 1, range.end);
-        const lineHashes = [];
-        const formatted = [];
-        let charCount = 0;
-
-        for (let i = 0; i < selected.length; i++) {
-            const line = selected[i];
-            const num = range.start + i;
-            const hash32 = fnv1a(line);
-            const entry = opts.plain
-                ? `${num}|${line}`
-                : `${lineTag(hash32)}.${num}\t${line}`;
-
-            if (charCount + entry.length > MAX_OUTPUT_CHARS && formatted.length > 0) {
-                cappedAtLine = num;
-                break;
-            }
-            lineHashes.push(hash32);
-            formatted.push(entry);
-            charCount += entry.length + 1;
+    for (const requested of requestedRanges) {
+        const normalized = normalizeRange(requested, total);
+        if (normalized.type === "diagnostic_block") {
+            diagnostics.push(normalized);
+            continue;
         }
-
-        // Update range end to actual lines shown
-        const actualEnd = formatted.length > 0
-            ? range.start + formatted.length - 1
-            : range.start;
-        range.end = actualEnd;
-
-        parts.push(formatted.join("\n"));
-
-        // Range checksum (only for lines actually shown)
-        const cs = rangeChecksum(lineHashes, range.start, actualEnd);
-        parts.push(`checksum: ${cs}`);
-
-        if (cappedAtLine) break;
+        const built = buildReadBlock(snapshot, normalized, opts.plain, remainingChars);
+        blocks.push(built.block);
+        remainingChars = built.remainingChars;
+        if (built.cappedAtLine) {
+            cappedAtLine = built.cappedAtLine;
+            diagnostics.push(buildDiagnosticBlock({
+                kind: "output_capped",
+                message: `OUTPUT_CAPPED at line ${built.cappedAtLine} (${MAX_OUTPUT_CHARS} char limit). Use offset=${built.cappedAtLine} to continue reading.`,
+                requestedStartLine: built.cappedAtLine,
+                requestedEndLine: built.cappedAtLine,
+                startLine: built.block.startLine,
+                endLine: built.block.endLine,
+            }));
+            break;
+        }
     }
 
-    // Header
-    const sizeKB = (stat.size / 1024).toFixed(1);
+    const sizeText = formatSize(stat.size);
     const ago = relativeTime(stat.mtime);
-    let meta = `${total} lines, ${sizeKB}KB, ${ago}`;
-    if (ranges.length === 1) {
-        const r = ranges[0];
-        if (r.start > 1 || r.end < total) {
-            meta += `, showing ${r.start}-${r.end}`;
+    let meta = `${total} lines, ${sizeText}, ${ago}`;
+    if (requestedRanges.length === 1 && blocks.length === 1) {
+        const block = blocks[0];
+        if (block.startLine > 1 || block.endLine < total) {
+            meta += `, showing ${block.startLine}-${block.endLine}`;
         }
-        if (r.end < total) {
-            meta += `, ${total - r.end} more below`;
+        if (block.endLine < total) {
+            meta += `, ${total - block.endLine} more below`;
         }
     }
 
-    // Graph enrichment (opt-in)
     const db = opts.includeGraph ? getGraphDB(real) : null;
     const relFile = db ? getRelativePath(real) : null;
     let graphLine = "";
@@ -144,13 +179,17 @@ export function readFile(filePath, opts = {}) {
         }
     }
 
-    let result =
-        `File: ${filePath}${graphLine}\nmeta: ${meta}\nrevision: ${snapshot.revision}\nfile: ${snapshot.fileChecksum}\n\n${parts.join("\n\n")}`;
-
-    // Character cap notice
-    if (cappedAtLine) {
-        result += `\n\nOUTPUT_CAPPED at line ${cappedAtLine} (${MAX_OUTPUT_CHARS} char limit). Use offset=${cappedAtLine} to continue reading.`;
+    const serializedBlocks = [
+        ...blocks.map(block => serializeReadBlock(block, { plain: opts.plain })),
+        ...diagnostics.map(block => serializeDiagnosticBlock(block)),
+    ];
+    if (cappedAtLine && serializedBlocks.length === 0) {
+        serializedBlocks.push(serializeDiagnosticBlock(buildDiagnosticBlock({
+            kind: "output_capped",
+            message: `OUTPUT_CAPPED at line ${cappedAtLine} (${MAX_OUTPUT_CHARS} char limit). Use offset=${cappedAtLine} to continue reading.`,
+            requestedStartLine: cappedAtLine,
+            requestedEndLine: cappedAtLine,
+        })));
     }
-
-    return result;
+    return `File: ${filePath}${graphLine}\nmeta: ${meta}\nrevision: ${snapshot.revision}\nfile: ${snapshot.fileChecksum}\n\n${serializedBlocks.join("\n\n")}`.trim();
 }

@@ -1,9 +1,12 @@
 /**
- * Revision journal for hex-line-mcp.
+ * Snapshot kernel for hex-line-mcp.
  *
- * Keeps short-lived file snapshots in memory so read/edit/verify can reuse
- * line hashes, file checksums, and changed ranges without re-reading the file
- * on every same-file operation.
+ * DocumentSnapshot is the source of truth for:
+ * - normalized lines
+ * - per-line hashes
+ * - file checksums
+ * - revision ids
+ * - change tracking across short-lived in-memory revisions
  */
 
 import { statSync } from "node:fs";
@@ -39,6 +42,7 @@ function pruneExpired(now = Date.now()) {
         const latest = latestByFile.get(snapshot.path);
         if (latest?.revision === revision) latestByFile.delete(snapshot.path);
     }
+
     while (latestByFile.size > MAX_FILES) {
         const oldestPath = latestByFile.keys().next().value;
         const ids = fileRevisionIds.get(oldestPath) || [];
@@ -141,7 +145,7 @@ export function computeChangedRanges(oldLines, newLines) {
             continue;
         }
 
-        oldNum += count; // eslint-disable-line no-unused-vars -- tracks position in old text
+        oldNum += count; // eslint-disable-line no-unused-vars -- position tracking
         newNum += count;
     }
 
@@ -220,17 +224,15 @@ export function getSnapshotByRevision(revision) {
 }
 
 export function overlapsChangedRanges(ranges, startLine, endLine) {
-    return (ranges || []).some((range) => range.start <= endLine && startLine <= range.end);
+    return (ranges || []).some(range => range.start <= endLine && range.end >= startLine);
 }
 
 export function buildRangeChecksum(snapshot, startLine, endLine) {
-    const startIdx = startLine - 1;
-    const endIdx = endLine - 1;
-    if (startIdx < 0 || endIdx >= snapshot.lineHashes.length || startIdx > endIdx) return null;
-    return rangeChecksum(snapshot.lineHashes.slice(startIdx, endIdx + 1), startLine, endLine);
+    if (startLine < 1 || endLine > snapshot.lineHashes.length || startLine > endLine) return null;
+    return rangeChecksum(snapshot.lineHashes.slice(startLine - 1, endLine), startLine, endLine);
 }
 
-export function _resetRevisionCache() {
+export function _resetSnapshotCache() {
     latestByFile.clear();
     revisionsById.clear();
     fileRevisionIds.clear();

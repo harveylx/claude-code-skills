@@ -1,11 +1,13 @@
 ---
 description: "Publish MCP server to npm (hex-line-mcp, hex-ssh-mcp, or hex-graph-mcp). Auto-detects unpublished changes, suggests bump type, syncs server.mjs version."
-allowed-tools: Read, Edit, Bash, Grep, AskUserQuestion
+allowed-tools: Bash, Glob, AskUserQuestion, mcp__hex-line__read_file, mcp__hex-line__edit_file, mcp__hex-line__grep_search, mcp__hex-line__write_file
 ---
 
 # Publish MCP Server
 
 Publishes one of the bundled MCP servers to npm. Tag push triggers GitHub Actions → `npm publish --provenance`.
+
+**IMPORTANT:** Set `PROJECT_ROOT` to the absolute path of the repo root at the start. Use `$PROJECT_ROOT` in all `cd` and path references to avoid CWD-related failures.
 
 ## Package Registry
 
@@ -34,7 +36,7 @@ git log ${LAST_TAG}..HEAD --oneline -- mcp/${PKG}/
 git diff --stat -- mcp/${PKG}/
 
 # Local version
-node --input-type=module -e "import{readFileSync}from'fs';console.log(JSON.parse(readFileSync('./mcp/${PKG}/package.json','utf8')).version)"
+node --input-type=module -e "import{readFileSync}from'fs';console.log(JSON.parse(readFileSync('$PROJECT_ROOT/mcp/${PKG}/package.json','utf8')).version)"
 
 # npm registry version
 npm view @levnikolaevich/${PKG} version 2>/dev/null || echo "not published"
@@ -62,7 +64,7 @@ If no packages need release → report "All packages up to date" and stop.
 
 ### 2. Choose package
 
-AskUserQuestion: "Which MCP server to publish?" — list only packages with commits > 0. If only one needs release, suggest it as default.
+AskUserQuestion: "Which MCP server to publish?" — list only packages that need release (commits > 0 OR unstaged changes). If only one needs release, suggest it as default. Allow "all" if multiple need release.
 
 Set variables:
 - `PKG` = selected package name (e.g. `hex-line-mcp`)
@@ -95,59 +97,47 @@ AskUserQuestion with the recommendation marked "(Recommended)":
 ### 5. Pre-publish checks
 
 ```bash
-cd mcp/hex-common && npm test && cd ../.. && cd mcp/${PKG} && npm run check && npm run lint && npm test
+cd $PROJECT_ROOT/mcp/hex-common && npm test && cd $PROJECT_ROOT/mcp/${PKG} && npm run check && npm run lint && npm test
 ```
 
 **Gate:** hex-common tests + package check/lint/test must all pass. If any fails — fix before proceeding.
 
-**README tool count check:**
+**README tool count check** (Bash grep OK here — runs on single files, not piped through built-in Grep):
 ```bash
-actual=$(grep -c 'registerTool' mcp/${PKG}/server.mjs || echo 0)
-claimed=$(grep -oE '[0-9]+ MCP Tools' mcp/${PKG}/README.md | grep -oE '[0-9]+' || echo "0")
+actual=$(grep -c 'registerTool' $PROJECT_ROOT/mcp/${PKG}/server.mjs || echo 0)
+claimed=$(grep -oE '[0-9]+ MCP Tools' $PROJECT_ROOT/mcp/${PKG}/README.md | grep -oE '[0-9]+' || echo "0")
 [ "$actual" != "$claimed" ] && echo "FAIL: README claims $claimed tools, actual $actual — update README" || echo "README tool count OK ($actual)"
 ```
 If mismatch — update `N MCP Tools` in README.md before proceeding.
 
-### 5b. Benchmark (hex-line only)
-
-```bash
-cd mcp/hex-line-mcp && node benchmark.mjs
-```
-
-Focus on **Workflow Scenarios (W1-W4)**, not atomic operations. Atomic savings (read, grep) vary by file size and are misleading in isolation. Workflow savings reflect real agent usage patterns.
-
-**Review:** If any workflow scenario shows <50% savings or regression — investigate before publishing.
-
 ### 6. Bump version
 
 ```bash
-cd mcp/${PKG} && npm version ${BUMP_TYPE} --no-git-tag-version
-node --input-type=module -e "import{readFileSync}from'fs';console.log(JSON.parse(readFileSync('./mcp/${PKG}/package.json','utf8')).version)"
+cd $PROJECT_ROOT/mcp/${PKG} && npm version ${BUMP_TYPE} --no-git-tag-version
+node --input-type=module -e "import{readFileSync}from'fs';console.log(JSON.parse(readFileSync('$PROJECT_ROOT/mcp/${PKG}/package.json','utf8')).version)"
 ```
 
 ### 7. Build bundle (inlines hex-common + injects version)
 
 ```bash
-cd mcp/${PKG} && npm run build
+cd $PROJECT_ROOT/mcp/${PKG} && npm run build
 ```
 
 Version is injected at build time via esbuild `define: { __HEX_VERSION__ }`. No manual sync in server.mjs needed.
 
-Verify:
-```bash
-grep '"${NEW_VERSION}"' mcp/${PKG}/dist/server.mjs | head -1
-```
+Verify version in bundle using `mcp__hex-line__grep_search`:
+- pattern: `"${NEW_VERSION}"` (literal), path: `mcp/${PKG}/dist/server.mjs`, limit: 1
 
 ### 7b. Sync version in server.json (MCP Registry metadata)
 
 Update both `version` and `packages[0].version` in `mcp/${PKG}/server.json`:
 ```bash
-jq --arg v "${NEW_VERSION}" '.version = $v | .packages[0].version = $v' mcp/${PKG}/server.json > /tmp/server.tmp && mv /tmp/server.tmp mcp/${PKG}/server.json
+jq --arg v "${NEW_VERSION}" '.version = $v | .packages[0].version = $v' $PROJECT_ROOT/mcp/${PKG}/server.json > /tmp/server.tmp && mv /tmp/server.tmp $PROJECT_ROOT/mcp/${PKG}/server.json
 ```
 
 Verify:
 ```bash
-jq '.version, .packages[0].version' mcp/${PKG}/server.json
+jq '.version, .packages[0].version' $PROJECT_ROOT/mcp/${PKG}/server.json
 ```
 
 ### 8. Commit + tag + push

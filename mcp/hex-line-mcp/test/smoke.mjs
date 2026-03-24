@@ -59,6 +59,24 @@ async function closeGraphRepo(dir) {
     getStore(dir).close();
 }
 
+async function withMcpClient(run) {
+    const { Client } = await import("@modelcontextprotocol/sdk/client");
+    const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
+    const client = new Client({ name: "hex-line-smoke", version: "1.0.0" }, { capabilities: {} });
+    const transport = new StdioClientTransport({
+        command: "node",
+        args: ["server.mjs"],
+        cwd: CWD,
+        stderr: "pipe",
+    });
+    try {
+        await client.connect(transport);
+        return await run(client);
+    } finally {
+        await transport.close().catch(() => {});
+    }
+}
+
 // ==================== hash ====================
 
 describe("FNV-1a hash", () => {
@@ -447,6 +465,95 @@ describe("edit business logic", () => {
             fs.unlinkSync(tmp);
         }
     });
+
+    it("applies replace_lines directly from a canonical read block", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const tmp = "d:/tmp/hex-test-read-block-edit.js";
+        fs.writeFileSync(tmp, "alpha\nbeta\ngamma\ndelta\n");
+        try {
+            const readResult = readFile(tmp, { ranges: ["2-3"] });
+            const startAnchor = readResult.match(/([a-z2-7]{2}\.2)\tbeta/)?.[1];
+            const endAnchor = readResult.match(/([a-z2-7]{2}\.3)\tgamma/)?.[1];
+            const checksum = readResult.match(/checksum: (\d+-\d+:[0-9a-f]{8})/)?.[1];
+            assert.ok(startAnchor && endAnchor && checksum, "Canonical read block provides anchors and checksum");
+
+            const result = editFile(tmp, [{
+                replace_lines: {
+                    start_anchor: startAnchor,
+                    end_anchor: endAnchor,
+                    new_text: "beta updated\ngamma updated",
+                    range_checksum: checksum,
+                }
+            }]);
+            assert.ok(result.includes("status: OK"), "Edit succeeds from read block payload");
+            const written = fs.readFileSync(tmp, "utf-8");
+            assert.ok(written.includes("beta updated"), "Read-derived edit updates target range");
+            assert.ok(written.includes("gamma updated"), "Read-derived edit updates full block");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("applies set_line directly from a canonical search block", async () => {
+        const { grepSearch } = await import("../lib/search.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const tmp = "d:/tmp/hex-test-search-block-edit.js";
+        fs.writeFileSync(tmp, "const alpha = 1;\nconst target = 2;\nconst omega = 3;\n");
+        try {
+            const grepResult = await grepSearch("target", { path: tmp, context: 1 });
+            const anchor = grepResult.match(/>>([a-z2-7]{2}\.2)\tconst target = 2;/)?.[1];
+            assert.ok(anchor, "Canonical search block provides direct anchor");
+
+            const result = editFile(tmp, [{
+                set_line: {
+                    anchor,
+                    new_text: "const target = 22;",
+                }
+            }]);
+            assert.ok(result.includes("status: OK"), "Edit succeeds from search block anchor");
+            const written = fs.readFileSync(tmp, "utf-8");
+            assert.ok(written.includes("const target = 22;"), "Search-derived edit updates match line");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("multi-edit result footer stays deterministic", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const tmp = "d:/tmp/hex-test-deterministic-footer.js";
+        fs.writeFileSync(tmp, "first\nsecond\nthird\n");
+        try {
+            const readResult = readFile(tmp, { ranges: ["1-3"] });
+            const firstAnchor = readResult.match(/([a-z2-7]{2}\.1)\tfirst/)?.[1];
+            const secondAnchor = readResult.match(/([a-z2-7]{2}\.2)\tsecond/)?.[1];
+            assert.ok(firstAnchor && secondAnchor, "Read block provides anchors for batch edit");
+
+            const result = editFile(tmp, [
+                { insert_after: { anchor: firstAnchor, text: "between" } },
+                { set_line: { anchor: secondAnchor, new_text: "second updated" } },
+            ]);
+
+            const statusIdx = result.indexOf("status:");
+            const revisionIdx = result.indexOf("revision:");
+            const fileIdx = result.indexOf("file:");
+            const updatedIdx = result.indexOf("Updated ");
+            const postEditIdx = result.indexOf("block: post_edit");
+            const checksumIdx = result.indexOf("checksum:", postEditIdx);
+            const diffIdx = result.indexOf("Diff:");
+
+            assert.ok(statusIdx === 0, "Result starts with status");
+            assert.ok(revisionIdx > statusIdx, "Revision follows status");
+            assert.ok(fileIdx > revisionIdx, "File checksum follows revision");
+            assert.ok(updatedIdx > fileIdx, "Update summary follows checksum");
+            assert.ok(postEditIdx > updatedIdx, "Post-edit block follows update summary");
+            assert.ok(checksumIdx > postEditIdx, "Post-edit block has checksum");
+            assert.ok(diffIdx > postEditIdx, "Diff is emitted last");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
 });
 
 describe("edit error messages", () => {
@@ -528,6 +635,8 @@ describe("read_file output", () => {
             assert.match(result, /^meta: .+/m, "Read includes compact metadata");
             assert.match(result, /revision: \S+/, "Read includes revision");
             assert.match(result, /file: 1-\d+:[0-9a-f]{8}/, "Read includes file checksum");
+            assert.match(result, /block: read_range/, "Read emits canonical block header");
+            assert.match(result, /span: 1-2/, "Read emits block span");
             assert.ok(!result.includes("```"), "Read output is compact text, not fenced block");
         } finally {
             fs.unlinkSync(tmp);
@@ -562,10 +671,40 @@ describe("read_file output", () => {
         fs.writeFileSync(tmp, Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n"));
         try {
             const result = readFile(tmp, { ranges: ["2-3", { start: 10, end: 11 }] });
+            assert.equal((result.match(/block: read_range/g) || []).length, 2, "Each valid range becomes a canonical block");
             assert.ok(result.includes(".2\tline 2"), "String range is included");
             assert.ok(result.includes(".10\tline 10"), "Object range is included");
             const checksumMatches = result.match(/checksum: \d+-\d+:[0-9a-f]{8}/g) || [];
             assert.equal(checksumMatches.length, 2, "Each range gets its own checksum");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("returns an explicit diagnostic block for ranges outside EOF", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const tmp = "d:/tmp/hex-test-invalid-range.js";
+        fs.writeFileSync(tmp, "line 1\nline 2\n");
+        try {
+            const result = readFile(tmp, { ranges: ["99-120"] });
+            assert.ok(result.includes("block: diagnostic"), "Invalid range emits diagnostic block");
+            assert.ok(result.includes("kind: invalid_range"), "Diagnostic kind is explicit");
+            assert.ok(result.includes("requested_span: 99-120"), "Diagnostic includes requested range");
+            assert.ok(!result.includes("checksum:"), "Diagnostic block does not pretend to be edit-ready");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("keeps valid blocks and diagnostics together for mixed ranges", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const tmp = "d:/tmp/hex-test-mixed-ranges.js";
+        fs.writeFileSync(tmp, Array.from({ length: 5 }, (_, i) => `line ${i + 1}`).join("\n"));
+        try {
+            const result = readFile(tmp, { ranges: ["2-3", "50-60"] });
+            assert.equal((result.match(/block: read_range/g) || []).length, 1, "Valid range still emits edit-ready block");
+            assert.equal((result.match(/block: diagnostic/g) || []).length, 1, "Invalid range emits one diagnostic block");
+            assert.ok(result.includes("kind: invalid_range"), "Diagnostic block is preserved alongside valid block");
         } finally {
             fs.unlinkSync(tmp);
         }
@@ -693,6 +832,8 @@ describe("grep_search output modes", () => {
     it("content mode returns checksums per group", async () => {
         const { grepSearch } = await import("../lib/search.mjs");
         const result = await grepSearch("grepSearch", { path: CWD + "/lib/search.mjs", context: 1 });
+        assert.ok(result.includes("block: search_hunk"), "content mode emits canonical search blocks");
+        assert.ok(result.includes("span:"), "content mode includes block span");
         assert.ok(result.includes(">>"), "content mode has >> match markers");
         assert.ok(result.includes("checksum:"), "content mode has per-group checksums");
         // Verify checksum format: N-N:hexhexhex
@@ -707,6 +848,7 @@ describe("grep_search output modes", () => {
         fs.writeFileSync(tmp, content);
         try {
             const result = await grepSearch("MARKER", { path: tmp });
+            assert.ok((result.match(/block: search_hunk/g) || []).length >= 2, "Disjoint hunks stay separate blocks");
             const checksums = result.match(/checksum: \d+-\d+:[0-9a-f]{8}/g) || [];
             assert.ok(checksums.length >= 2, `disjoint markers should produce >=2 checksums, got ${checksums.length}`);
         } finally {
@@ -724,7 +866,65 @@ describe("grep_search output modes", () => {
             const csMatch = result.match(/checksum: (\d+-\d+:[0-9a-f]{8})/);
             assert.ok(csMatch, "grep should produce a checksum");
             const verifyResult = verifyChecksums(tmp, [csMatch[1]]);
-            assert.ok(verifyResult.includes("valid"), `checksum should verify: ${verifyResult}`);
+            assert.ok(verifyResult.includes("status: OK"), `verify should report OK: ${verifyResult}`);
+            assert.ok(verifyResult.includes("VALID"), `checksum should verify: ${verifyResult}`);
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("read checksum round-trips through verify with canonical report", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { verifyChecksums } = await import("../lib/verify.mjs");
+        const tmp = join(tmpdir(), "hex-test-read-verify.txt");
+        fs.writeFileSync(tmp, "alpha\nbeta\ngamma\n");
+        try {
+            const result = readFile(tmp, { ranges: ["1-2"] });
+            const csMatch = result.match(/checksum: (\d+-\d+:[0-9a-f]{8})/);
+            assert.ok(csMatch, "read should produce a checksum");
+            const verifyResult = verifyChecksums(tmp, [csMatch[1]]);
+            assert.ok(verifyResult.includes("status: OK"), `verify should report OK: ${verifyResult}`);
+            assert.ok(verifyResult.includes("summary: valid=1 stale=0 invalid=0"), "Summary should classify the checksum set");
+            assert.ok(verifyResult.includes("VALID 1-2"), "Valid checksum entry should be listed");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("verify reports stale checksums with changed ranges when base revision is available", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { verifyChecksums } = await import("../lib/verify.mjs");
+        const tmp = join(tmpdir(), "hex-test-stale-verify.txt");
+        fs.writeFileSync(tmp, "one\ntwo\nthree\n");
+        try {
+            const firstRead = readFile(tmp, { ranges: ["1-2"] });
+            const checksum = firstRead.match(/checksum: (\d+-\d+:[0-9a-f]{8})/)[1];
+            const baseRevision = firstRead.match(/revision: (\S+)/)[1];
+            fs.writeFileSync(tmp, "one\ntwo changed\nthree\n");
+            const verifyResult = verifyChecksums(tmp, [checksum], { baseRevision });
+            assert.ok(verifyResult.includes("status: STALE"), `verify should report stale: ${verifyResult}`);
+            assert.ok(verifyResult.includes(`base_revision: ${baseRevision}`), "Base revision should be echoed");
+            assert.ok(verifyResult.includes("changed_ranges:"), "Changed ranges should be reported");
+            assert.ok(verifyResult.includes("STALE 1-2"), "Stale checksum entry should be listed");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("verify reports mixed valid and invalid checksum sets deterministically", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { verifyChecksums } = await import("../lib/verify.mjs");
+        const tmp = join(tmpdir(), "hex-test-mixed-verify.txt");
+        fs.writeFileSync(tmp, "uno\ndos\ntres\n");
+        try {
+            const readResult = readFile(tmp, { ranges: ["1-2"] });
+            const validChecksum = readResult.match(/checksum: (\d+-\d+:[0-9a-f]{8})/)[1];
+            const verifyResult = verifyChecksums(tmp, [validChecksum, "99-120:deadbeef", "bad-checksum"]);
+            assert.ok(verifyResult.includes("status: INVALID"), `mixed set should report INVALID: ${verifyResult}`);
+            assert.ok(verifyResult.includes("summary: valid=1 stale=0 invalid=2"), "Summary should classify mixed set");
+            assert.ok(verifyResult.includes("VALID 1-2"), "Valid entry should remain visible");
+            assert.ok(verifyResult.includes("INVALID 99-120"), "Out-of-range checksum should be classified");
+            assert.ok(verifyResult.includes("INVALID checksum: bad-checksum"), "Malformed checksum should be classified");
         } finally {
             fs.unlinkSync(tmp);
         }
@@ -767,6 +967,32 @@ describe("edit_file replace removed", () => {
             }, /REPLACE_REMOVED/);
         } finally {
             fs.unlinkSync(tmp);
+        }
+    });
+
+    it("edit_file rejects non-canonical flat shapes through the MCP tool boundary", async () => {
+        const tmp = join(tmpdir(), `hex-test-noncanonical-edit-${Date.now()}-${Math.random().toString(16).slice(2)}.js`);
+        fs.writeFileSync(tmp, "alpha\nbeta\ngamma\n");
+        try {
+            await withMcpClient(async (client) => {
+                const result = await client.callTool({
+                    name: "edit_file",
+                    arguments: {
+                        path: tmp,
+                        edits: JSON.stringify([{
+                            type: "replace_lines",
+                            start: 1,
+                            end: 2,
+                            content: "alpha updated\nbeta updated",
+                            range_checksum: "1-2:deadbeef",
+                        }]),
+                    },
+                });
+                assert.equal(result.isError, true, "Tool rejects non-canonical edit payload");
+                assert.match(result.content[0].text, /BAD_INPUT: unknown edit type/, "Failure is reported at the public contract boundary");
+            });
+        } finally {
+            if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
         }
     });
 
@@ -836,7 +1062,7 @@ describe("bulk_replace", () => {
 
     it("caps per-file diff lines and total output in full mode", async () => {
         const { bulkReplace } = await import("../lib/bulk-replace.mjs");
-        const { MAX_BULK_OUTPUT_CHARS, MAX_PER_FILE_DIFF_LINES } = await import("../lib/format.mjs");
+        const { MAX_BULK_OUTPUT_CHARS } = await import("../lib/format.mjs");
         const tmp = "d:/tmp/hex-test-bulk-cap";
         fs.mkdirSync(tmp, { recursive: true });
         // Create a large file with 600 lines, each containing the target text
@@ -1195,5 +1421,343 @@ describe("WASM dependency contract", () => {
             return !fs.existsSync(wasm);
         });
         assert.deepEqual(missing, [], `WASM files missing for: ${missing.join(", ")}`);
+    });
+});
+
+// ==================== Phase 7: Protocol & E2E tests ====================
+
+describe("kernel: snapshot", () => {
+    it("createSnapshot returns deterministic revision and hashes", async () => {
+        const { rememberSnapshot, _resetSnapshotCache } = await import("../lib/snapshot.mjs");
+        _resetSnapshotCache();
+        const tmp = "d:/tmp/hex-test-kernel-snapshot.js";
+        fs.writeFileSync(tmp, "line1\nline2\nline3\n");
+        try {
+            const stat = fs.statSync(tmp);
+            const snap = rememberSnapshot(tmp, "line1\nline2\nline3\n", { mtimeMs: stat.mtimeMs, size: stat.size });
+            assert.match(snap.revision, /^rev-\d+-[a-f0-9]{8}$/, "Revision format rev-N-hex8");
+            assert.strictEqual(snap.lines.length, 4, "Lines split correctly (trailing newline)");
+            assert.strictEqual(snap.lineHashes.length, snap.lines.length, "lineHashes matches lines count");
+            assert.ok(snap.fileChecksum, "File checksum present");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("buildRangeChecksum returns null for out-of-bounds", async () => {
+        const { rememberSnapshot, buildRangeChecksum, _resetSnapshotCache } = await import("../lib/snapshot.mjs");
+        _resetSnapshotCache();
+        const tmp = "d:/tmp/hex-test-kernel-range.js";
+        fs.writeFileSync(tmp, "a\nb\nc\n");
+        try {
+            const stat = fs.statSync(tmp);
+            const snap = rememberSnapshot(tmp, "a\nb\nc\n", { mtimeMs: stat.mtimeMs, size: stat.size });
+            assert.ok(buildRangeChecksum(snap, 1, 3), "Valid range returns checksum");
+            assert.strictEqual(buildRangeChecksum(snap, 1, 100), null, "Out-of-bounds returns null");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+});
+
+describe("protocol: read_file blocks", () => {
+    it("single range returns edit_ready_block with checksum", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const tmp = "d:/tmp/hex-test-proto-read.js";
+        fs.writeFileSync(tmp, "alpha\nbeta\ngamma\ndelta\n");
+        try {
+            const result = readFile(tmp, { ranges: ["1-3"] });
+            assert.ok(result.includes("block: read_range"), "Contains read_range block");
+            assert.ok(result.includes("span: 1-3"), "Contains correct span");
+            assert.ok(result.includes("checksum: 1-3:"), "Contains checksum for range");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("multi-range returns separate blocks", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const tmp = "d:/tmp/hex-test-proto-multiread.js";
+        fs.writeFileSync(tmp, Array.from({length: 20}, (_, i) => `line${i+1}`).join("\n") + "\n");
+        try {
+            const result = readFile(tmp, { ranges: ["1-5", "15-20"] });
+            const blocks = result.split("block: read_range").length - 1;
+            assert.ok(blocks >= 2, "At least 2 read_range blocks");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+});
+
+describe("protocol: grep_search blocks", () => {
+    it("content mode returns search_hunk with checksum", async () => {
+        const { grepSearch } = await import("../lib/search.mjs");
+        const result = await grepSearch("buildEditReadyBlock", { path: CWD + "/lib", output: "content" });
+        assert.ok(result.includes("block: search_hunk"), "Contains search_hunk block");
+        assert.ok(result.includes("checksum:"), "Contains checksum");
+    });
+});
+
+describe("protocol: edit_file output", () => {
+    it("read_file -> edit_file succeeds through the MCP tool boundary", async () => {
+        const tmp = join(tmpdir(), `hex-test-mcp-edit-${Date.now()}-${Math.random().toString(16).slice(2)}.js`);
+        fs.writeFileSync(tmp, "alpha\nbeta\ngamma\ndelta\n");
+        try {
+            await withMcpClient(async (client) => {
+                const readResult = await client.callTool({
+                    name: "read_file",
+                    arguments: { path: tmp, ranges: ["2-3"] },
+                });
+                const readText = readResult.content[0].text;
+                const startAnchor = readText.match(/([a-z2-7]{2}\.2)\tbeta/)?.[1];
+                const endAnchor = readText.match(/([a-z2-7]{2}\.3)\tgamma/)?.[1];
+                const checksum = readText.match(/checksum: (\d+-\d+:[0-9a-f]{8})/)?.[1];
+                assert.ok(startAnchor && endAnchor && checksum, "read_file exposes canonical anchors and checksum");
+
+                const editResult = await client.callTool({
+                    name: "edit_file",
+                    arguments: {
+                        path: tmp,
+                        edits: JSON.stringify([{
+                            replace_lines: {
+                                start_anchor: startAnchor,
+                                end_anchor: endAnchor,
+                                new_text: "beta updated\ngamma updated",
+                                range_checksum: checksum,
+                            },
+                        }]),
+                    },
+                });
+                assert.notEqual(editResult.isError, true, "Canonical edit payload succeeds");
+                const editText = editResult.content[0].text;
+                assert.ok(editText.includes("status: OK"), "Edit reports success");
+                assert.ok(editText.includes("block: post_edit"), "Edit returns post-edit canonical block");
+            });
+        } finally {
+            if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+        }
+    });
+
+    it("post-edit contains block: post_edit with checksum", async () => {
+        const { editFile } = await import("../lib/edit.mjs");
+        const { readFile } = await import("../lib/read.mjs");
+        const tmp = "d:/tmp/hex-test-proto-edit.js";
+        fs.writeFileSync(tmp, "first\nsecond\nthird\n");
+        try {
+            const read = readFile(tmp, { ranges: ["1-3"] });
+            const anchor = read.match(/([a-z2-7]{2}\.2)\tsecond/)?.[1];
+            assert.ok(anchor, "Got anchor from read");
+            const result = editFile(tmp, [{ set_line: { anchor, new_text: "SECOND" } }]);
+            assert.ok(result.includes("block: post_edit"), "Post-edit uses block protocol");
+            assert.ok(result.includes("checksum:"), "Post-edit has checksum");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("CHECKSUM_MISMATCH includes recovery guidance", async () => {
+        const { editFile } = await import("../lib/edit.mjs");
+        const { readFile } = await import("../lib/read.mjs");
+        const tmp = "d:/tmp/hex-test-proto-recovery.js";
+        fs.writeFileSync(tmp, "aaa\nbbb\nccc\n");
+        try {
+            const read = readFile(tmp, { ranges: ["1-3"] });
+            const startAnchor = read.match(/([a-z2-7]{2}\.1)/)?.[1];
+            const endAnchor = read.match(/([a-z2-7]{2}\.3)/)?.[1];
+            // Mutate the file to make checksum stale
+            fs.writeFileSync(tmp, "aaa\nXXX\nccc\n");
+            try {
+                editFile(tmp, [{ replace_lines: { start_anchor: startAnchor, end_anchor: endAnchor, new_text: "new", range_checksum: "1-3:deadbeef" } }]);
+                assert.fail("Should have thrown");
+            } catch (e) {
+                assert.ok(e.message.includes("CHECKSUM_MISMATCH"), "Error is CHECKSUM_MISMATCH");
+                assert.ok(e.message.includes("Recovery:"), "Contains recovery guidance");
+                assert.ok(e.message.includes("read_file"), "Mentions read_file");
+            }
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+});
+
+describe("protocol: outline", () => {
+    it("code outline includes hash anchors", async () => {
+        const { fileOutline } = await import("../lib/outline.mjs");
+        const result = await fileOutline(CWD + "/lib/snapshot.mjs");
+        // Should contain tag.lineNum-lineNum: pattern
+        assert.match(result, /[a-z2-7]{2}\.\d+-\d+:/, "Outline entries have hash anchor prefix");
+        assert.ok(result.includes("symbols"), "Shows symbol count");
+    });
+
+    it("markdown outline returns headings", async () => {
+        const { fileOutline } = await import("../lib/outline.mjs");
+        const tmp = "d:/tmp/hex-test-outline.md";
+        fs.writeFileSync(tmp, "# Title\n\nSome text\n\n## Section A\n\n### Subsection\n\n## Section B\n");
+        try {
+            const result = await fileOutline(tmp);
+            assert.ok(result.includes("Title"), "Contains title heading");
+            assert.ok(result.includes("Section A"), "Contains section heading");
+            assert.ok(result.includes("Subsection"), "Contains subsection");
+            assert.ok(result.includes("4 symbols"), "Counts 4 headings");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("markdown outline ignores headings inside fenced code blocks", async () => {
+        const { fileOutline } = await import("../lib/outline.mjs");
+        const tmp = join(tmpdir(), `hex-test-outline-fenced-${Date.now()}-${Math.random().toString(16).slice(2)}.md`);
+        fs.writeFileSync(tmp, "# Title\n\n```md\n# Fake Heading\n```\n\n## Real Section\n");
+        try {
+            const result = await fileOutline(tmp);
+            assert.ok(result.includes("Title"), "Real heading remains visible");
+            assert.ok(result.includes("Real Section"), "Heading after fence remains visible");
+            assert.ok(!result.includes("Fake Heading"), "Fenced code heading is ignored");
+            assert.ok(result.includes("2 symbols"), "Only real headings are counted");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+});
+
+describe("E2E: workflow round-trips", () => {
+    it("read -> edit -> verify round-trip", async () => {
+        const { readFile } = await import("../lib/read.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const { verifyChecksums } = await import("../lib/verify.mjs");
+        const tmp = "d:/tmp/hex-test-e2e-rev.js";
+        fs.writeFileSync(tmp, "const x = 1;\nconst y = 2;\nconst z = 3;\n");
+        try {
+            // Read
+            const read = readFile(tmp, { ranges: ["1-3"] });
+            const anchor = read.match(/([a-z2-7]{2}\.2)/)?.[1];
+            assert.ok(anchor, "Got anchor from read");
+            // Edit
+            const editResult = editFile(tmp, [{ set_line: { anchor, new_text: "const y = 42;" } }]);
+            assert.ok(editResult.includes("status: OK"), "Edit succeeded");
+            // Extract post-edit checksum
+            const postChecksum = editResult.match(/checksum: (\S+)/)?.[1];
+            assert.ok(postChecksum, "Post-edit has checksum");
+            // Verify post-edit checksum
+            const verifyResult = verifyChecksums(tmp, [postChecksum]);
+            assert.ok(verifyResult.includes("status: OK"), "Verify confirms post-edit checksum is valid");
+            assert.ok(verifyResult.includes("valid=1"), "One valid checksum");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("grep -> edit -> verify round-trip", async () => {
+        const { grepSearch } = await import("../lib/search.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const { verifyChecksums } = await import("../lib/verify.mjs");
+        const tmp = "d:/tmp/hex-test-e2e-grep.js";
+        fs.writeFileSync(tmp, "function hello() {\n    return 'world';\n}\n");
+        try {
+            // Search
+            const searchResult = await grepSearch("hello", { path: tmp, output: "content" });
+            assert.ok(searchResult.includes("search_hunk"), "Search returned hunk");
+            // Extract anchor from search result
+            const anchor = searchResult.match(/>>([a-z2-7]{2}\.\d+)\t/)?.[1];
+            assert.ok(anchor, "Got anchor from search match");
+            // Edit using search anchor
+            const editResult = editFile(tmp, [{ set_line: { anchor, new_text: "function greet() {" } }]);
+            assert.ok(editResult.includes("status: OK"), "Edit from search anchor succeeded");
+            // Extract post-edit checksum and verify
+            const postChecksum = editResult.match(/checksum: (\S+)/)?.[1];
+            const verifyResult = verifyChecksums(tmp, [postChecksum]);
+            assert.ok(verifyResult.includes("valid=1"), "Post-edit checksum valid");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+});
+
+describe("remaining checklist tests", () => {
+    it("snapshot cache returns same revision on repeated read", async () => {
+        const { readSnapshot, _resetSnapshotCache } = await import("../lib/snapshot.mjs");
+        _resetSnapshotCache();
+        const tmp = "d:/tmp/hex-test-cache-behavior.js";
+        fs.writeFileSync(tmp, "cached\ncontent\n");
+        try {
+            const snap1 = readSnapshot(tmp);
+            const snap2 = readSnapshot(tmp);
+            assert.strictEqual(snap1.revision, snap2.revision, "Same revision from cache");
+            assert.strictEqual(snap1, snap2, "Same object reference (cache hit)");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("outline-to-read range roundtrip", async () => {
+        const { fileOutline } = await import("../lib/outline.mjs");
+        const { readFile } = await import("../lib/read.mjs");
+        const result = await fileOutline(CWD + "/lib/snapshot.mjs");
+        // Extract first entry range: tag.start-end: text
+        const match = result.match(/([a-z2-7]{2})\.(\d+)-(\d+):/);
+        assert.ok(match, "Outline has entry with range");
+        const [, , start, end] = match;
+        // Read that exact range
+        const readResult = readFile(CWD + "/lib/snapshot.mjs", { ranges: [`${start}-${end}`] });
+        assert.ok(readResult.includes(`span: ${start}-`), "Read returns block spanning outline range");
+        assert.ok(readResult.includes("checksum:"), "Read block has checksum");
+    });
+
+    it("outline -> read_file -> edit_file E2E", async () => {
+        const { fileOutline } = await import("../lib/outline.mjs");
+        const { readFile } = await import("../lib/read.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const { verifyChecksums } = await import("../lib/verify.mjs");
+        const tmp = "d:/tmp/hex-test-e2e-outline.js";
+        fs.writeFileSync(tmp, "function foo() {\n    return 1;\n}\n\nfunction bar() {\n    return 2;\n}\n");
+        try {
+            // Outline
+            const outline = await fileOutline(tmp);
+            assert.ok(outline.includes("foo"), "Outline has foo");
+            // Extract anchor from outline (tag.line)
+            const anchorMatch = outline.match(/([a-z2-7]{2})\.(\d+)-\d+:.*foo/);
+            assert.ok(anchorMatch, "Got anchor for foo from outline");
+            const anchor = `${anchorMatch[1]}.${anchorMatch[2]}`;
+            // Read range around foo
+            const read = readFile(tmp, { ranges: ["1-3"] });
+            assert.ok(read.includes("checksum:"), "Read has checksum");
+            // Edit using outline anchor
+            const editResult = editFile(tmp, [{ set_line: { anchor, new_text: "function foo_renamed() {" } }]);
+            assert.ok(editResult.includes("status: OK"), "Edit succeeded");
+            // Verify post-edit
+            const postChecksum = editResult.match(/checksum: (\S+)/)?.[1];
+            const verifyResult = verifyChecksums(tmp, [postChecksum]);
+            assert.ok(verifyResult.includes("valid=1"), "Post-edit checksum valid");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    });
+
+    it("grep_search -> multi-edit", async () => {
+        const { grepSearch } = await import("../lib/search.mjs");
+        const { editFile } = await import("../lib/edit.mjs");
+        const { verifyChecksums } = await import("../lib/verify.mjs");
+        const tmp = "d:/tmp/hex-test-e2e-multi-grep.js";
+        fs.writeFileSync(tmp, "const AAA = 1;\nconst BBB = 2;\nconst CCC = 3;\nconst AAA_2 = 4;\n");
+        try {
+            // Search for AAA
+            const searchResult = await grepSearch("AAA", { path: tmp, output: "content" });
+            assert.ok(searchResult.includes("search_hunk"), "Search returned hunks");
+            // Extract 2 match anchors
+            const anchors = [...searchResult.matchAll(/>>([a-z2-7]{2}\.\d+)\t/g)].map(m => m[1]);
+            assert.ok(anchors.length >= 2, `Got ${anchors.length} match anchors`);
+            // Multi-edit: change both lines
+            const editResult = editFile(tmp, [
+                { set_line: { anchor: anchors[0], new_text: "const XXX = 1;" } },
+                { set_line: { anchor: anchors[1], new_text: "const XXX_2 = 4;" } },
+            ]);
+            assert.ok(editResult.includes("status: OK"), "Multi-edit succeeded");
+            // Verify
+            const postChecksum = editResult.match(/checksum: (\S+)/)?.[1];
+            const verifyResult = verifyChecksums(tmp, [postChecksum]);
+            assert.ok(verifyResult.includes("valid=1"), "Multi-edit checksum valid");
+        } finally {
+            fs.unlinkSync(tmp);
+        }
     });
 });

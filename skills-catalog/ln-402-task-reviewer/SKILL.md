@@ -1,6 +1,7 @@
 ---
 name: ln-402-task-reviewer
 description: "Reviews task implementation for quality, code standards, and test coverage. Use when task is in To Review. Sets task Done or To Rework."
+allowed-tools: Read, Grep, Glob, Bash, WebFetch, mcp__context7, mcp__hex-graph__find_clones, mcp__hex-graph__find_references, mcp__hex-line__changes
 license: MIT
 ---
 
@@ -157,6 +158,7 @@ Step 9: Update & Commit
 1) **Resolve taskId:** Run Task Resolution Chain per guide (status filter: [To Review]).
 2) **Load task:** Load full task and parent Story independently. Detect type (label "tests" -> test task, else implementation/refactor).
 3) **Read context:** Full task + parent Story; load affected components/docs; review diffs if available.
+   **Hex-line acceleration:** Use `changes(path="src/", compare_against="HEAD~1")` for AST-level diff review — shows structural changes, not whitespace.
 3b) **Goal gate:** **MANDATORY READ:** `shared/references/goal_articulation_gate.md` — Before reviewing, state: (1) REAL GOAL: what specific quality question must this review answer for THIS task? (2) DONE: what evidence proves quality is sufficient? (3) NOT THE GOAL: what would a surface-level rubber-stamp look like? (4) INVARIANTS: what non-obvious constraint exists (side-effects on other modules, implicit AC)?
 4) **Review checks:**
    > **Spec-first gate:** Quick AC pre-check: scan task AC against implementation. If any AC is clearly unmet (BLOCKER-level) → immediate To Rework, skip remaining quality checks. Full AC validation still runs in Step 5.

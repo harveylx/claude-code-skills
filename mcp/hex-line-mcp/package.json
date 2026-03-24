@@ -1,6 +1,6 @@
 {
   "name": "@levnikolaevich/hex-line-mcp",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "mcpName": "io.github.levnikolaevich/hex-line-mcp",
   "type": "module",
   "description": "Hash-verified file editing MCP + token efficiency hook for AI coding agents. 11 tools: read, edit, write, grep, outline, verify, directory_tree, file_info, setup_hooks, changes, bulk_replace.",
@@ -20,9 +20,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "node --test test/*.mjs",
-    "benchmark": "node benchmark/index.mjs",
-    "benchmark:diagnostic": "node benchmark/index.mjs --diagnostics",
-    "benchmark:diagnostic:graph": "node benchmark/index.mjs --diagnostics --with-graph",
+    "scenarios": "node scenarios/index.mjs",
+    "scenarios:diagnostic": "node scenarios/index.mjs --diagnostics",
+    "scenarios:diagnostic:graph": "node scenarios/index.mjs --diagnostics --with-graph",
     "check": "node --check server.mjs && node --check hook.mjs"
   },
   "_dep_notes": {

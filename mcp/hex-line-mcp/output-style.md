@@ -38,6 +38,8 @@ Prefer:
 4. use `set_line`, `replace_lines`, `insert_after`, `replace_between` based on scope
 5. use `verify` before rereading after staleness
 
+Post-edit output uses `block: post_edit` with checksum — use it directly for follow-up edits or verify.
+
 Avoid:
 - chained same-file `edit_file` calls when all edits are already known
 - full-file rewrites for local changes

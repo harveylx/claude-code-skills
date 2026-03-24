@@ -9,8 +9,15 @@ if (!goalsFile || !expectationsFile || !outputDir) {
 
 const goalsText = readFileSync(goalsFile, "utf8").replace(/\r\n/g, "\n");
 const expectations = JSON.parse(readFileSync(expectationsFile, "utf8"));
-const sections = [...goalsText.matchAll(/^## (.+)\n([\s\S]*?)(?=^## |\s*$)/gm)]
-    .map((match) => ({ title: match[1].trim(), body: match[2].trim() }));
+const headingMatches = [...goalsText.matchAll(/^## (.+)$/gm)];
+const sections = headingMatches.map((match, index) => {
+    const bodyStart = match.index + match[0].length + 1;
+    const bodyEnd = index + 1 < headingMatches.length ? headingMatches[index + 1].index : goalsText.length;
+    return {
+        title: match[1].trim(),
+        body: goalsText.slice(bodyStart, bodyEnd).trim(),
+    };
+});
 
 if (!Array.isArray(expectations.scenarios) || expectations.scenarios.length === 0) {
     throw new Error("expectations.json must define a non-empty scenarios array");

@@ -15,15 +15,15 @@ After each Skill() call, re-read kanban and verify expected state:
 
 ## 2. Context Recovery
 
-When auto-compaction compresses conversation during long pipelines, lead loses SKILL.md instructions and state variables.
+When auto-compaction compresses conversation during long pipelines, lead loses in-memory variables. CLI state remains the source of truth.
 
-**Detection:** Lead cannot recall pipeline variables, stage flow, or ASSERT guards.
+**Detection:** Lead cannot recall pipeline variables, current stage, or ASSERT guards.
 
 **Recovery steps:**
-1. Read `.hex-skills/pipeline/state.json` -> restore ALL state variables
-2. Read this SKILL.md (FULL) -> restore phases, rules, error handling
-3. Read `references/phases/phase4_flow.md` -> restore ASSERT guards and flow
-4. Resume from last checkpoint stage + 1
+1. Run `node $PIPELINE status --story {id}`
+2. Extract `state`, `checkpoint`, and `resume_action` from the JSON response
+3. Re-read this SKILL.md (FULL) and `references/phases/phase4_flow.md` to restore execution rules
+4. Follow `resume_action`
 
 **Trigger:** `PostCompact` hook (Claude Code 2.1.76+) or manual detection.
 
@@ -31,9 +31,9 @@ When auto-compaction compresses conversation during long pipelines, lead loses S
 
 | Error type | Detection | Recovery |
 |-----------|-----------|---------|
-| Skill() returns error | Exception in lead | Read checkpoint -> re-invoke same Skill(). Kanban handles task-level resume (Done tasks skipped by coordinator query) |
-| ASSERT fails | Kanban re-read shows unexpected state | Log issue, PAUSED, ESCALATE to user |
-| Lead crash (session dies) | Phase 0 on next session | Read state.json + checkpoint -> jump to correct stage |
+| Skill() returns error | Exception in lead | `node $PIPELINE status` -> re-invoke same Skill(). Kanban handles task-level resume (Done tasks skipped by coordinator query) |
+| ASSERT fails | Kanban re-read shows unexpected state | `node $PIPELINE pause --reason "..."`, ESCALATE to user |
+| Lead crash (session dies) | Phase 0 on next session | `node $PIPELINE status` -> resume from resume_action |
 
 ## 4. Stage Notes Template
 

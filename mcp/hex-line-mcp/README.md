@@ -36,7 +36,7 @@ Advanced / occasional:
 | `edit_file` | Revision-aware anchor edits (`set_line`, `replace_lines`, `insert_after`, `replace_between`) | Batched same-file edits + conservative auto-rebase |
 | `write_file` | Create new file or overwrite, auto-creates parent dirs | Path validation, no hash overhead |
 | `grep_search` | Search with ripgrep, 3 output modes, per-group checksums | Plain `files`/`count`, compact edit-ready `content` |
-| `outline` | AST-based structural overview via tree-sitter WASM | 95% token reduction (10 lines instead of 500) |
+| `outline` | AST-based structural overview with hash anchors via tree-sitter WASM. Supports code (15+ langs) and fence-aware markdown headings | 95% token reduction, direct edit anchors |
 | `verify` | Check if held checksums / revision are still current | Staleness check without full re-read |
 | `directory_tree` | Compact directory tree with root .gitignore support | Skips node_modules/.git, shows file sizes |
 | `get_file_info` | File metadata without reading content | Size, lines, mtime, type, binary detection |
@@ -88,29 +88,24 @@ mcp__hex-line__setup_hooks(agent="claude")
 
 The `setup_hooks` tool automatically installs the output style to `~/.claude/output-styles/hex-line.md` and activates it if no other style is set. To activate manually: `/config` > Output style > hex-line.
 
-## Benchmarking
+## Validation
 
-Two benchmark layers:
-
-- `/benchmark-compare` — balanced built-in vs hex-line comparison inside Claude Code, validated by scenario manifests and saved diffs
-- `npm run benchmark` — hex-line standalone workflow metrics (Node.js, all real library calls, no simulations)
+Use the normal package checks:
 
 ```bash
-npm run benchmark -- --repo /path/to/repo
-npm run benchmark:diagnostic -- --repo /path/to/repo
+npm test
+npm run lint
+npm run check
 ```
 
-Current standalone workflow metrics on the `hex-line-mcp` repo (all real library calls):
+Maintainers can also run the internal scenario harness when they want reproducible repo-local workflow regressions:
 
-| # | Workflow | Hex-line output | Ops |
-|---|----------|---------:|----:|
-| W1 | Debug hook file-listing redirect | 882 chars | 2 |
-| W2 | Adjust `setup_hooks` guidance and verify | 1,719 chars | 3 |
-| W3 | Repo-wide benchmark wording refresh | 213 chars | 1 |
-| W4 | Inspect large smoke test before edit | 2,322 chars | 3 |
-| W5 | Follow-up edit after unrelated line shift | 1,267 chars | 3 |
+```bash
+npm run scenarios -- --repo /path/to/repo
+npm run scenarios:diagnostic -- --repo /path/to/repo
+```
 
-Workflow total: `6,403` chars across `12` ops. Run `/benchmark-compare` for the balanced scenario suite with activation checks and diff-based correctness.
+Comparative built-in vs hex-line benchmarks are maintained outside this package.
 
 ### Optional Graph Enrichment
 
@@ -152,7 +147,7 @@ Use `bulk_replace` for text rename patterns across one or more files. Returns co
 
 ### read_file
 
-Read a file with FNV-1a hash-annotated lines, range checksums, file checksum, and revision. Supports batch reads, multi-range reads, and directory listing.
+Read a file as canonical edit-ready blocks. Each valid range becomes a `read_range` block with absolute span, line entries, and a checksum covering exactly the emitted lines. Invalid ranges become explicit diagnostic blocks. Supports batch reads, multi-range reads, and directory listing.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -164,18 +159,20 @@ Read a file with FNV-1a hash-annotated lines, range checksums, file checksum, an
 | `include_graph` | boolean | no | Opt in to graph annotations when the graph index exists |
 | `plain` | boolean | no | Omit hashes, output `lineNum\|content` instead |
 
-Default output is compact:
+Default output is compact but block-structured:
 
 ```
 File: lib/search.mjs
-meta: lines 1-20 of 282
+meta: 282 lines, 10.2KB, 2 hours ago
 revision: rev-12-a1b2c3d4
 file: 1-282:beefcafe
 
+block: read_range
+span: 1-3
 ab.1    import { resolve } from "node:path";
 cd.2    import { readFileSync } from "node:fs";
-...
-checksum: 1-50:f7e2a1b0
+ef.3    ...
+checksum: 1-3:f7e2a1b0
 ```
 
 ### edit_file
@@ -222,7 +219,7 @@ Create a new file or overwrite an existing one. Creates parent directories autom
 
 ### grep_search
 
-Search file contents using ripgrep. Three output modes: `content` (hash-annotated with checksums), `files` (plain path list), `count` (plain `file:count` list).
+Search file contents using ripgrep. Three output modes: `content` (canonical `search_hunk` blocks), `files` (plain path list), `count` (plain `file:count` list).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -240,13 +237,13 @@ Search file contents using ripgrep. Three output modes: `content` (hash-annotate
 | `context_after` | number | no | Context lines AFTER match (`-A`) |
 | `limit` | number | no | Max matches per file (default: 100) |
 | `total_limit` | number | no | Total match events across all files; multiline matches count as 1 (0 = unlimited) |
-| `plain` | boolean | no | Omit hash tags, return `file:line:content` |
+| `plain` | boolean | no | Omit hash tags inside block entries, return `lineNum\|content` |
 
-`content` mode returns per-group checksums enabling direct `replace_lines` from grep results without intermediate `read_file`.
+`content` mode returns canonical `search_hunk` blocks with per-hunk checksums enabling direct `replace_lines` from grep results without intermediate `read_file`.
 
 ### outline
 
-AST-based structural outline: functions, classes, interfaces with line ranges.
+AST-based structural outline with hash anchors for direct `edit_file` usage. Supports code files (15+ languages) and fence-aware markdown heading navigation (`.md`/`.mdx`). Each entry includes a hash tag for immediate anchor use without intermediate `read_file`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -254,11 +251,11 @@ AST-based structural outline: functions, classes, interfaces with line ranges.
 
 Supported languages: JavaScript, TypeScript (JSX/TSX), Python, Go, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, Bash -- 15+ via tree-sitter WASM.
 
-Not for `.md`, `.json`, `.yaml`, `.txt` -- use `read_file` directly for those.
+Not for `.json`, `.yaml`, `.txt` -- use `read_file` directly for those.
 
 ### verify
 
-Check if range checksums from a prior read are still valid, optionally relative to a prior `base_revision`.
+Check if range checksums from prior read/search blocks are still valid, optionally relative to a prior `base_revision`. Returns a deterministic verification report with `status`, `summary`, and one line per checksum entry.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -266,7 +263,18 @@ Check if range checksums from a prior read are still valid, optionally relative 
 | `checksums` | string[] | yes | Array of checksum strings, e.g. `["1-50:f7e2a1b0"]` |
 | `base_revision` | string | no | Prior revision to compare against latest state |
 
-Returns a single-line confirmation or lists changed ranges.
+Example output:
+
+```text
+status: STALE
+revision: rev-17-deadbeef
+file: 1-120:abc123ef
+summary: valid=0 stale=1 invalid=0
+base_revision: rev-16-feedcafe
+changed_ranges: 10-12(replace)
+
+STALE 10-12 checksum: 10-12:oldc0de0 current=10-12:newc0de0
+```
 
 ### directory_tree
 
@@ -398,7 +406,7 @@ The edit is rejected with an error showing which lines changed since the last re
 <details>
 <summary><b>Is outline available for all file types?</b></summary>
 
-Outline works on code files only (15+ languages via tree-sitter WASM). For markdown, JSON, YAML, and text files use `read_file` directly -- these formats don't benefit from structural outline.
+Outline works on code files (15+ languages via tree-sitter WASM) and markdown heading navigation (`.md`/`.mdx`, fenced code blocks ignored). For JSON, YAML, and text files use `read_file` directly. Each outline entry includes a hash anchor (`tag.line-range: symbol`) for direct use in `edit_file`.
 
 </details>
 

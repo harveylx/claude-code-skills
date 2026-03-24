@@ -1,6 +1,6 @@
 /**
- * Checksum verification without re-reading full file.
- * Validates range checksums from prior reads.
+ * Canonical checksum verification against the snapshot kernel.
+ * Reports valid/stale/invalid checksum state deterministically.
  */
 
 import { parseChecksum } from "@levnikolaevich/hex-common/text-protocol/hash";
@@ -11,60 +11,118 @@ import {
     describeChangedRanges,
     getSnapshotByRevision,
     readSnapshot,
-} from "./revisions.mjs";
+} from "./snapshot.mjs";
 
-/**
- * Verify checksums against current file state.
- *
- * @param {string} filePath
- * @param {string[]} checksums - array of "start-end:8hex" strings
- * @param {object} opts
- * @returns {string} verification result
- */
+function parseChecksumEntry(raw) {
+    try {
+        return { ok: true, raw, parsed: parseChecksum(raw) };
+    } catch (error) {
+        return {
+            ok: false,
+            raw,
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
+
+function classifyChecksum(currentSnapshot, entry) {
+    if (!entry.ok) {
+        return {
+            status: "INVALID",
+            checksum: entry.raw,
+            span: null,
+            currentChecksum: null,
+            reason: `invalid checksum format: ${entry.error}`,
+        };
+    }
+    const { start, end } = entry.parsed;
+    if (start < 1 || end < start) {
+        return {
+            status: "INVALID",
+            checksum: entry.raw,
+            span: `${start}-${end}`,
+            currentChecksum: null,
+            reason: `invalid range ${start}-${end}`,
+        };
+    }
+    if (end > currentSnapshot.lines.length) {
+        return {
+            status: "INVALID",
+            checksum: entry.raw,
+            span: `${start}-${end}`,
+            currentChecksum: null,
+            reason: `range ${start}-${end} exceeds file length ${currentSnapshot.lines.length}`,
+        };
+    }
+    const currentChecksum = buildRangeChecksum(currentSnapshot, start, end);
+    if (currentChecksum === entry.raw) {
+        return {
+            status: "VALID",
+            checksum: entry.raw,
+            span: `${start}-${end}`,
+            currentChecksum,
+            reason: null,
+        };
+    }
+    return {
+        status: "STALE",
+        checksum: entry.raw,
+        span: `${start}-${end}`,
+        currentChecksum,
+        reason: `content changed since the checksum was captured. Recovery: read_file ranges=["${start}-${end}"] to get fresh content.`,
+    };
+}
+
+function summarizeStatuses(entries) {
+    return entries.reduce((acc, entry) => {
+        const key = entry.status.toLowerCase();
+        acc[key] += 1;
+        return acc;
+    }, { valid: 0, stale: 0, invalid: 0 });
+}
+
+function renderEntry(entry) {
+    const base = `checksum: ${entry.checksum}`;
+    if (entry.status === "VALID") {
+        return `${entry.status} ${entry.span} ${base}`;
+    }
+    if (entry.status === "STALE") {
+        return `${entry.status} ${entry.span} ${base} current=${entry.currentChecksum} | re-read to refresh`;
+    }
+    return `${entry.status}${entry.span ? ` ${entry.span}` : ""} ${base} reason=${entry.reason}`;
+}
+
 export function verifyChecksums(filePath, checksums, opts = {}) {
     filePath = normalizePath(filePath);
     const real = validatePath(filePath);
-    const current = readSnapshot(real);
+    const currentSnapshot = readSnapshot(real);
     const baseSnapshot = opts.baseRevision ? getSnapshotByRevision(opts.baseRevision) : null;
+    const hasBaseSnapshot = !!(baseSnapshot && baseSnapshot.path === real);
+    const parsedEntries = (checksums || []).map(parseChecksumEntry);
+    const results = parsedEntries.map(entry => classifyChecksum(currentSnapshot, entry));
+    const summary = summarizeStatuses(results);
+    const status = summary.invalid > 0 ? "INVALID"
+        : summary.stale > 0 ? "STALE"
+            : "OK";
+    const lines = [
+        `status: ${status}`,
+        `revision: ${currentSnapshot.revision}`,
+        `file: ${currentSnapshot.fileChecksum}`,
+        `summary: valid=${summary.valid} stale=${summary.stale} invalid=${summary.invalid}`,
+    ];
 
-    const results = [];
-    let allValid = true;
-
-    for (const cs of checksums) {
-        const parsed = parseChecksum(cs);
-
-        if (parsed.start < 1 || parsed.end > current.lines.length) {
-            results.push(`${cs}: INVALID (range ${parsed.start}-${parsed.end} exceeds file length ${current.lines.length})`);
-            allValid = false;
-            continue;
-        }
-
-        const actual = buildRangeChecksum(current, parsed.start, parsed.end);
-        const currentHex = actual.split(":")[1];
-
-        if (currentHex === parsed.hex) {
-            results.push(`${cs}: valid`);
+    if (opts.baseRevision) {
+        lines.push(`base_revision: ${opts.baseRevision}`);
+        if (hasBaseSnapshot) {
+            lines.push(`changed_ranges: ${describeChangedRanges(computeChangedRanges(baseSnapshot.lines, currentSnapshot.lines))}`);
         } else {
-            const staleBits = [`${cs}: STALE → current: ${actual}`];
-            if (baseSnapshot?.path === real) {
-                const changedRanges = computeChangedRanges(baseSnapshot.lines, current.lines);
-                staleBits.push(`revision: ${current.revision}`);
-                staleBits.push(`changed_ranges: ${describeChangedRanges(changedRanges)}`);
-            } else if (opts.baseRevision) {
-                staleBits.push(`revision: ${current.revision}`);
-                staleBits.push(`changed_ranges: unavailable (base revision evicted)`);
-            }
-            results.push(staleBits.join("\n"));
-            allValid = false;
+            lines.push("base_revision_status: evicted");
         }
     }
 
-    if (allValid && checksums.length > 0) {
-        let msg = `All ${checksums.length} checksum(s) valid for ${filePath}`;
-        msg += `\nrevision: ${current.revision}`;
-        msg += `\nfile: ${current.fileChecksum}`;
-        return msg;
+    if (results.length > 0) {
+        lines.push("", ...results.map(renderEntry));
     }
 
-    return results.join("\n");
+    return lines.join("\n");
 }

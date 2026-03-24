@@ -238,6 +238,17 @@ function block(reason, context) {
     process.exit(2);
 }
 
+function advise(reason) {
+    process.stdout.write(JSON.stringify({
+        hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "approve",
+            permissionDecisionReason: reason,
+        }
+    }));
+    process.exit(0);
+}
+
 // ---- PreToolUse handler ----
 
 function handlePreToolUse(data) {
@@ -286,8 +297,11 @@ function handlePreToolUse(data) {
         }
 
         if (toolName === "Read") {
-            if (isPartialRead(toolInput) || (fileSize !== null && fileSize <= LARGE_FILE_BYTES)) {
+            if (isPartialRead(toolInput)) {
                 process.exit(0);
+            }
+            if (fileSize !== null && fileSize <= LARGE_FILE_BYTES) {
+                advise("hex-line read_file returns hash-annotated lines for verified edit workflow. For code files, outline gives a compact structural map first.");
             }
             const target = filePath
                 ? `Use mcp__hex-line__outline or mcp__hex-line__read_file with path="${filePath}"`
@@ -465,7 +479,7 @@ function handleSessionStart() {
     const msg = prefix +
         "Call hex-line tools directly. Do not use ToolSearch for hex-line tools.\n" +
         "Workflow:\n" +
-        "- Discovery: outline for large code files, read_file for targeted reads, grep_search for symbol/text lookup\n" +
+        "- Discovery: outline for code and markdown files, read_file for targeted reads, grep_search for symbol/text lookup\n" +
         "- Read cheaply: prefer offset/limit or ranges; avoid full-file Read on large files\n" +
         "- Edit safely: read/grep first, then one batched edit_file call per file with base_revision when available\n" +
         "- Verify before reread: use verify to check checksums or revision freshness\n" +

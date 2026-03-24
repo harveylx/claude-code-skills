@@ -29,7 +29,7 @@ Phase 1: Discovery       Phase 2: Pre-flight       Phase 3: Team Setup
 ┌──────────────────┐     ┌──────────────────┐      ┌────────────────────────┐
 │ IN:  kanban_board │────→│ IN:  Story desc  │─────→│ IN:  settings_template │
 │ OUT: Story list   │     │ OUT: answers{}   │      │ OUT: Team + worktree   │
-│      user picks 1 │     │      or skip     │      │      state.json        │
+│      user picks 1 │     │      or skip     │      │      CLI state + cp    │
 └──────────────────┘     └──────────────────┘      │      hooks installed   │
                                                     └──────────┬─────────────┘
                                                                │
@@ -49,7 +49,7 @@ Phase 4: Event Loop (heartbeat ~60s) ◄─────────────�
                                    │
 Phase 5: Cleanup ◄─────────────────┘
 ┌──────────────────────────────────────────────────────┐
-│ IN:  story_state, stage_notes, git_stats             │
+│ IN:  pipeline state, stage_notes, git_stats          │
 │ OUT: Pipeline report, TeamDelete, .hex-skills/pipeline/ removed │
 └──────────────────────┬───────────────────────────────┘
                        │
@@ -232,8 +232,8 @@ Lead executes these read-only ASSERTs after each stage completion, **before** ad
 | 2 | Tasks exist under Story {id} | Kanban/Linear |
 | 3 | Task count IN 1..8 | Kanban/Linear |
 
-**On pass:** `story_state = STAGE_1`, spawn Stage 1 plan worker
-**On fail:** `story_state = PAUSED`, escalate
+**On pass:** advance CLI state to `STAGE_1`, then spawn Stage 1 plan worker
+**On fail:** pause CLI state and escalate
 
 ### After Stage 1 GO (Validation)
 
@@ -243,8 +243,8 @@ Lead executes these read-only ASSERTs after each stage completion, **before** ad
 | 2 | Story status = Todo | Kanban/Linear (ln-310 set this) |
 | 3 | Readiness score >= 5 | Worker report |
 
-**On pass:** `story_state = STAGE_2`, spawn Stage 2 plan worker
-**On fail:** `story_state = PAUSED`, escalate
+**On pass:** advance CLI state to `STAGE_2`, then spawn Stage 2 plan worker
+**On fail:** pause CLI state and escalate
 **On NO-GO:** Retry once (fresh worker), then PAUSED
 
 ### After Stage 2 COMPLETE (Execution)
@@ -256,8 +256,8 @@ Lead executes these read-only ASSERTs after each stage completion, **before** ad
 | 3 | All tasks status = Done | Kanban/Linear |
 | 4 | Feature branch has commits | `git log origin/{base}..HEAD --oneline` > 0 |
 
-**On pass:** `story_state = STAGE_3`, spawn Stage 3 plan worker
-**On fail:** `story_state = PAUSED`, escalate
+**On pass:** advance CLI state to `STAGE_3`, then spawn Stage 3 plan worker
+**On fail:** pause CLI state and escalate
 
 ### After Stage 3 PASS/CONCERNS/WAIVED (Quality Gate)
 
@@ -269,7 +269,7 @@ Lead executes these read-only ASSERTs after each stage completion, **before** ad
 | 4 | Branch pushed to remote | `git branch -r` contains feature branch |
 | 5 | Extract git_stats | `stage_3_notes` or fallback `git diff --stat` |
 
-**On pass:** `story_state = DONE`
+**On pass:** advance CLI state to `DONE`
 **On fail:** WARN user (non-blocking — story likely Done, verification incomplete)
 
 **Note:** Lead does NOT update kanban to Done — ln-500 is the sole kanban writer for Done status (per AGENT_TEAMS_PLATFORM_GUIDE §9: Single kanban writer). Lead only reads and ASSERTs.
@@ -282,8 +282,8 @@ Lead executes these read-only ASSERTs after each stage completion, **before** ad
 | 2 | Story status = To Rework | Kanban/Linear (ln-500 set this) |
 | 3 | quality_cycles < 2 | Pipeline state |
 
-**If rework allowed:** `story_state = STAGE_2`, spawn Stage 2 (fix cycle)
-**If limit reached:** `story_state = PAUSED`, escalate with score degradation analysis
+**If rework allowed:** advance CLI state back to `STAGE_2`, then spawn Stage 2 (fix cycle)
+**If limit reached:** pause CLI state and escalate with score degradation analysis
 
 ## Pipeline Report Format
 
@@ -372,10 +372,10 @@ Pipeline-level verification (Phase 5). Per-stage checks are in VERIFY blocks abo
 
 | # | Criterion | Verified By | Scope |
 |---|-----------|-------------|-------|
-| 1 | User selected Story | `selected_story_id` is set | Always |
+| 1 | User selected Story | `state.story_id` is set | Always |
 | 2 | Business questions resolved | `business_answers` stored OR skip | Always |
 | 3 | Team created + operated | team exists in state | Always |
-| 4 | Story reached terminal state | `story_state IN (DONE, PAUSED)` | Always |
+| 4 | Story reached terminal state | `state.stage IN (DONE, PAUSED)` | Always |
 | 5 | Per-stage verifications passed | All VERIFY blocks above passed | DONE only |
 | 6 | Pipeline report generated | File exists at `docs/tasks/reports/` | Always |
 | 7 | Pipeline summary shown to user | Phase 5 table output | Always |
@@ -386,7 +386,7 @@ Pipeline-level verification (Phase 5). Per-stage checks are in VERIFY blocks abo
 ## Phase 5 Cleanup Sequence
 
 ```
- 1. Write state.json: complete=true        ← Stop hook passes through
+ 1. If current stage is not `DONE`, mark pipeline complete via CLI state transition (`advance --to DONE` or pause/cancel)
  2. Self-verify DoD (table above)
  3. Read stage notes from .hex-skills/pipeline/
  4. Write pipeline report
@@ -411,7 +411,7 @@ Pipeline-level verification (Phase 5). Per-stage checks are in VERIFY blocks abo
 | `references/phases/phase4_heartbeat.md` | Health monitoring + structured heartbeat output | Lead (Phase 4) |
 | `references/worker_health_contract.md` | Lifecycle, keepalive hooks, respawn rules | Lead (reference) |
 | `references/pipeline_states.md` | State machine transitions + guards | Lead (routing) |
-| `references/checkpoint_format.md` | Checkpoint + state.json schemas | Lead + workers |
+| `references/checkpoint_format.md` | CLI-managed checkpoint + state schemas | Lead + workers |
 | `references/message_protocol.md` | Message formats + parsing regex | Lead + workers |
 | `references/kanban_parser.md` | Story extraction from kanban board | Lead (Phase 1) |
 | `references/settings_template.json` | Permissions + hooks config | Lead (Phase 3) |

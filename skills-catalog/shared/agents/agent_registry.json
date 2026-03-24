@@ -47,7 +47,7 @@
     "claude-hexline": {
       "name": "Claude (hex-line)",
       "command": "claude",
-      "args": ["-p", "--strict-mcp-config", "--mcp-config", "mcp/hex-line-mcp/benchmark/mcp-bench.json", "--output-format", "json", "--dangerously-skip-permissions", "--max-turns", "30"],
+      "args": ["-p", "--strict-mcp-config", "--mcp-config", "skills-catalog/ln-840-benchmark-compare/references/mcp-bench.json", "--output-format", "json", "--dangerously-skip-permissions", "--max-turns", "30"],
       "hard_timeout_seconds": 600,
       "normal_prompt_delivery": "positional",
       "skill_groups": ["840"],

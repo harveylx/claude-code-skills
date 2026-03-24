@@ -19,8 +19,8 @@ Run a clean A/B benchmark in Claude Code: one session with built-in tools only, 
 
 | Direction | Content |
 |-----------|----------|
-| **Input** | Target repo path (default: current repo), optional `goals.md`, optional `expectations.json` |
-| **Output** | Comparison report in `mcp/hex-line-mcp/benchmark/results/{date}-comparison.md` |
+| **Input** | Repo checkout containing `mcp/hex-line-mcp/`, optional `references/goals.md`, optional `references/expectations.json` |
+| **Output** | Comparison report in `skills-catalog/ln-840-benchmark-compare/results/{date}-comparison.md` |
 
 ---
 
@@ -30,8 +30,8 @@ Run a clean A/B benchmark in Claude Code: one session with built-in tools only, 
 - `git` succeeds
 - `mcp/hex-line-mcp/server.mjs` exists
 - `mcp/hex-line-mcp/hook.mjs` exists
-- `mcp/hex-line-mcp/benchmark/goals.md` exists
-- `mcp/hex-line-mcp/benchmark/expectations.json` exists
+- `skills-catalog/ln-840-benchmark-compare/references/goals.md` exists
+- `skills-catalog/ln-840-benchmark-compare/references/expectations.json` exists
 
 ---
 
@@ -39,8 +39,8 @@ Run a clean A/B benchmark in Claude Code: one session with built-in tools only, 
 
 ```bash
 bash skills-catalog/ln-840-benchmark-compare/scripts/run-benchmark.sh \
-  [mcp/hex-line-mcp/benchmark/goals.md] \
-  [mcp/hex-line-mcp/benchmark/expectations.json]
+  [skills-catalog/ln-840-benchmark-compare/references/goals.md] \
+  [skills-catalog/ln-840-benchmark-compare/references/expectations.json]
 ```
 
 The runner handles:
@@ -57,9 +57,9 @@ The runner handles:
 
 ### Phase 1: Define The Canonical Suite
 
-Use one canonical pair:
-- `mcp/hex-line-mcp/benchmark/goals.md`
-- `mcp/hex-line-mcp/benchmark/expectations.json`
+Use one canonical pair owned by this skill:
+- `skills-catalog/ln-840-benchmark-compare/references/goals.md`
+- `skills-catalog/ln-840-benchmark-compare/references/expectations.json`
 
 Rules:
 - The suite must be a balanced mix of common engineering scenarios.
@@ -142,7 +142,7 @@ Interpretation rules:
 
 ## Report Contract
 
-`benchmark/results/{date}-comparison.md` must answer:
+`skills-catalog/ln-840-benchmark-compare/results/{date}-comparison.md` must answer:
 - Did each scenario complete correctly?
 - Did `hex-line` activate cleanly without discovery drift?
 - What changed in wall time, API time, cost, output tokens, and total tool calls?
@@ -171,7 +171,7 @@ Do not treat raw time/cost as sufficient without scenario correctness.
 - [ ] Runner passes syntax and SessionStart preflight
 - [ ] Each scenario runs in two clean worktrees from the same commit
 - [ ] Parser evaluates activation and scenario correctness from logs plus diffs
-- [ ] Final report is saved to `benchmark/results/`
+- [ ] Final report is saved to `skills-catalog/ln-840-benchmark-compare/results/`
 - [ ] Temporary worktrees are removed
 
 ---

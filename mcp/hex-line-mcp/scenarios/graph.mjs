@@ -12,7 +12,7 @@ import { readFile } from "../lib/read.mjs";
 import { editFile } from "../lib/edit.mjs";
 import { grepSearch } from "../lib/search.mjs";
 import { fnv1a, lineTag } from "../lib/hash.mjs";
-import { getFileLines, fmt, pctSavings } from "../lib/benchmark-helpers.mjs";
+import { getFileLines, fmt, pctSavings } from "../lib/scenario-helpers.mjs";
 
 /**
  * Run TEST 16-18 graph enrichment benchmarks.

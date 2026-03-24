@@ -1,5 +1,5 @@
 export default [
-    { ignores: ["dist/", "benchmark/"] },
+    { ignores: ["dist/", "scenarios/"] },
     {
         files: ["**/*.mjs"],
         languageOptions: {

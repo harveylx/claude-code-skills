@@ -52,12 +52,11 @@ Skills collection for Claude Code with config-driven Agile task management (Line
 | Topic | File |
 |-------|------|
 | Writing Guidelines | `docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` §Writing Guidelines |
-| Tool Configuration | `skills/shared/references/tools_config_guide.md` |
-| Task kanban + Team ID | `docs/tasks/kanban_board.md` |
-| Risk-Based Testing | `skills/shared/references/risk_based_testing_guide.md` |
-| Frontmatter fields | `skills/shared/references/frontmatter_reference.md` |
-| Hooks reference | `skills/shared/references/hooks_reference.md` |
-| Questions format | `skills/shared/references/questions_format.md` |
+| Tool Configuration | `skills-catalog/shared/references/tools_config_guide.md` |
+| Risk-Based Testing | `skills-catalog/shared/references/risk_based_testing_guide.md` |
+| Frontmatter fields | `skills-catalog/shared/references/frontmatter_reference.md` |
+| Hooks reference | `skills-catalog/shared/references/hooks_reference.md` |
+| Questions format | `skills-catalog/shared/references/questions_format.md` |
 | Hook Design | `docs/best-practice/HOOK_DESIGN_GUIDE.md` |
 | MCP Tool Design | `docs/best-practice/MCP_TOOL_DESIGN_GUIDE.md` |
 | Token Efficiency | `docs/standards/TOKEN_EFFICIENCY_PATTERNS.md` |

@@ -6,8 +6,8 @@
  * Synthetic tool-level scenarios are available behind --diagnostics.
  *
  * Usage:
- *   node mcp/hex-line-mcp/benchmark/index.mjs [--repo /path/to/repo]
- *   node mcp/hex-line-mcp/benchmark/index.mjs --diagnostics [--with-graph]
+ *   node mcp/hex-line-mcp/scenarios/index.mjs [--repo /path/to/repo]
+ *   node mcp/hex-line-mcp/scenarios/index.mjs --diagnostics [--with-graph]
  */
 
 import { writeFileSync, unlinkSync } from "node:fs";
@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import {
     walkDir, getFileLines, categorize, generateTempCode,
     fmt, RUNS,
-} from "../lib/benchmark-helpers.mjs";
+} from "../lib/scenario-helpers.mjs";
 import { runAtomic } from "./atomic.mjs";
 import { runGraph } from "./graph.mjs";
 import { runWorkflows } from "./workflows.mjs";

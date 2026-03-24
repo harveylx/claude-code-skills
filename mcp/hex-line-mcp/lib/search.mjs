@@ -1,9 +1,9 @@
 /**
- * File search via ripgrep with hash-annotated results.
+ * File search via ripgrep with canonical edit-ready blocks.
  * Uses spawn with arg arrays (no shell string interpolation).
  *
  * Output modes:
- *   content (default) — hash-annotated lines with per-group checksums (uses rg --json)
+ *   content (default) — edit-ready search blocks (uses rg --json)
  *   files — file paths only (rg -l)
  *   count — match counts per file (rg -c)
  */
@@ -11,9 +11,14 @@
 import { spawn } from "node:child_process";
 import { resolve, isAbsolute } from "node:path";
 import { existsSync } from "node:fs";
-import { fnv1a, lineTag, rangeChecksum } from "@levnikolaevich/hex-common/text-protocol/hash";
 import { getGraphDB, matchAnnotation, getRelativePath } from "./graph-enrich.mjs";
 import { normalizePath } from "./security.mjs";
+import {
+    buildDiagnosticBlock,
+    buildEditReadyBlock,
+    serializeDiagnosticBlock,
+    serializeSearchBlock,
+} from "./block-protocol.mjs";
 
 let rgBin = "rg";
 try {
@@ -139,7 +144,7 @@ async function countMode(pattern, target, opts) {
 }
 
 /**
- * content mode: rg --json — hash-annotated lines with per-group checksums.
+ * content mode: rg --json — canonical search blocks.
  */
 async function contentMode(pattern, target, opts, plain, totalLimit) {
     const realArgs = ["--json"];
@@ -164,24 +169,38 @@ async function contentMode(pattern, target, opts, plain, totalLimit) {
 
     // Parse NDJSON output
     const jsonLines = stdout.trimEnd().split("\n").filter(Boolean);
-    const formatted = [];
+    const blocks = [];
     const db = getGraphDB(target);
     const relCache = new Map();
 
-    // Track current group for checksums
     let groupFile = null;
-    let groupLines = [];   // { lineNum, hash32 }
+    let groupEntries = [];
     let matchCount = 0;
 
     function flushGroup() {
-        if (groupLines.length === 0) return;
-        const sorted = [...groupLines].sort((a, b) => a.lineNum - b.lineNum);
-        const start = sorted[0].lineNum;
-        const end = sorted[sorted.length - 1].lineNum;
-        const hashes = sorted.map(l => l.hash32);
-        const cs = rangeChecksum(hashes, start, end);
-        formatted.push(`checksum: ${cs}`);
-        groupLines = [];
+        if (groupEntries.length === 0) return;
+        const matchLines = groupEntries
+            .filter(entry => entry.role === "match")
+            .map(entry => entry.lineNumber);
+        // Graph-aware scoring and summary from annotations
+        let graphScore = 0;
+        let defs = 0;
+        let usages = 0;
+        for (const entry of groupEntries) {
+            if (!entry.annotation) continue;
+            const callerMatch = entry.annotation.match(/(\d+)\u2191/);
+            if (callerMatch) graphScore += parseInt(callerMatch[1], 10);
+            if (/\[fn|\[cls|\[mtd/.test(entry.annotation)) defs++;
+            else usages++;
+        }
+        const summary = (defs || usages) ? `${defs} definition(s), ${usages} usage(s)` : null;
+        blocks.push(buildEditReadyBlock({
+            path: groupFile,
+            kind: "search_hunk",
+            entries: groupEntries,
+            meta: { matchLines, graphScore, ...(summary ? { summary } : {}) },
+        }));
+        groupEntries = [];
     }
 
     for (const jl of jsonLines) {
@@ -192,12 +211,6 @@ async function contentMode(pattern, target, opts, plain, totalLimit) {
             if (msg.type === "end") {
                 flushGroup();
                 groupFile = null;
-            }
-            if (msg.type === "begin") {
-                // Separator between file groups
-                if (formatted.length > 0 && formatted[formatted.length - 1] !== "") {
-                    formatted.push("");
-                }
             }
             continue;
         }
@@ -231,51 +244,57 @@ async function contentMode(pattern, target, opts, plain, totalLimit) {
         for (let i = 0; i < subLines.length; i++) {
             const ln = lineNum + i;
             const lineContent = subLines[i];
-            const hash32 = fnv1a(lineContent);
-            const tag = lineTag(hash32);
 
-            // Flush on line gap (disjoint match clusters get separate checksums)
-            if (groupLines.length > 0) {
-                const lastLn = groupLines[groupLines.length - 1].lineNum;
+            if (groupEntries.length > 0) {
+                const lastLn = groupEntries[groupEntries.length - 1].lineNumber;
                 if (ln > lastLn + 1) flushGroup();
             }
-            groupLines.push({ lineNum: ln, hash32 });
 
             const isMatch = msg.type === "match";
-            if (plain) {
-                formatted.push(`${filePath}:${ln}:${lineContent}`);
-            } else {
-                let anno = "";
-                if (db && isMatch) {
-                    let rel = relCache.get(filePath);
-                    if (rel === undefined) {
-                        rel = getRelativePath(resolve(filePath)) || "";
-                        relCache.set(filePath, rel);
-                    }
-                    if (rel) {
-                        const a = matchAnnotation(db, rel, ln);
-                        if (a) anno = `  ${a}`;
-                    }
+            let annotation = "";
+            if (db && isMatch) {
+                let rel = relCache.get(filePath);
+                if (rel === undefined) {
+                    rel = getRelativePath(resolve(filePath)) || "";
+                    relCache.set(filePath, rel);
                 }
-                const prefix = isMatch ? ">>" : "  ";
-                formatted.push(`${filePath}:${prefix}${tag}.${ln}\t${lineContent}${anno}`);
+                if (rel) {
+                    const a = matchAnnotation(db, rel, ln);
+                    if (a) annotation = a;
+                }
             }
-
+            groupEntries.push({
+                lineNumber: ln,
+                text: lineContent,
+                role: isMatch ? "match" : "context",
+                annotation,
+            });
         }
 
-        // Count matches per rg event, not per subLine
         if (msg.type === "match") {
             matchCount++;
             if (totalLimit > 0 && matchCount >= totalLimit) {
                 flushGroup();
-                formatted.push(`--- total_limit reached (${totalLimit}) ---`);
-                return formatted.join("\n");
+                blocks.push(buildDiagnosticBlock({
+                    kind: "total_limit",
+                    message: `Search stopped after ${totalLimit} match event(s). Narrow the query to continue.`,
+                    path: String(target).replace(/\\/g, "/"),
+                }));
+                return blocks
+                    .map(block => block.type === "edit_ready_block"
+                        ? serializeSearchBlock(block, { plain })
+                        : serializeDiagnosticBlock(block))
+                    .join("\n\n");
             }
         }
     }
 
-    // Flush last group
     flushGroup();
-
-    return formatted.join("\n");
+    // Graph-aware ranking: sort blocks by graphScore DESC (only reorders when graph DB is available)
+    if (db) blocks.sort((a, b) => (b.meta.graphScore || 0) - (a.meta.graphScore || 0));
+    return blocks
+        .map(block => block.type === "edit_ready_block"
+            ? serializeSearchBlock(block, { plain })
+            : serializeDiagnosticBlock(block))
+        .join("\n\n");
 }

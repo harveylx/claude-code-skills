@@ -9,10 +9,19 @@
 
 import { statSync, writeFileSync } from "node:fs";
 import { diffLines } from "diff";
-import { fnv1a, lineTag, parseChecksum, parseRef, rangeChecksum } from "@levnikolaevich/hex-common/text-protocol/hash";
+import { fnv1a, lineTag, parseChecksum, parseRef } from "@levnikolaevich/hex-common/text-protocol/hash";
 import { validatePath, normalizePath } from "./security.mjs";
 import { getGraphDB, callImpact, getRelativePath } from "./graph-enrich.mjs";
 import { MAX_DIFF_CHARS } from "./format.mjs";
+import {
+    assertNonOverlappingTargets,
+    collectEditTargets,
+    normalizeAnchoredEdits,
+    sortEditsForApply,
+    targetRangeForReplaceBetween,
+    validateChecksumCoverage,
+} from "./edit-resolution.mjs";
+import { createSnapshotEntries, buildEditReadyBlock, serializeReadBlock } from "./block-protocol.mjs";
 import {
     buildRangeChecksum,
     computeChangedRanges,
@@ -21,7 +30,7 @@ import {
     overlapsChangedRanges,
     readSnapshot,
     rememberSnapshot,
-} from "./revisions.mjs";
+} from "./snapshot.mjs";
 
 /**
  * Restore indentation from original lines onto replacement lines.
@@ -213,11 +222,144 @@ function buildConflictMessage({
     return msg;
 }
 
-function targetRangeForReplaceBetween(startIdx, endIdx, boundaryMode) {
-    if (boundaryMode === "exclusive") {
-        return { start: startIdx + 2, end: Math.max(startIdx + 1, endIdx) };
+function applySetLineEdit(edit, ctx) {
+    const { lines, opts, locateOrConflict, ensureRevisionContext } = ctx;
+    const { tag, line } = parseRef(edit.set_line.anchor);
+    const idx = locateOrConflict({ tag, line });
+    if (typeof idx === "string") return idx;
+    const conflict = ensureRevisionContext(idx + 1, idx + 1, idx);
+    if (conflict) return conflict;
+
+    const txt = edit.set_line.new_text;
+    if (!txt && txt !== 0) {
+        lines.splice(idx, 1);
+        return null;
     }
-    return { start: startIdx + 1, end: endIdx + 1 };
+    const origLine = [lines[idx]];
+    const raw = sanitizeEditText(txt).split("\n");
+    const newLines = opts.restoreIndent ? restoreIndent(origLine, raw) : raw;
+    lines.splice(idx, 1, ...newLines);
+    return null;
+}
+
+function applyInsertAfterEdit(edit, ctx) {
+    const { lines, opts, locateOrConflict, ensureRevisionContext } = ctx;
+    const { tag, line } = parseRef(edit.insert_after.anchor);
+    const idx = locateOrConflict({ tag, line });
+    if (typeof idx === "string") return idx;
+    const conflict = ensureRevisionContext(idx + 1, idx + 1, idx);
+    if (conflict) return conflict;
+
+    let insertLines = sanitizeEditText(edit.insert_after.text).split("\n");
+    if (opts.restoreIndent) insertLines = restoreIndent([lines[idx]], insertLines);
+    lines.splice(idx + 1, 0, ...insertLines);
+    return null;
+}
+
+function applyReplaceLinesEdit(edit, ctx) {
+    const {
+        baseSnapshot,
+        buildStrictChecksumMismatchError,
+        conflictIfNeeded,
+        currentSnapshot,
+        ensureRevisionContext,
+        hasBaseSnapshot,
+        lines,
+        locateOrConflict,
+        opts,
+        origLines,
+        staleRevision,
+    } = ctx;
+    const startRef = parseRef(edit.replace_lines.start_anchor);
+    const endRef = parseRef(edit.replace_lines.end_anchor);
+    const startIdx = locateOrConflict(startRef);
+    if (typeof startIdx === "string") return startIdx;
+    const endIdx = locateOrConflict(endRef);
+    if (typeof endIdx === "string") return endIdx;
+    const actualStart = startIdx + 1;
+    const actualEnd = endIdx + 1;
+    const rangeChecksum = edit.replace_lines.range_checksum;
+    if (!rangeChecksum) {
+        throw new Error("range_checksum required for replace_lines. Read the range first via read_file, then pass its checksum. The checksum range must cover start-to-end anchors (inclusive).");
+    }
+
+    if (staleRevision && opts.conflictPolicy === "conservative") {
+        const conflict = ensureRevisionContext(actualStart, actualEnd, startIdx);
+        if (conflict) return conflict;
+        const baseCheck = hasBaseSnapshot ? verifyChecksumAgainstSnapshot(baseSnapshot, rangeChecksum) : null;
+        if (!baseCheck?.ok) {
+            return conflictIfNeeded(
+                "stale_checksum",
+                startIdx,
+                baseCheck?.actual || null,
+                baseCheck?.actual
+                    ? `Provided checksum ${rangeChecksum} does not match base revision ${opts.baseRevision}.`
+                    : `Checksum range from ${rangeChecksum} is outside the available base revision.`,
+            );
+        }
+    } else {
+        const coverage = validateChecksumCoverage(rangeChecksum, actualStart, actualEnd);
+        const { start: csStart, end: csEnd, hex: csHex } = parseChecksum(rangeChecksum);
+        if (!coverage.ok) {
+            const snip = buildErrorSnippet(origLines, actualStart - 1);
+            throw new Error(
+                `${coverage.reason}\n\n` +
+                `Current content (lines ${snip.start}-${snip.end}):\n${snip.text}\n\n` +
+                "Tip: Use updated hashes above for retry.",
+            );
+        }
+        const actual = buildRangeChecksum(currentSnapshot, csStart, csEnd);
+        const actualHex = actual?.split(":")[1];
+        if (!actual || csHex !== actualHex) {
+            const details = `CHECKSUM_MISMATCH: expected ${rangeChecksum}, got ${actual}. Content at lines ${csStart}-${csEnd} differs from when you read it.\nRecovery: read_file path ranges=["${csStart}-${csEnd}"], then retry edit with fresh checksum.`;
+            if (opts.conflictPolicy === "conservative") {
+                return conflictIfNeeded("stale_checksum", csStart - 1, actual, details);
+            }
+            throw buildStrictChecksumMismatchError(details, csStart, actual);
+        }
+    }
+
+    const txt = edit.replace_lines.new_text;
+    if (!txt && txt !== 0) {
+        lines.splice(startIdx, endIdx - startIdx + 1);
+        return null;
+    }
+    const origRange = lines.slice(startIdx, endIdx + 1);
+    let newLines = sanitizeEditText(txt).split("\n");
+    if (opts.restoreIndent) newLines = restoreIndent(origRange, newLines);
+    lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
+    return null;
+}
+
+function applyReplaceBetweenEdit(edit, ctx) {
+    const { lines, opts, locateOrConflict, ensureRevisionContext } = ctx;
+    const boundaryMode = edit.replace_between.boundary_mode || "inclusive";
+    if (boundaryMode !== "inclusive" && boundaryMode !== "exclusive") {
+        throw new Error(`BAD_INPUT: replace_between boundary_mode must be inclusive or exclusive, got ${boundaryMode}`);
+    }
+    const startRef = parseRef(edit.replace_between.start_anchor);
+    const endRef = parseRef(edit.replace_between.end_anchor);
+    const startIdx = locateOrConflict(startRef);
+    if (typeof startIdx === "string") return startIdx;
+    const endIdx = locateOrConflict(endRef);
+    if (typeof endIdx === "string") return endIdx;
+    if (startIdx > endIdx) {
+        throw new Error(`BAD_INPUT: replace_between start anchor resolves after end anchor (${startIdx + 1} > ${endIdx + 1})`);
+    }
+
+    const targetRange = targetRangeForReplaceBetween(startIdx, endIdx, boundaryMode);
+    const conflict = ensureRevisionContext(targetRange.start, targetRange.end, startIdx);
+    if (conflict) return conflict;
+
+    const txt = edit.replace_between.new_text;
+    let newLines = sanitizeEditText(txt ?? "").split("\n");
+    const sliceStart = boundaryMode === "exclusive" ? startIdx + 1 : startIdx;
+    const removeCount = boundaryMode === "exclusive" ? Math.max(0, endIdx - startIdx - 1) : (endIdx - startIdx + 1);
+    const origRange = lines.slice(sliceStart, sliceStart + removeCount);
+    if (opts.restoreIndent && origRange.length > 0) newLines = restoreIndent(origRange, newLines);
+    if (txt === "" || txt === null) newLines = [];
+    lines.splice(sliceStart, removeCount, ...newLines);
+    return null;
 }
 
 /**
@@ -249,52 +391,9 @@ export function editFile(filePath, edits, opts = {}) {
     const remaps = [];
     const remapKeys = new Set();
 
-    const anchored = [];
-    for (const e of edits) {
-        if (e.set_line || e.replace_lines || e.insert_after || e.replace_between) anchored.push(e);
-        else if (e.replace) throw new Error("REPLACE_REMOVED: replace is no longer supported in edit_file. Use set_line/replace_lines for single edits, bulk_replace tool for rename/refactor.");
-        else throw new Error(`BAD_INPUT: unknown edit type: ${JSON.stringify(e)}`);
-    }
-
-    const editTargets = [];
-    for (const e of anchored) {
-        if (e.set_line) {
-            const line = parseRef(e.set_line.anchor).line;
-            editTargets.push({ start: line, end: line });
-        } else if (e.replace_lines) {
-            const s = parseRef(e.replace_lines.start_anchor).line;
-            const en = parseRef(e.replace_lines.end_anchor).line;
-            editTargets.push({ start: s, end: en });
-        } else if (e.insert_after) {
-            const line = parseRef(e.insert_after.anchor).line;
-            editTargets.push({ start: line, end: line, insert: true });
-        } else if (e.replace_between) {
-            const s = parseRef(e.replace_between.start_anchor).line;
-            const en = parseRef(e.replace_between.end_anchor).line;
-            editTargets.push({ start: s, end: en });
-        }
-    }
-    for (let i = 0; i < editTargets.length; i++) {
-        for (let j = i + 1; j < editTargets.length; j++) {
-            const a = editTargets[i], b = editTargets[j];
-            if (a.insert || b.insert) continue;
-            if (a.start <= b.end && b.start <= a.end) {
-                throw new Error(
-                    `OVERLAPPING_EDITS: lines ${a.start}-${a.end} and ${b.start}-${b.end} overlap. ` +
-                    `Split into separate edit_file calls.`
-                );
-            }
-        }
-    }
-
-    const sorted = anchored.map((e) => {
-        let sortKey;
-        if (e.set_line) sortKey = parseRef(e.set_line.anchor).line;
-        else if (e.replace_lines) sortKey = parseRef(e.replace_lines.start_anchor).line;
-        else if (e.insert_after) sortKey = parseRef(e.insert_after.anchor).line;
-        else if (e.replace_between) sortKey = parseRef(e.replace_between.start_anchor).line;
-        return { ...e, _k: sortKey };
-    }).sort((a, b) => b._k - a._k);
+    const anchored = normalizeAnchoredEdits(edits);
+    assertNonOverlappingTargets(collectEditTargets(anchored));
+    const sorted = sortEditsForApply(anchored);
 
     const conflictIfNeeded = (reason, centerIdx, retryChecksum, details) => {
         if (conflictPolicy !== "conservative") {
@@ -343,7 +442,7 @@ export function editFile(filePath, edits, opts = {}) {
                 "base_revision_evicted",
                 centerIdx,
                 null,
-                `Base revision ${opts.baseRevision} is not available in the local revision cache.`
+                `Base revision ${opts.baseRevision} is not available in the local revision cache. Recovery: re-read the file with read_file to get a fresh revision, then retry.`
             );
         }
         if (overlapsChangedRanges(changedRanges, actualStart, actualEnd)) {
@@ -351,141 +450,45 @@ export function editFile(filePath, edits, opts = {}) {
                 "overlap",
                 centerIdx,
                 null,
-                `Changes since ${opts.baseRevision} overlap edit range ${actualStart}-${actualEnd}.`
+                `Changes since ${opts.baseRevision} overlap edit range ${actualStart}-${actualEnd}. Recovery: re-read lines ${actualStart}-${actualEnd} with read_file, then retry with fresh anchors and checksum.`
             );
         }
         autoRebased = true;
         return null;
     };
 
+    const buildStrictChecksumMismatchError = (details, checksumStart, actual) => {
+        const snip = buildErrorSnippet(origLines, checksumStart - 1);
+        return new Error(
+            `${details}\n\n` +
+            `Current content (lines ${snip.start}-${snip.end}):\n${snip.text}\n\n` +
+            `Retry with fresh checksum ${actual}, or use set_line with hashes above.`,
+        );
+    };
+
+    const editContext = {
+        baseSnapshot,
+        buildStrictChecksumMismatchError,
+        conflictIfNeeded,
+        currentSnapshot,
+        ensureRevisionContext,
+        hasBaseSnapshot,
+        lines,
+        locateOrConflict,
+        opts,
+        origLines,
+        staleRevision,
+    };
+
     for (let _ei = 0; _ei < sorted.length; _ei++) {
         const e = sorted[_ei];
         try {
-        if (e.set_line) {
-            const { tag, line } = parseRef(e.set_line.anchor);
-            const idx = locateOrConflict({ tag, line });
-            if (typeof idx === "string") return idx;
-            const conflict = ensureRevisionContext(idx + 1, idx + 1, idx);
-            if (conflict) return conflict;
-
-            const txt = e.set_line.new_text;
-            if (!txt && txt !== 0) {
-                lines.splice(idx, 1);
-            } else {
-                const origLine = [lines[idx]];
-                const raw = sanitizeEditText(txt).split("\n");
-                const newLines = opts.restoreIndent ? restoreIndent(origLine, raw) : raw;
-                lines.splice(idx, 1, ...newLines);
-            }
-            continue;
-        }
-
-        if (e.insert_after) {
-            const { tag, line } = parseRef(e.insert_after.anchor);
-            const idx = locateOrConflict({ tag, line });
-            if (typeof idx === "string") return idx;
-            const conflict = ensureRevisionContext(idx + 1, idx + 1, idx);
-            if (conflict) return conflict;
-
-            let insertLines = sanitizeEditText(e.insert_after.text).split("\n");
-            if (opts.restoreIndent) insertLines = restoreIndent([lines[idx]], insertLines);
-            lines.splice(idx + 1, 0, ...insertLines);
-            continue;
-        }
-
-        if (e.replace_lines) {
-            const s = parseRef(e.replace_lines.start_anchor);
-            const en = parseRef(e.replace_lines.end_anchor);
-            const si = locateOrConflict(s);
-            if (typeof si === "string") return si;
-            const ei = locateOrConflict(en);
-            if (typeof ei === "string") return ei;
-            const actualStart = si + 1;
-            const actualEnd = ei + 1;
-            const rc = e.replace_lines.range_checksum;
-            if (!rc) throw new Error("range_checksum required for replace_lines. Read the range first via read_file, then pass its checksum. The checksum range must cover start-to-end anchors (inclusive).");
-
-            if (staleRevision && conflictPolicy === "conservative") {
-                const conflict = ensureRevisionContext(actualStart, actualEnd, si);
-                if (conflict) return conflict;
-                const baseCheck = hasBaseSnapshot ? verifyChecksumAgainstSnapshot(baseSnapshot, rc) : null;
-                if (!baseCheck?.ok) {
-                    return conflictIfNeeded(
-                        "stale_checksum",
-                        si,
-                        baseCheck?.actual || null,
-                        baseCheck?.actual
-                            ? `Provided checksum ${rc} does not match base revision ${opts.baseRevision}.`
-                            : `Checksum range from ${rc} is outside the available base revision.`
-                    );
-                }
-            } else {
-                const { start: csStart, end: csEnd, hex: csHex } = parseChecksum(rc);
-                if (csStart > actualStart || csEnd < actualEnd) {
-                    const snip = buildErrorSnippet(origLines, actualStart - 1);
-                    throw new Error(
-                        `CHECKSUM_RANGE_GAP: checksum covers lines ${csStart}-${csEnd} but edit spans ${actualStart}-${actualEnd} (inclusive). Checksum range must fully contain the anchor range.\n\n` +
-                        `Current content (lines ${snip.start}-${snip.end}):\n${snip.text}\n\n` +
-                        `Tip: Use updated hashes above for retry.`
-                    );
-                }
-                const actual = buildRangeChecksum(currentSnapshot, csStart, csEnd);
-                const actualHex = actual?.split(":")[1];
-                if (!actual || csHex !== actualHex) {
-                    const details =
-                        `CHECKSUM_MISMATCH: expected ${rc}, got ${actual}. Content at lines ${csStart}-${csEnd} differs from when you read it \u2014 re-read before editing.`;
-                    if (conflictPolicy === "conservative") {
-                        return conflictIfNeeded("stale_checksum", csStart - 1, actual, details);
-                    }
-                    const snip = buildErrorSnippet(origLines, csStart - 1);
-                    throw new Error(
-                        `${details}\n\n` +
-                        `Current content (lines ${snip.start}-${snip.end}):\n${snip.text}\n\n` +
-                        `Retry with fresh checksum ${actual}, or use set_line with hashes above.`
-                    );
-                }
-            }
-
-            const txt = e.replace_lines.new_text;
-            if (!txt && txt !== 0) {
-                lines.splice(si, ei - si + 1);
-            } else {
-                const origRange = lines.slice(si, ei + 1);
-                let newLines = sanitizeEditText(txt).split("\n");
-                if (opts.restoreIndent) newLines = restoreIndent(origRange, newLines);
-                lines.splice(si, ei - si + 1, ...newLines);
-            }
-            continue;
-        }
-
-        if (e.replace_between) {
-            const boundaryMode = e.replace_between.boundary_mode || "inclusive";
-            if (boundaryMode !== "inclusive" && boundaryMode !== "exclusive") {
-                throw new Error(`BAD_INPUT: replace_between boundary_mode must be inclusive or exclusive, got ${boundaryMode}`);
-            }
-            const s = parseRef(e.replace_between.start_anchor);
-            const en = parseRef(e.replace_between.end_anchor);
-            const si = locateOrConflict(s);
-            if (typeof si === "string") return si;
-            const ei = locateOrConflict(en);
-            if (typeof ei === "string") return ei;
-            if (si > ei) {
-                throw new Error(`BAD_INPUT: replace_between start anchor resolves after end anchor (${si + 1} > ${ei + 1})`);
-            }
-
-            const targetRange = targetRangeForReplaceBetween(si, ei, boundaryMode);
-            const conflict = ensureRevisionContext(targetRange.start, targetRange.end, si);
-            if (conflict) return conflict;
-
-            const txt = e.replace_between.new_text;
-            let newLines = sanitizeEditText(txt ?? "").split("\n");
-            const sliceStart = boundaryMode === "exclusive" ? si + 1 : si;
-            const removeCount = boundaryMode === "exclusive" ? Math.max(0, ei - si - 1) : (ei - si + 1);
-            const origRange = lines.slice(sliceStart, sliceStart + removeCount);
-            if (opts.restoreIndent && origRange.length > 0) newLines = restoreIndent(origRange, newLines);
-            if (txt === "" || txt === null) newLines = [];
-            lines.splice(sliceStart, removeCount, ...newLines);
-        }
+            let conflictResult = null;
+            if (e.set_line) conflictResult = applySetLineEdit(e, editContext);
+            else if (e.insert_after) conflictResult = applyInsertAfterEdit(e, editContext);
+            else if (e.replace_lines) conflictResult = applyReplaceLinesEdit(e, editContext);
+            else if (e.replace_between) conflictResult = applyReplaceBetweenEdit(e, editContext);
+            if (typeof conflictResult === "string") return conflictResult;
         } catch (editErr) {
             if (sorted.length > 1) editErr.message = `Edit ${_ei + 1}/${sorted.length}: ${editErr.message}`;
             throw editErr;
@@ -545,17 +548,13 @@ export function editFile(filePath, edits, opts = {}) {
 
     // Post-edit context (before diff — always visible even if output truncated)
     if (fullDiff && minLine <= maxLine) {
-        const ctxStart = Math.max(0, minLine - 6);
+        const ctxStart = Math.max(0, minLine - 6) + 1; // 1-indexed for snapshot
         const ctxEnd = Math.min(newLinesAll.length, maxLine + 5);
-        const ctxLines = [];
-        const ctxHashes = [];
-        for (let i = ctxStart; i < ctxEnd; i++) {
-            const h = fnv1a(newLinesAll[i]);
-            ctxHashes.push(h);
-            ctxLines.push(`${lineTag(h)}.${i + 1}\t${newLinesAll[i]}`);
+        const entries = createSnapshotEntries(nextSnapshot, ctxStart, ctxEnd);
+        if (entries.length > 0) {
+            const block = buildEditReadyBlock({ path: real, kind: "post_edit", entries });
+            msg += `\n\n${serializeReadBlock(block)}`;
         }
-        const ctxCs = rangeChecksum(ctxHashes, ctxStart + 1, ctxEnd);
-        msg += `\n\nPost-edit (lines ${ctxStart + 1}-${ctxEnd}):\n${ctxLines.join("\n")}\nchecksum: ${ctxCs}`;
     }
 
     // Call impact (before diff — usually visible)

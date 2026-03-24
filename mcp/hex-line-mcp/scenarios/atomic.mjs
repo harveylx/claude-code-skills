@@ -22,7 +22,7 @@ import { extname } from "node:path";
 import {
     getFileLines,
     runN,
-} from "../lib/benchmark-helpers.mjs";
+} from "../lib/scenario-helpers.mjs";
 
 /**
  * Run TEST 1-14 atomic benchmarks (hex-line only).

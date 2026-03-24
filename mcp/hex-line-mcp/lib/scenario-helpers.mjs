@@ -1,7 +1,6 @@
 import { readFileSync, statSync, readdirSync } from "node:fs";
 import { performance } from "node:perf_hooks";
-import { resolve, extname, join } from "node:path";
-import { readFile } from "./read.mjs";
+import { resolve, extname } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Constants (shared with benchmark.mjs)
