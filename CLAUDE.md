@@ -42,7 +42,7 @@ Skills collection for Claude Code with config-driven Agile task management (Line
 | Project overview + tree | `cat README.md` |
 | Architecture (L0-L3) | `cat docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` |
 | Key workflow | `ln-700 → ln-100 → ln-200 → ln-1000` |
-| Tool config (Linear/File) | `cat skills/shared/references/tools_config_guide.md` |
+| Tool config (Linear/File) | `cat skills-catalog/shared/references/tools_config_guide.md` |
 | Skill metadata | `head -20 {ln-NNN}/SKILL.md` |
 
 ## Navigation
