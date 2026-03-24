@@ -91,13 +91,18 @@ One pass: use Phase 1 state (do NOT re-run `claude mcp list`) → remove depreca
    - IF `dry_run: true` → show planned command
    - IF **linear** → ask user: "Do you use Linear?" → no → SKIP
 
-Registration commands:
+Registration commands (OS-dependent prefix):
 
-| Server | Command |
+| OS | Prefix | Why |
+|----|--------|-----|
+| Windows | `cmd /c npx` | Windows requires `cmd /c` wrapper to execute npx |
+| macOS / Linux | `npx` | Direct execution |
+
+| Server | Command (replace `{NPX}` with OS prefix above) |
 |--------|----------|
-| hex-line | `claude mcp add -s user hex-line -- npx -y @levnikolaevich/hex-line-mcp` |
-| hex-ssh | `claude mcp add -s user hex-ssh -- npx -y @levnikolaevich/hex-ssh-mcp` |
-| hex-graph | `claude mcp add -s user hex-graph -- npx -y @levnikolaevich/hex-graph-mcp` |
+| hex-line | `claude mcp add -s user hex-line -- {NPX} -y @levnikolaevich/hex-line-mcp` |
+| hex-ssh | `claude mcp add -s user hex-ssh -- {NPX} -y @levnikolaevich/hex-ssh-mcp` |
+| hex-graph | `claude mcp add -s user hex-graph -- {NPX} -y @levnikolaevich/hex-graph-mcp` |
 | context7 | `claude mcp add -s user --transport http context7 https://mcp.context7.com/mcp` |
 | Ref | `claude mcp add -s user --transport http Ref https://api.ref.tools/mcp` |
 | linear | `claude mcp add -s user --transport http linear-server https://mcp.linear.app/mcp` |
@@ -226,7 +231,7 @@ MCP Configuration:
 | linear    | HTTP      | skipped       | skipped    | user declined           |
 ```
 
-**Token efficiency benchmark:** Run `/ln-015-benchmark-compare` for real A/B comparison (built-in vs hex-line).
+**Token efficiency benchmark:** Run `/ln-840-benchmark-compare` for real A/B comparison (built-in vs hex-line).
 
 ---
 
@@ -235,7 +240,7 @@ MCP Configuration:
 1. **Write only via sanctioned paths.** Register servers via `claude mcp add`. Write to `~/.claude/settings.json` ONLY for hooks (via `setup_hooks`), permissions (`permissions.allow[]`), and `outputStyle`
 2. **Verify after add.** Always run `claude mcp list` after registration to confirm connection
 3. **Ask before optional servers.** Linear requires explicit user consent
-4. **npx -y for all hex MCP.** Never `npm i -g` — npx provides process isolation and avoids EBUSY on Windows
+4. **npx -y for all hex MCP.** Never `npm i -g` — npx provides process isolation and avoids EBUSY on Windows. On Windows, wrap with `cmd /c npx` (see Phase 2 OS prefix table)
 5. **Remove deprecated servers.** Clean up servers no longer in the registry
 6. **Grant permissions.** After registration, add `mcp__{server}` to user settings
 7. **Minimize `claude mcp list` calls.** Phase 1 runs it once (discovery). Phase 2 reuses that data. Only Phase 2 Step 4 runs it again (post-mutation verify). Max 2 calls total
@@ -263,7 +268,7 @@ MCP Configuration:
 - [ ] Project allowed-tools migrated (Phase 5)
 - [ ] MCP Tool Preferences in all instruction files (Phase 6)
 - [ ] Status table displayed (Phase 8)
-- [ ] Token efficiency benchmark referenced: ln-015-benchmark-compare (Phase 8)
+- [ ] Token efficiency benchmark referenced: ln-840-benchmark-compare (Phase 8)
 
 ---
 

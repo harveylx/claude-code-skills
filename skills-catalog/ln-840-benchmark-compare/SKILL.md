@@ -1,5 +1,5 @@
 ---
-name: ln-015-benchmark-compare
+name: ln-840-benchmark-compare
 description: "Runs A/B benchmark: launches two Claude Code sessions (built-in vs hex-line) on identical tasks, compares tool calls, tokens, time. Use after hex-line changes to measure real impact."
 license: MIT
 ---
@@ -9,7 +9,7 @@ license: MIT
 # Benchmark Compare
 
 **Type:** L3 Worker
-**Category:** 0XX Shared
+**Category:** 8XX Optimization \u2192 840 Benchmark
 
 Runs real A/B comparison: launches Claude Code with built-in tools only vs with hex-line MCP on identical composite tasks. Measures tool calls, tokens, wall time, accuracy. No simulations.
 
