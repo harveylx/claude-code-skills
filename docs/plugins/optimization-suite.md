@@ -32,6 +32,7 @@ Three optimization tracks: Performance (profile -> research -> validate -> execu
 | ln-830-code-modernization-coordinator | Coordinate OSS replacement and bundle optimization |
 | ln-831-oss-replacer | Replace custom modules with OSS packages |
 | ln-832-bundle-optimizer | Reduce JS/TS bundle size |
+| ln-840-benchmark-compare | A/B benchmark: built-in vs hex-line tool comparison |
 
 ## How it works
 

@@ -740,8 +740,18 @@ async function runAgent(agentName, prompt, cwd, timeout, registry,
     const subprocessCwd = resolvedArgs.includes("-C") ? null : cwd;
     const cmd = buildCommand(agentCfg, resolvedArgs);
 
+    // Support positional prompt delivery (e.g. claude -p "prompt")
+    const delivery = agentCfg.normal_prompt_delivery || "stdin";
+    let stdinPrompt;
+    if (delivery === "positional") {
+        resolvedArgs.push(prompt);
+        stdinPrompt = null;
+    } else {
+        stdinPrompt = prompt;
+    }
+
     const result = await executeAgent(
-        agentCfg, cmd, prompt, hardTimeout,
+        agentCfg, cmd, stdinPrompt, hardTimeout,
         subprocessCwd, env,
         outputFile, logPath, agentName
     );

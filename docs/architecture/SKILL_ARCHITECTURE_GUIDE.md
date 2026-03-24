@@ -1096,7 +1096,7 @@ Quality gates run before completion."
 
 ## Appendix B: Structural Migration Checklist
 
-When moving files or directories (e.g., `ln-*/` → `skills/ln-*/`), verify ALL path-dependent tooling:
+When moving files or directories (e.g., `ln-*/` → `skills-catalog/ln-*/`), verify ALL path-dependent tooling:
 
 | Check | File | What to verify |
 |-------|------|----------------|
