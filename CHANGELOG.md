@@ -2,6 +2,12 @@
 
 <!-- SCOPE: User-facing changes only. Max 5 bullets per entry. Focus: new capabilities, workflow changes, breaking changes. -->
 
+## 2026-03-25
+- **ln-010 npx cache probe** — hex package version detection via npx cache scan instead of `npm outdated -g`; setup_hooks called unconditionally in Phase 3c verification
+- **ln-014 auto-fix** — Phase 5b auto-fixes missing Compact Instructions and MCP Tool Preferences sections in instruction files
+- **ln-012 probe cleanup** — removed global npm/npm ls fallback probes; hex packages are npx-only
+
+
 ## 2026-03-24
 - **skills-catalog rename** — `skills/` → `skills-catalog/` to fix plugin skill duplication (128×6 entries in autocomplete)
 - **ln-840-benchmark-compare** — new skill in optimization-suite: A/B benchmark (built-in vs hex-line), renamed from ln-015

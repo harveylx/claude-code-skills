@@ -67,12 +67,12 @@ For each connected hex server, run in parallel:
 npm view @levnikolaevich/${PKG} version 2>/dev/null
 ```
 
-Then compare npm latest against the running local version using a multi-source fallback chain:
+Then compare npm latest against the running local version:
 1. **npx cache probe:** `npm config get cache` -> scan `{cacheRoot}/_npx/**/node_modules/@levnikolaevich/${PKG}/package.json` -> pick newest by semver/mtime
-2. **Global npm probe (fallback):** `node -e "console.log(require('@levnikolaevich/${PKG}/package.json').version)"` with `paths: [process.env.APPDATA + '/npm/node_modules']` (Windows) or global prefix (macOS/Linux)
-3. **npm ls probe (fallback):** `npm ls -g @levnikolaevich/${PKG} --json` -> parse `dependencies.*.version`
 
-Use the FIRST version found. If ALL probes return nothing, report `running=unknown` and treat the server as refresh-recommended rather than claiming it is current.
+Use the npx cache version. If probe returns nothing, report `running=unknown` and treat the server as refresh-recommended rather than claiming it is current.
+
+Note: hex packages run via `npx -y`, NOT global install. Never probe global npm paths.
 
 | npm latest | cached local version | Action |
 |------------|---------|--------|
@@ -160,6 +160,8 @@ MUST call `mcp__hex-line__setup_hooks(agent="all")` AFTER all Phase 2 registrati
 **Verification:** Response must contain `Hooks configured for`. If `SKIPPED`, `UNKNOWN_AGENT`, `Error`, or `failed` — STOP.
 
 **Note:** `setup_hooks(agent="all")` also syncs MCP server entries and hook paths for Gemini. Codex is reported as "not supported" (expected). After this call, ln-013 should verify Gemini state rather than blindly overwriting.
+
+**Note:** ln-010 Phase 3c also calls `setup_hooks(agent="all")` unconditionally during verification. Double-call is intentional and harmless (idempotent). Ensures hooks are current even when ln-012 is not dispatched.
 
 ### Phase 4: Graph Indexing
 
@@ -302,5 +304,5 @@ MCP Configuration:
 
 ---
 
-**Version:** 1.4.0
+**Version:** 1.4.1
 **Last Updated:** 2026-03-25
