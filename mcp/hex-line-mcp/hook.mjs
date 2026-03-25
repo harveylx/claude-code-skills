@@ -225,28 +225,55 @@ function isHexLineDisabled(configPath) {
 /** Reset cache (for testing). */
 function _resetHexLineDisabledCache() { _hexLineDisabled = null; }
 
+/** Cache: undefined = not computed yet */
+let _hookMode;
+
+/**
+ * Get hook enforcement mode for the current project.
+ * Reads .hex-skills/environment_state.json -> hooks.mode.
+ * Fail-closed: returns "blocking" on any error.
+ */
+function getHookMode() {
+    if (_hookMode !== undefined) return _hookMode;
+    _hookMode = "blocking";
+    try {
+        const stateFile = resolve(process.cwd(), ".hex-skills/environment_state.json");
+        const data = JSON.parse(readFileSync(stateFile, "utf-8"));
+        if (data.hooks?.mode === "advisory") _hookMode = "advisory";
+    } catch { /* file missing or malformed -> default blocking */ }
+    return _hookMode;
+}
+
+
 function block(reason, context) {
     const output = {
         hookSpecificOutput: {
-            hookEventName: "PreToolUse",
             permissionDecision: "deny",
-            permissionDecisionReason: reason,
-        }
+        },
+        systemMessage: context ? `${reason}\n${context}` : reason,
     };
-    if (context) output.hookSpecificOutput.additionalContext = context;
     process.stdout.write(JSON.stringify(output));
     process.exit(2);
 }
 
-function advise(reason) {
-    process.stdout.write(JSON.stringify({
+function advise(reason, context) {
+    const output = {
         hookSpecificOutput: {
-            hookEventName: "PreToolUse",
-            permissionDecision: "approve",
-            permissionDecisionReason: reason,
-        }
-    }));
+            permissionDecision: "allow",
+        },
+        systemMessage: context ? `${reason}\n${context}` : reason,
+    };
+    process.stdout.write(JSON.stringify(output));
     process.exit(0);
+}
+
+/** Route to block or advise based on hook mode. Dangerous commands always block. */
+function redirect(reason, context) {
+    if (getHookMode() === "advisory") {
+        advise(reason, context);
+    } else {
+        block(reason, context);
+    }
 }
 
 // ---- PreToolUse handler ----
@@ -306,7 +333,7 @@ function handlePreToolUse(data) {
             const target = filePath
                 ? `Use mcp__hex-line__outline or mcp__hex-line__read_file with path="${filePath}"`
                 : "Use mcp__hex-line__directory_tree or mcp__hex-line__read_file";
-            block(target, "For large or unknown full reads: call outline first, then read_file with offset/limit or ranges. Do not use built-in Read here.");
+            redirect(target, "For large or unknown full reads: call outline first, then read_file with offset/limit or ranges. Do not use built-in Read here.");
         }
 
         if (toolName === "Edit") {
@@ -318,17 +345,17 @@ function handlePreToolUse(data) {
             const target = filePath
                 ? `Use mcp__hex-line__grep_search or mcp__hex-line__read_file, then mcp__hex-line__edit_file with path="${filePath}"`
                 : "Use mcp__hex-line__grep_search or mcp__hex-line__read_file, then mcp__hex-line__edit_file";
-            block(target, "For large or repeated edits: locate anchors/checksums first, then call edit_file once with batched edits.");
+            redirect(target, "For large or repeated edits: locate anchors/checksums first, then call edit_file once with batched edits.");
         }
 
         if (toolName === "Write") {
             const pathNote = filePath ? ` with path="${filePath}"` : "";
-            block(`Use mcp__hex-line__write_file${pathNote}`, TOOL_HINTS.Write);
+            redirect(`Use mcp__hex-line__write_file${pathNote}`, TOOL_HINTS.Write);
         }
 
         if (toolName === "Grep") {
             const pathNote = filePath ? ` with path="${filePath}"` : "";
-            block(`Use mcp__hex-line__grep_search${pathNote}`, TOOL_HINTS.Grep);
+            redirect(`Use mcp__hex-line__grep_search${pathNote}`, TOOL_HINTS.Grep);
         }
     }
 
@@ -362,7 +389,7 @@ function handlePreToolUse(data) {
                 if (regex.test(firstCmd)) {
                     const hint = TOOL_HINTS[key];
                     const toolName2 = hint.split(" (")[0];
-                    block(`Use ${toolName2} instead of piped command`, hint);
+                    redirect(`Use ${toolName2} instead of piped command`, hint);
                 }
             }
             process.exit(0);
@@ -375,7 +402,7 @@ function handlePreToolUse(data) {
                 const toolName2 = hint.split(" (")[0];
                 const args = command.split(/\s+/).slice(1).join(" ");
                 const argsNote = args ? ` — args: "${args}"` : "";
-                block(`Use ${toolName2}${argsNote}`, hint);
+                redirect(`Use ${toolName2}${argsNote}`, hint);
             }
         }
     }

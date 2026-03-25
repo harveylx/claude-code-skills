@@ -13,6 +13,7 @@ import { join, resolve } from "node:path";
 import { existsSync, unlinkSync, mkdirSync } from "node:fs";
 
 const SCHEMA_VERSION = 1;
+export const CODEGRAPH_DIR = ".hex-skills/codegraph";
 const EXTERNAL_FILE_PREFIX = "[[external]]/";
 
 /**
@@ -43,7 +44,7 @@ const _stores = new Map();
 export function getStore(projectPath) {
     if (_stores.has(projectPath)) return _stores.get(projectPath);
 
-    const dbDir = join(projectPath, ".hex-skills/codegraph");
+    const dbDir = join(projectPath, CODEGRAPH_DIR);
     const dbPath = join(dbDir, "index.db");
 
     // Check schema version BEFORE creating store
@@ -70,7 +71,7 @@ export function getStore(projectPath) {
 class Store {
     constructor(projectPath) {
         this.projectPath = projectPath;
-        const dbDir = join(projectPath, ".hex-skills/codegraph");
+        const dbDir = join(projectPath, CODEGRAPH_DIR);
         if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true });
         const dbPath = join(dbDir, "index.db");
         this.db = new Database(dbPath);
@@ -993,7 +994,7 @@ export function resolveStore(path) {
             if (abs.startsWith(key + "/") || abs.startsWith(key + "\\")) return s;
         }
         // 3. Auto-open persisted DB from disk (readonly probe first)
-        const dbPath = join(abs, ".hex-skills/codegraph", "index.db");
+        const dbPath = join(abs, CODEGRAPH_DIR, "index.db");
         if (existsSync(dbPath)) {
             try {
                 const probe = new Database(dbPath, { readonly: true });

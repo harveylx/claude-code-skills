@@ -8,9 +8,9 @@
 
 import { watch } from "chokidar";
 import { resolve, relative, extname } from "node:path";
+import { CODEGRAPH_DIR, getStore } from "./store.mjs";
 import { isSupported } from "./parser.mjs";
 import { reindexFile } from "./indexer.mjs";
-import { getStore } from "./store.mjs";
 
 const _watchers = new Map();
 
@@ -30,7 +30,7 @@ export function watchProject(projectPath) {
         ignored: [
             "**/node_modules/**", "**/.git/**", "**/dist/**", "**/build/**",
             "**/__pycache__/**", "**/.venv/**", "**/vendor/**", "**/target/**",
-            "**/.hex-skills/codegraph/**", "**/.vs/**", "**/bin/**", "**/obj/**",
+            `**/${CODEGRAPH_DIR}/**`, "**/.vs/**", "**/bin/**", "**/obj/**",
         ],
         persistent: true,
         ignoreInitial: true,

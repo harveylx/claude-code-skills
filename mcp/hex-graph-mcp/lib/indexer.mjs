@@ -13,13 +13,13 @@
 import { readFileSync, statSync, readdirSync, existsSync, mkdirSync } from "node:fs";
 import { resolve, extname, relative, join, dirname, basename } from "node:path";
 import { createHash } from "node:crypto";
-import { getStore } from "./store.mjs";
+import { getStore, CODEGRAPH_DIR } from "./store.mjs";
 import { parseFile, languageFor, supportedExtensions } from "./parser.mjs";
 
 const IGNORE_DIRS = new Set([
     "node_modules", ".git", "dist", "build", "out", ".next",
     "__pycache__", ".venv", "venv", "vendor", "target",
-    ".hex-skills/codegraph", ".vs", "bin", "obj", "packages",
+    CODEGRAPH_DIR, ".vs", "bin", "obj", "packages",
 ]);
 
 const MAX_FILE_SIZE = 500_000; // 500KB
@@ -36,7 +36,7 @@ export async function indexProject(projectPath, { languages } = {}) {
     const t0 = Date.now();
 
     // Ensure .hex-skills/codegraph dir exists
-    const dbDir = join(absPath, ".hex-skills/codegraph");
+    const dbDir = join(absPath, CODEGRAPH_DIR);
     if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true });
 
     const store = getStore(absPath);

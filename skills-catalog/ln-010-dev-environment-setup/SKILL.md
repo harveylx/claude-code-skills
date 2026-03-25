@@ -172,6 +172,8 @@ Full verification after workers complete. This is the **acceptance check** — c
 **3a: Verify CLI Agents**
 - `codex --version`, `gemini --version`, `claude --version` for each non-disabled agent
 - Record: available, version
+- Compare Phase 3a versions against Phase 1a versions
+- If any version changed during the session: INFO "Agent {name} updated from {v1} to {v2} during setup"
 
 **3b: Verify MCP Servers**
 - `claude mcp list` → verify all registered servers `Connected`
@@ -224,6 +226,7 @@ Full verification after workers complete. This is the **acceptance check** — c
 3. **Migrate legacy paths** (idempotent — skips if already migrated):
    ```
    mkdir -p .hex-skills
+
    FOR each {old, new} IN:
      .agent-review/              -> .hex-skills/agent-review/
      .codegraph/                 -> .hex-skills/codegraph/
@@ -232,7 +235,23 @@ Full verification after workers complete. This is the **acceptance check** — c
      .optimization/              -> .hex-skills/optimization/
      docs/environment_state.json -> .hex-skills/environment_state.json
    IF old exists AND new does NOT exist: mv old new
-   Clean .gitignore: remove lines matching old patterns
+
+   # .codegraph/ migration note: hex-graph-mcp >= 0.4.0 already writes to .hex-skills/codegraph/.
+   # Old .codegraph/ may be locked by a running MCP process from an older version.
+   # IF mv fails (EBUSY/locked): skip, WARN "restart Claude Code first, then re-run ln-010".
+   # After restart the new hex-graph process writes to .hex-skills/codegraph/ and old .codegraph/ is stale.
+
+   Clean .gitignore (line-by-line, surgical removal):
+     Remove ONLY lines that EXACTLY match these legacy patterns:
+       /.codegraph
+       /.agent-review
+       /.pipeline
+       /.worktrees
+       /.optimization
+       docs/environment_state.json
+     Method: grep -v with exact match, or mcp__hex-line__edit_file with set_line per line.
+     NEVER use replace_between on .gitignore -- risk of deleting adjacent unrelated entries.
+     After removal: verify no unrelated lines were affected (read file, compare line count).
    ```
 4. **Ensure gitignore:** If `.hex-skills/` not in `.gitignore` -> append:
    ```
@@ -329,5 +348,5 @@ Skill type: `execution-orchestrator`. Analyze this session per protocol §7. Out
 
 ---
 
-**Version:** 2.0.0
-**Last Updated:** 2026-03-23
+**Version:** 2.1.0
+**Last Updated:** 2026-03-25
