@@ -2,6 +2,8 @@
 
 Common workflow for all agent review workers. Each skill provides parameters and unique logic; this reference defines the shared execution mechanics.
 
+> **Preferred orchestration path:** Coordinators that need deterministic phase control should use `shared/references/review_runtime_contract.md` plus `shared/scripts/review-runtime/cli.mjs`. This file defines the shared review mechanics; runtime-enabled skills persist state/checkpoints instead of relying on conversational memory.
+
 ## Parameters (provided by each skill)
 
 | Parameter | Description | Examples |
@@ -38,11 +40,11 @@ IF file not exists: proceed with all agents (no exclusions)
 
 **2. Probe remaining agents:**
 ```
-node shared/agents/agent_runner.mjs --health-check
+node shared/agents/agent_runner.mjs --health-check --json
 ```
 
 - If 0 agents available (after disabled exclusions) -> return `{verdict: "SKIPPED", reason: "no agents available"}`
-- Display health-check output as-is (agent names come from registry dynamically)
+- Runtime-enabled skills should checkpoint: `health_check_done`, `agents_available`, `agents_required`, optional `agents_skipped_reason`
 
 ## Step: Ensure .hex-skills/agent-review/
 
@@ -83,7 +85,7 @@ Assemble the review prompt from base template + mode-specific content:
 9. Save assembled prompt to `.hex-skills/agent-review/{agent}/{identifier}_{review_type}_prompt.md`
    Note: prompt is now agent-specific (different `{focus_hint}` per agent), so save per-agent, not shared.
 
-## Step: Run Agents (background, process-as-arrive)
+## Step: Run Agents (background, sync-before-merge)
 
 a) Launch BOTH agents as background Bash tasks (`run_in_background=true`):
 
@@ -91,11 +93,17 @@ a) Launch BOTH agents as background Bash tasks (`run_in_background=true`):
 node shared/agents/agent_runner.mjs --agent {agent_name} \
   --prompt-file .hex-skills/agent-review/{agent}/{identifier}_{review_type}_prompt.md \
   --output-file .hex-skills/agent-review/{agent}/{identifier}_{review_type}_result.md \
+  --metadata-file .hex-skills/agent-review/{agent}/{identifier}_{review_type}_metadata.json \
   --cwd {cwd}
 ```
 Repeat for each available agent (names from `--list-agents`).
 
-**Log-based monitoring (while agents work):**
+**Runtime-first monitoring (preferred):**
+- Register each launched agent in review runtime with prompt/result/log/metadata paths
+- Use `node shared/scripts/review-runtime/cli.mjs sync-agent --skill {skill}` before merge gates
+- Merge is allowed only after every required agent is `result_ready | dead | failed | skipped`
+
+**Log-based monitoring (legacy/manual path):**
 - After launching, output: `"Agents launched: {names}. Continuing with foreground work..."`
 - Agent stdout streams to `.hex-skills/agent-review/{agent}/{identifier}_{review_type}.log` in real time
 - Every ~2 min between foreground phases: `stat` log file (growing = alive), `tail -10` for current stage
@@ -103,7 +111,7 @@ Repeat for each available agent (names from `--list-agents`).
 - Do NOT poll in a sleep-loop — the framework sends background task notifications automatically
 - When each agent completes, immediately output: `"Agent {name} completed ({duration}s). {N} suggestions found."` Then proceed to parse results.
 
-> **BLOCKING MODEL:** Background agents enable foreground work in parallel. But before merging results (Critical Verification step), ALL agents must be **resolved**. "Resolved" = result file exists OR agent confirmed DEAD via Liveness Protocol (all 3 checks). Do NOT begin Critical Verification until this condition is met for every launched agent. Use `TaskOutput` to check background task status if no completion notification has arrived. Proceeding with ANY agent still ALIVE or UNRESOLVED is a PROTOCOL VIOLATION.
+> **BLOCKING MODEL:** Background agents enable foreground work in parallel. But before merging results (Critical Verification step), ALL agents must be **resolved**. For runtime-enabled skills, resolve from metadata + result files via review runtime. For legacy/manual skills, use the liveness protocol below. Do NOT begin Critical Verification until this condition is met for every launched agent.
 
 
 **Agent Liveness Protocol (MANDATORY before declaring agent failed/timed out):**
@@ -212,7 +220,7 @@ After Critical Verification, run a deterministic refinement loop using Codex. Th
 
 After collecting results from all agents, verify no orphaned processes remain:
 
-1. Extract `pid` from runner's JSON output (returned when agent completes)
+1. Extract `pid` from runner stdout or from `{identifier}_{review_type}_metadata.json`
 2. Run verification per agent:
 ```
 node shared/agents/agent_runner.mjs --verify-dead {pid}
@@ -309,6 +317,7 @@ refinement:
 
 ## Shared Reference Files
 
+- **Review runtime contract:** `shared/references/review_runtime_contract.md`
 - **Agent delegation pattern:** `shared/references/agent_delegation_pattern.md`
 - **Review base template:** `shared/agents/prompt_templates/review_base.md`
 - **Review mode files:** `shared/agents/prompt_templates/modes/` (code.md, story.md, context.md)

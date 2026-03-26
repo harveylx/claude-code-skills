@@ -17,6 +17,7 @@
  *     node agent_runner.mjs --agent codex-review --prompt-file prompt.md --output-file result.md --cwd /project
  *     node agent_runner.mjs --agent codex-review --resume-session abc-123 --prompt-file challenge.md --output-file result.md --cwd /project
  *     node agent_runner.mjs --health-check
+ *     node agent_runner.mjs --health-check --json
  *     node agent_runner.mjs --list-agents
  */
 
@@ -309,6 +310,24 @@ function checkAgentHealth(agentName, registry) {
 }
 
 
+function buildHealthCheckReport(registry) {
+    const agents = [];
+    let availableCount = 0;
+    for (const name of Object.keys(registry.agents)) {
+        const { ok, info } = checkAgentHealth(name, registry);
+        const status = ok ? "OK" : "UNAVAILABLE";
+        agents.push({ name, status, info });
+        if (ok) availableCount++;
+    }
+    return {
+        ok: availableCount === agents.length,
+        available_count: availableCount,
+        unavailable_count: agents.length - availableCount,
+        agents,
+    };
+}
+
+
 function writeResultFile(outputFile, agentName, response, duration, exitCode,
                          sessionId) {
     const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -326,6 +345,13 @@ function writeResultFile(outputFile, agentName, response, duration, exitCode,
 
     fs.mkdirSync(path.dirname(path.resolve(outputFile)), { recursive: true });
     fs.writeFileSync(outputFile, header + (response || "") + footer, "utf-8");
+}
+
+
+function writeMetadataFile(metadataFile, metadata) {
+    if (!metadataFile) return;
+    fs.mkdirSync(path.dirname(path.resolve(metadataFile)), { recursive: true });
+    fs.writeFileSync(metadataFile, JSON.stringify(metadata, null, 2) + "\n", "utf-8");
 }
 
 
@@ -398,9 +424,10 @@ function utcTimestamp() {
  */
 function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
                       subprocessCwd, env,
-                      outputFile, logPath, agentName) {
+                      outputFile, logPath, metadataFile, agentName) {
     return new Promise((resolve) => {
         const startTime = Date.now();
+        const startedAt = utcTimestamp();
         let logFh = null;
         let timedOut = false;
         let rawStdout = "";
@@ -448,6 +475,18 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
         } catch (e) {
             cleanup();
             if (logFh) logFh.end();
+            writeMetadataFile(metadataFile, {
+                agent: agentName,
+                status: "failed",
+                started_at: startedAt,
+                finished_at: utcTimestamp(),
+                success: false,
+                exit_code: -1,
+                error: "Command '" + agentCfg.command + "' not found",
+                pid: null,
+                log_file: logPath,
+                output_file: outputFile,
+            });
             resolve({
                 success: false,
                 agent: agentName,
@@ -455,9 +494,28 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
                 duration_seconds: 0,
                 error: "Command '" + agentCfg.command + "' not found",
                 session_id: null,
+                pid: null,
+                log_file: logPath,
+                output_file: outputFile,
+                started_at: startedAt,
+                finished_at: utcTimestamp(),
+                exit_code: -1,
             });
             return;
         }
+
+        writeMetadataFile(metadataFile, {
+            agent: agentName,
+            status: "launched",
+            pid: child.pid,
+            started_at: startedAt,
+            success: null,
+            exit_code: null,
+            session_id: null,
+            error: null,
+            log_file: logPath,
+            output_file: outputFile,
+        });
 
         // Handle spawn error (e.g., ENOENT)
         child.on("error", (err) => {
@@ -466,6 +524,19 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
             childExitCode = -1;
             cleanup();
             if (logFh) logFh.end();
+            writeMetadataFile(metadataFile, {
+                agent: agentName,
+                status: "failed",
+                pid: child.pid || null,
+                started_at: startedAt,
+                finished_at: utcTimestamp(),
+                success: false,
+                exit_code: -1,
+                session_id: null,
+                error: "Command '" + agentCfg.command + "' not found: " + err.message,
+                log_file: logPath,
+                output_file: outputFile,
+            });
             resolve({
                 success: false,
                 agent: agentName,
@@ -473,6 +544,12 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
                 duration_seconds: 0,
                 error: "Command '" + agentCfg.command + "' not found: " + err.message,
                 session_id: null,
+                pid: child.pid || null,
+                log_file: logPath,
+                output_file: outputFile,
+                started_at: startedAt,
+                finished_at: utcTimestamp(),
+                exit_code: -1,
             });
         });
 
@@ -539,6 +616,7 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
             }
 
             const duration = Math.round((Date.now() - startTime) / 10) / 100;
+            const finishedAt = utcTimestamp();
 
             // Clean up orphaned child processes after normal exit
             killProcessTree(child.pid);
@@ -559,6 +637,19 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
             }
 
             if (timedOut) {
+                writeMetadataFile(metadataFile, {
+                    agent: agentName,
+                    status: "failed",
+                    pid: child.pid || null,
+                    started_at: startedAt,
+                    finished_at: finishedAt,
+                    success: false,
+                    exit_code: code,
+                    session_id: null,
+                    error: "Hard timeout after " + hardTimeout + " seconds",
+                    log_file: logPath,
+                    output_file: outputFile,
+                });
                 resolve({
                     success: false,
                     agent: agentName,
@@ -566,6 +657,12 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
                     duration_seconds: duration,
                     error: "Hard timeout after " + hardTimeout + " seconds",
                     session_id: null,
+                    pid: child.pid || null,
+                    log_file: logPath,
+                    output_file: outputFile,
+                    started_at: startedAt,
+                    finished_at: finishedAt,
+                    exit_code: code,
                 });
                 return;
             }
@@ -598,6 +695,19 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
             }
 
             if (code !== 0) {
+                writeMetadataFile(metadataFile, {
+                    agent: agentName,
+                    status: "failed",
+                    pid: child.pid || null,
+                    started_at: startedAt,
+                    finished_at: finishedAt,
+                    success: false,
+                    exit_code: code,
+                    session_id: sessionId,
+                    error: "Exit code " + code,
+                    log_file: logPath,
+                    output_file: outputFile,
+                });
                 resolve({
                     success: false,
                     agent: agentName,
@@ -605,10 +715,29 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
                     duration_seconds: duration,
                     error: "Exit code " + code,
                     session_id: sessionId,
+                    pid: child.pid || null,
+                    log_file: logPath,
+                    output_file: outputFile,
+                    started_at: startedAt,
+                    finished_at: finishedAt,
+                    exit_code: code,
                 });
                 return;
             }
 
+            writeMetadataFile(metadataFile, {
+                agent: agentName,
+                status: "result_ready",
+                pid: child.pid || null,
+                started_at: startedAt,
+                finished_at: finishedAt,
+                success: true,
+                exit_code: code,
+                session_id: sessionId,
+                error: null,
+                log_file: logPath,
+                output_file: outputFile,
+            });
             resolve({
                 success: true,
                 agent: agentName,
@@ -616,6 +745,12 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
                 duration_seconds: duration,
                 error: null,
                 session_id: sessionId,
+                pid: child.pid || null,
+                log_file: logPath,
+                output_file: outputFile,
+                started_at: startedAt,
+                finished_at: finishedAt,
+                exit_code: code,
             });
         });
     });
@@ -627,7 +762,7 @@ function executeAgent(agentCfg, cmd, stdinPrompt, hardTimeout,
 // ---------------------------------------------------------------------------
 
 async function runAgent(agentName, prompt, cwd, timeout, registry,
-                        outputFile, resumeSession, logFile) {
+                        outputFile, resumeSession, logFile, metadataFile) {
     const agentCfg = registry.agents[agentName];
     if (!agentCfg) {
         return {
@@ -635,6 +770,9 @@ async function runAgent(agentName, prompt, cwd, timeout, registry,
             response: null, duration_seconds: 0,
             error: "Agent '" + agentName + "' not found in registry",
             session_id: null, session_resumed: false,
+            pid: null, log_file: logFile || getLogPath(outputFile),
+            output_file: outputFile || null,
+            started_at: null, finished_at: null, exit_code: -1,
         };
     }
 
@@ -645,6 +783,9 @@ async function runAgent(agentName, prompt, cwd, timeout, registry,
             response: null, duration_seconds: 0,
             error: "Command '" + agentCfg.command + "' not found in PATH",
             session_id: null, session_resumed: false,
+            pid: null, log_file: logFile || getLogPath(outputFile),
+            output_file: outputFile || null,
+            started_at: null, finished_at: null, exit_code: -1,
         };
     }
 
@@ -695,7 +836,7 @@ async function runAgent(agentName, prompt, cwd, timeout, registry,
         let result = await executeAgent(
             agentCfg, cmd, stdinPrompt, hardTimeout,
             subprocessCwd, env,
-            outputFile, logPath, agentName
+            outputFile, logPath, metadataFile, agentName
         );
 
         // Check if resume actually worked
@@ -753,7 +894,7 @@ async function runAgent(agentName, prompt, cwd, timeout, registry,
     const result = await executeAgent(
         agentCfg, cmd, stdinPrompt, hardTimeout,
         subprocessCwd, env,
-        outputFile, logPath, agentName
+        outputFile, logPath, metadataFile, agentName
     );
     result.session_resumed = false;
     return result;
@@ -769,6 +910,7 @@ function printUsageAndExit(msg) {
     process.stderr.write(
         "Usage: node agent_runner.mjs --agent NAME --prompt TEXT\n" +
         "       node agent_runner.mjs --health-check\n" +
+        "       node agent_runner.mjs --health-check --json\n" +
         "       node agent_runner.mjs --list-agents\n" +
         "       node agent_runner.mjs --verify-dead PID\n"
     );
@@ -786,10 +928,12 @@ async function main() {
                 "prompt-file": { type: "string" },
                 "output-file": { type: "string" },
                 "log-file": { type: "string" },
+                "metadata-file": { type: "string" },
                 cwd: { type: "string" },
                 timeout: { type: "string" },
                 "resume-session": { type: "string" },
                 "health-check": { type: "boolean", default: false },
+                json: { type: "boolean", default: false },
                 "list-agents": { type: "boolean", default: false },
                 "verify-dead": { type: "string" },
             },
@@ -834,14 +978,15 @@ async function main() {
 
     // --health-check
     if (opts["health-check"]) {
-        let allOk = true;
-        for (const name of Object.keys(registry.agents)) {
-            const { ok, info } = checkAgentHealth(name, registry);
-            const status = ok ? "OK" : "UNAVAILABLE";
-            process.stdout.write(name + ": " + status + " -- " + info + "\n");
-            if (!ok) allOk = false;
+        const report = buildHealthCheckReport(registry);
+        if (opts.json) {
+            process.stdout.write(JSON.stringify(report) + "\n");
+        } else {
+            for (const agent of report.agents) {
+                process.stdout.write(agent.name + ": " + agent.status + " -- " + agent.info + "\n");
+            }
         }
-        process.exit(allOk ? 0 : 1);
+        process.exit(report.ok ? 0 : 1);
     }
 
     // --agent required for execution
@@ -865,7 +1010,8 @@ async function main() {
         opts.agent, prompt, opts.cwd || null, timeoutVal, registry,
         opts["output-file"] || null,
         opts["resume-session"] || null,
-        opts["log-file"] || null
+        opts["log-file"] || null,
+        opts["metadata-file"] || null
     );
 
     process.stdout.write(JSON.stringify(result) + "\n");

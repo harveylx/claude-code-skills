@@ -102,17 +102,22 @@ Skill(skill: "ln-512-tech-debt-cleaner", args: "{storyId}")
 > **Fast-track:** Launch 1 agent only (most available). Results merged in Phase 9 as normal.
 
 **MANDATORY READ:** Load `shared/references/agent_review_workflow.md`, `shared/references/agent_delegation_pattern.md`
+**MANDATORY READ:** Load `shared/references/review_runtime_contract.md`
 
-4a) **Health Check** (per shared workflow "Step: Health Check"):
-    - Read `.hex-skills/environment_state.json` → exclude agents with `disabled: true`
-    - Run `node shared/agents/agent_runner.mjs --health-check` for remaining agents
-    - If 0 agents → agent review SKIPPED, go to Phase 5
-4b) **Get references:** `get_issue(storyId)` + `list_issues(parent=storyId, status=Done)` (exclude test tasks)
-4c) **Build prompt:** Assemble from `shared/agents/prompt_templates/review_base.md` + `modes/code.md` (per shared workflow "Step: Build Prompt"), replace `{story_ref}`, `{task_refs}`. Save to `.hex-skills/agent-review/{identifier}_codereview_prompt.md`
-4d) **Launch BOTH agents** as background tasks. `agents_launched = true`
-    **Exact command (per agent_delegation_pattern.md):**
-    `node shared/agents/agent_runner.mjs --agent {name} --prompt-file .hex-skills/agent-review/{agent}/{id}_codereview_prompt.md --output-file .hex-skills/agent-review/{agent}/{id}_codereview_result.md --cwd {project_dir}`
-    → Continue to Phase 5 (Criteria Validation), Phase 6 (Linters), Phase 7 (Regression), Phase 8 (Log Analysis) while agents work
+4a) Start review runtime for `ln-510` with:
+    - `mode=code`
+    - `identifier={storyId}`
+    - `expected_agents = ["codex", "gemini"]` or single available agent in fast-track
+4b) Run health check:
+    - Read `.hex-skills/environment_state.json` → exclude disabled
+    - Run `node shared/agents/agent_runner.mjs --health-check --json`
+    - If 0 agents → checkpoint runtime with `agents_skipped_reason`, go to Phase 5
+4c) Get references: `get_issue(storyId)` + `list_issues(parent=storyId, status=Done)` (exclude test tasks)
+4d) Build per-agent prompt from `review_base.md` + `modes/code.md`
+4e) Launch available agents with metadata files:
+    `node shared/agents/agent_runner.mjs --agent {name} --prompt-file .hex-skills/agent-review/{agent}/{id}_codereview_prompt.md --output-file .hex-skills/agent-review/{agent}/{id}_codereview_result.md --metadata-file .hex-skills/agent-review/{agent}/{id}_codereview_metadata.json --cwd {project_dir}`
+4f) Register each launched agent in review runtime with prompt/result/log/metadata paths
+4g) Checkpoint runtime Phase 2-equivalent state, then continue to Phase 5-8 while agents work
 
 ### Phase 5: Criteria Validation
 
@@ -160,11 +165,12 @@ Skill(skill: "ln-514-test-log-analyzer", args: "review logs since test run start
 
 **MANDATORY READ:** Load `shared/references/agent_review_workflow.md` (Critical Verification + Iterative Refinement), `shared/references/agent_review_memory.md`
 
-9a) **Wait for agent results** — read result files as they arrive (process-as-arrive pattern)
+9a) Sync agent state via review runtime. Do not merge until every required agent is `result_ready | dead | failed | skipped`
 9b) **Critical Verification** per shared workflow — Claude evaluates each suggestion on merits
 9c) **Merge accepted suggestions** into issues list (SEC-, PERF-, MNT-, ARCH-, BP-, OPT-)
     - If `area=security` or `area=correctness` → escalate aggregate to CONCERNS
 9d) **Save review summary** to `.hex-skills/agent-review/review_history.md`
+9e) Checkpoint merge summary in review runtime
 
 ### Phase 10: Iterative Refinement (MANDATORY when Codex available — SKIP if agents SKIPPED)
 
@@ -176,6 +182,7 @@ Execute per `shared/references/agent_review_workflow.md` "Step: Iterative Refine
 2) **Loop (max 5 iterations):** Build prompt → send to Codex (foreground) → parse → AGREE/REJECT each suggestion → apply accepted → repeat until APPROVED or max
 3) **Display:** `"Iterative Refinement: {N} iterations, {total} suggestions, {applied} applied, exit: {reason}"`
 4) **Persist:** `.hex-skills/agent-review/refinement/`, append to `review_history.md`
+5) Checkpoint refinement summary in review runtime
 
 ### Phase 11: Calculate Verdict + Return Results
 
@@ -292,6 +299,7 @@ issues:
 
 - [ ] ln-511 invoked (ALWAYS — full or `--skip-mcp-ref` in fast-track), code quality score returned
 - [ ] ln-512 invoked (or skipped if --fast-track), tech debt cleanup results returned
+- [ ] Agent review runtime started and Phase 4 launch checkpoint recorded
 - [ ] Agent review executed inline (or skipped if --fast-track), results merged in Phase 9
 - [ ] Agent process trees verified dead after results collection (Phase 9)
 - [ ] Criteria Validation completed (3 checks)
@@ -313,6 +321,7 @@ Skill type: `review-coordinator` (with agents). Run after all phases complete. O
 - Workers: `../ln-511-code-quality-checker/SKILL.md`, `../ln-512-tech-debt-cleaner/SKILL.md`, `../ln-513-regression-checker/SKILL.md`, `../ln-514-test-log-analyzer/SKILL.md`
 - Agent review workflow: `shared/references/agent_review_workflow.md`
 - Agent delegation pattern: `shared/references/agent_delegation_pattern.md`
+- Review runtime contract: `shared/references/review_runtime_contract.md`
 - Agent review memory: `shared/references/agent_review_memory.md`
 - Review templates: `shared/agents/prompt_templates/review_base.md` + `modes/code.md`
 - Caller: `../ln-500-story-quality-gate/SKILL.md`

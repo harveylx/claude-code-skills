@@ -2,6 +2,8 @@
 
 Standard pattern for skills delegating work to external CLI AI agents (Codex, Gemini) via `shared/agents/agent_runner.mjs`.
 
+For deterministic orchestration, pair this file with `shared/references/review_runtime_contract.md`. Runtime-enabled skills keep agent state in `.hex-skills/agent-review/runtime/` and use `--metadata-file` for launch/finish bookkeeping.
+
 ## When to Use
 
 - Skill benefits from model specialization (planning, code analysis, structured review)
@@ -46,6 +48,9 @@ node shared/agents/agent_runner.mjs --agent codex --prompt "Review this plan..."
 # Large context via file with output (recommended)
 node shared/agents/agent_runner.mjs --agent codex --prompt-file prompt.md --output-file result.md --cwd /project
 
+# Large context with deterministic metadata
+node shared/agents/agent_runner.mjs --agent codex --prompt-file prompt.md --output-file result.md --metadata-file result.meta.json --cwd /project
+
 # Resume session (continues prior conversation context)
 node shared/agents/agent_runner.mjs --agent codex --resume-session abc-123 --prompt-file followup.md --output-file result.md --cwd /project
 
@@ -65,12 +70,39 @@ node shared/agents/agent_runner.mjs --health-check
   "duration_seconds": 12.4,
   "error": null,
   "session_id": "7f9f9a2e-1b3c-4c7a-9b0e-...",
-  "session_resumed": false
+  "session_resumed": false,
+  "pid": 12345,
+  "log_file": ".hex-skills/agent-review/codex/PROJ-123_storyreview.log",
+  "output_file": ".hex-skills/agent-review/codex/PROJ-123_storyreview_result.md",
+  "started_at": "2026-03-26T12:00:00Z",
+  "finished_at": "2026-03-26T12:00:12Z",
+  "exit_code": 0
 }
 ```
 
 - `session_id`: captured from agent output after execution (null if capture failed)
 - `session_resumed`: true only when `--resume-session` was used and succeeded
+- `pid`, `log_file`, `output_file`, `started_at`, `finished_at`, `exit_code`: deterministic runtime bookkeeping fields for review coordinators
+
+### Metadata File (when `--metadata-file` used)
+
+```json
+{
+  "agent": "codex",
+  "status": "launched | result_ready | failed",
+  "pid": 12345,
+  "started_at": "2026-03-26T12:00:00Z",
+  "finished_at": "2026-03-26T12:00:12Z",
+  "success": true,
+  "exit_code": 0,
+  "session_id": "7f9f9a2e-1b3c-4c7a-9b0e-...",
+  "error": null,
+  "log_file": "...log",
+  "output_file": "...result.md"
+}
+```
+
+Runtime-enabled skills should prefer metadata files over ad-hoc process reasoning.
 
 ### Result File Format (when --output-file used)
 
@@ -173,7 +205,7 @@ Phase 8: REPORT
 
 **HARD RULES:**
 1. **Check `.hex-skills/environment_state.json` disabled flags BEFORE running health-check.** Disabled agents are never probed. **File not found → proceed with all agents (default=enabled).**
-2. **ALWAYS execute the EXACT command** `node shared/agents/agent_runner.mjs --health-check` — no modifications, no substitutions.
+2. **ALWAYS execute the agent runner health check**. Runtime-enabled skills should use `node shared/agents/agent_runner.mjs --health-check --json`; manual skills may use text mode.
 3. **Do NOT invent alternative checks** (e.g., `where`, `which`, `--version`, PATH lookup). ONLY the command above is valid.
 4. **Only command output determines availability.** Do NOT reason about file existence, environment, or installation — run the command and read its output.
 5. **If command fails** (file not found, import error, any exception) → treat as "all agents unavailable" → return SKIPPED verdict.
