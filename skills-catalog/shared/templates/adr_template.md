@@ -4,6 +4,28 @@
 
 <!-- SCOPE: Architecture Decision Record for ONE specific technical decision ONLY. Contains context, decision, rationale, consequences, alternatives (2 with pros/cons). -->
 <!-- DO NOT add here: Implementation code -> Task descriptions, Requirements -> Requirements.md, Multiple decisions -> Create separate ADRs, Architecture diagrams -> Architecture.md -->
+<!-- DOC_KIND: record -->
+<!-- DOC_ROLE: canonical -->
+<!-- READ_WHEN: Read when you need the decision context, chosen option, and trade-offs for one technical choice. -->
+<!-- SKIP_WHEN: Skip when you only need the current system overview without decision history. -->
+<!-- PRIMARY_SOURCES: docs/project/architecture.md, docs/project/tech_stack.md, docs/reference/README.md -->
+
+## Quick Navigation
+
+- [Reference Hub](../README.md)
+- [Architecture](../../project/architecture.md)
+- [Tech Stack](../../project/tech_stack.md)
+
+## Agent Entry
+
+| Signal | Value |
+|--------|-------|
+| Purpose | Records one technical decision, the alternatives considered, and the resulting consequences. |
+| Read When | You need rationale or history behind a specific architectural choice. |
+| Skip When | You only need the current state without decision history. |
+| Canonical | Yes |
+| Next Docs | [Architecture](../../project/architecture.md), [Tech Stack](../../project/tech_stack.md), [Reference Hub](../README.md) |
+| Primary Sources | `docs/project/architecture.md`, `docs/project/tech_stack.md`, `docs/reference/README.md` |
 
 ---
 
@@ -62,9 +84,16 @@
 
 ---
 
+## Maintenance
+
 **Last Updated:** {{DATE}}
 
----
+**Update Triggers:**
+- Decision status changes
+- Consequences change materially
+- Related ADR references change
 
-**ADR Template Version:** 3.0.0 (With Categorization)
-**Template Last Updated:** 2025-11-05
+**Verification:**
+- [ ] Decision still reflects the accepted choice
+- [ ] Alternatives and consequences still match current understanding
+- [ ] Related ADR links resolve

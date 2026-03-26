@@ -4,6 +4,28 @@ Architectural patterns with 4-score evaluation.
 
 > **SCOPE:** Pattern inventory with scores, ADR/Guide links. Updated by ln-640 Pattern Evolution Auditor.
 > **Last Audit:** YYYY-MM-DD
+<!-- DOC_KIND: reference -->
+<!-- DOC_ROLE: canonical -->
+<!-- READ_WHEN: Read when you need the current inventory of architectural patterns and their audit status. -->
+<!-- SKIP_WHEN: Skip when you only need one specific ADR or implementation guide. -->
+<!-- PRIMARY_SOURCES: docs/reference/adrs/, docs/reference/guides/, docs/project/architecture.md -->
+
+## Quick Navigation
+
+- [Architecture](../project/architecture.md)
+- [ADRs](../reference/adrs/)
+- [Guides](../reference/guides/)
+
+## Agent Entry
+
+| Signal | Value |
+|--------|-------|
+| Purpose | Tracks active architectural patterns, links to supporting docs, and records audit posture. |
+| Read When | You need pattern inventory, trend, or audit status. |
+| Skip When | You already know the exact ADR or guide to inspect. |
+| Canonical | Yes |
+| Next Docs | [Architecture](../project/architecture.md), [ADRs](../reference/adrs/), [Guides](../reference/guides/) |
+| Primary Sources | `docs/reference/adrs/`, `docs/reference/guides/`, `docs/project/architecture.md` |
 
 ---
 
@@ -158,6 +180,7 @@ Formula: `avg(N pattern scores + layer_score + api_contract_score) * 10`
 **Updated by:** ln-640-pattern-evolution-auditor
 **Layer audit by:** ln-642-layer-boundary-auditor
 **API contract audit by:** ln-643-api-contract-auditor
+**Last Updated:** {{DATE}}
 
 **Update Triggers:**
 - New pattern implemented
@@ -165,7 +188,11 @@ Formula: `avg(N pattern scores + layer_score + api_contract_score) * 10`
 - ADR/Guide created or updated
 - Layer violation fixed
 
+**Verification:**
+- [ ] Pattern rows match the current codebase and reference docs
+- [ ] ADR and Guide links resolve
+- [ ] Audit fields reflect the latest review state
+
 **Next Audit:** YYYY-MM-DD (30 days)
 
 ---
-**Template Version:** 3.0.0

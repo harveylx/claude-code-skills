@@ -353,7 +353,7 @@ Through the Orchestrator-Worker pattern. Instead of feeding the entire codebase 
 <details>
 <summary><b>What can the audit skills detect?</b></summary>
 
-Audit skills in 5 groups: documentation quality (structure, semantics, fact-checking, code comments), codebase health (security, build, DRY/KISS/YAGNI, complexity, dependencies, dead code, observability, concurrency, lifecycle), test suites (business logic, E2E coverage, value scoring, coverage gaps, isolation), architecture (patterns, layer boundaries, API contracts, dependency graphs, OSS replacements, project structure, env configuration), and persistence performance (query efficiency, transactions, runtime, resource lifecycle).
+Audit skills in 5 groups: documentation quality (structure, semantics, fact-checking, inline code documentation), codebase health (security, build, DRY/KISS/YAGNI, complexity, dependencies, dead code, observability, concurrency, lifecycle), test suites (business logic, E2E coverage, value scoring, coverage gaps, isolation), architecture (patterns, layer boundaries, API contracts, dependency graphs, OSS replacements, project structure, env configuration), and persistence performance (query efficiency, transactions, runtime, resource lifecycle).
 
 </details>
 
@@ -449,7 +449,7 @@ claude-code-skills/                      # MARKETPLACE
 |-- ln-1XX-*/                          # DOCUMENTATION
 |   |-- ln-100-documents-pipeline/     # L1 Orchestrator: complete docs in one command
 |   |-- ln-110-project-docs-coordinator/  # Detects project type, delegates to workers
-|   |   |-- ln-111-root-docs-creator/     # CLAUDE.md, principles.md
+|   |   |-- ln-111-root-docs-creator/     # AGENTS.md, CLAUDE.md, principles.md
 |   |   |-- ln-112-project-core-creator/  # requirements.md, architecture.md
 |   |   |-- ln-113-backend-docs-creator/  # api_spec.md, database_schema.md
 |   |   |-- ln-114-frontend-docs-creator/ # design_guidelines.md
@@ -581,7 +581,8 @@ claude-code-skills/                      # MARKETPLACE
 |   |-- architecture/                  # Skill patterns & delegation runtime
 |   |-- best-practice/                 # Claude Code usage tips & component selection
 |   |-- standards/                     # Documentation & README standards
-|-- CLAUDE.md                          # Full documentation
+|-- AGENTS.md                          # Canonical agent-facing repo map
+|-- CLAUDE.md                          # Thin Anthropic compatibility shim
 ```
 
 </details>
@@ -592,9 +593,9 @@ claude-code-skills/                      # MARKETPLACE
 
 | | |
 |---|---|
-| **Documentation** | [CLAUDE.md](CLAUDE.md) |
+| **Documentation** | [AGENTS.md](AGENTS.md) |
 | **Architecture** | [SKILL_ARCHITECTURE_GUIDE.md](docs/architecture/SKILL_ARCHITECTURE_GUIDE.md) |
-| **Agent Delegation** | [AGENT_TEAMS_PLATFORM_GUIDE.md](docs/architecture/AGENT_TEAMS_PLATFORM_GUIDE.md) |
+| **Agent Delegation** | [AGENT_DELEGATION_PLATFORM_GUIDE.md](docs/architecture/AGENT_DELEGATION_PLATFORM_GUIDE.md) |
 | **Component Selection** | [COMPONENT_SELECTION.md](docs/best-practice/COMPONENT_SELECTION.md) |
 | **Workflow Tips** | [WORKFLOW_TIPS.md](docs/best-practice/WORKFLOW_TIPS.md) |
 | **Discussions** | [GitHub Discussions](https://github.com/levnikolaevich/claude-code-skills/discussions) |
@@ -613,11 +614,11 @@ Papers, docs, and methodologies studied and implemented in the skill architectur
 | [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) (Anthropic, 2024) | Orchestrator-Worker, prompt chaining, evaluator-optimizer patterns | Core 4-level hierarchy (L0→L3), single responsibility per skill |
 | [Multi-Agent Research System](https://www.anthropic.com/engineering/multi-agent-research-system) (Anthropic, 2025) | Production orchestration: 90.2% perf improvement with specialized agents | `ln-1000` pipeline orchestrator, parallel agent reviews (`ln-310`, `ln-510`) |
 | [Scheduler Agent Supervisor](https://learn.microsoft.com/azure/architecture/patterns/scheduler-agent-supervisor) (Microsoft) | Separation of scheduling, execution, and supervision | `ln-400`/`ln-402`/`ln-500` executor-reviewer-gate split |
-| [DIATAXIS](https://diataxis.fr) | 4-type docs: Tutorial / How-to / Reference / Explanation | Documentation levels in CLAUDE.md, progressive disclosure |
+| [DIATAXIS](https://diataxis.fr) | 4-type docs: Tutorial / How-to / Reference / Explanation | Documentation levels in AGENTS.md/docs, progressive disclosure |
 | [Sinks, Not Pipes](https://ianbull.com/posts/software-architecture) (Ian Bull, 2026) | "The architecture is the prompt" — AI agents can't reason about side-effect chains >2 levels deep; sinks (self-contained) > pipes (cascading) | [`ai_ready_architecture.md`](skills-catalog/shared/references/ai_ready_architecture.md) — cascade depth, architectural honesty, flat orchestration checks across 12 skills |
 | [Test Desiderata](https://testdesiderata.com/) (Kent Beck, 2019) | 12 properties of valuable tests — behavioral, predictive, specific, inspiring, deterministic... No numerical targets, only usefulness | [`risk_based_testing_guide.md`](skills-catalog/shared/references/risk_based_testing_guide.md) — 6 Test Usefulness Criteria (Risk Priority ≥15, Confidence ROI, Behavioral, Predictive, Specific, Non-Duplicative) |
 | Vertical Slicing ([Humanizing Work](https://www.humanizingwork.com/the-humanizing-work-guide-to-splitting-user-stories/)) | "Never split by architectural layer" | Foundation-First task ordering |
-| [Claude Code Picks](https://amplifying.ai/research/claude-code-picks) (Amplifying AI, 2026) | Claude's tool preferences are learned maturity signals, not bias — Drizzle/Vitest/Zustand chosen for objective quality. Build-not-buy in 12/20 categories. "Correcting" valid preferences = recommending worse tools | Research-to-Action Gate in CLAUDE.md — require concrete defect before turning research into skill changes |
+| [Claude Code Picks](https://amplifying.ai/research/claude-code-picks) (Amplifying AI, 2026) | Claude's tool preferences are learned maturity signals, not bias — Drizzle/Vitest/Zustand chosen for objective quality. Build-not-buy in 12/20 categories. "Correcting" valid preferences = recommending worse tools | Research-to-Action Gate in AGENTS.md — require concrete defect before turning research into skill changes |
 | [autoresearch](https://github.com/karpathy/autoresearch) (Karpathy, 2025) | Autoresearch loop: modify → benchmark → binary keep/discard; compound baselines; simplicity criterion (marginal gain + ugly code = discard) | [`ln-814-optimization-executor`](skills-catalog/ln-814-optimization-executor/SKILL.md) — keep/discard with adaptive thresholds, multi-file support, compound baselines, experiment log |
 | [The Complete Guide to Building Skills](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf) (Anthropic, 2026) | WHAT+WHEN descriptions, trigger testing, capability vs preference classification, negative triggers, 3-level progressive disclosure | Check #14 (trigger quality), negative trigger pattern, `metadata.skill-type` classification, functional DoD, M6 advisory |
 

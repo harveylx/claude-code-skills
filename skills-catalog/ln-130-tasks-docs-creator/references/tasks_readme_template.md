@@ -1,7 +1,29 @@
-﻿# Task Tracking System
+# Task Tracking System
 
+<!-- DOC_KIND: index -->
+<!-- DOC_ROLE: canonical -->
+<!-- READ_WHEN: Read when you need the task system workflow, state transitions, and provider rules. -->
+<!-- SKIP_WHEN: Skip when you only need the live board or a specific task artifact. -->
+<!-- PRIMARY_SOURCES: docs/tools_config.md, docs/tasks/kanban_board.md, docs/reference/guides/testing-strategy.md -->
 <!-- SCOPE: Task tracking system workflow and rules ONLY. Contains task lifecycle, naming conventions, and integration rules. -->
 <!-- DO NOT add here: actual task details → task files, kanban status → kanban_board.md, implementation guides → guides/ -->
+
+## Quick Navigation
+
+- [Kanban Board](kanban_board.md)
+- [Tools Config](../tools_config.md)
+- [Testing Strategy](../reference/guides/testing-strategy.md)
+
+## Agent Entry
+
+| Signal | Value |
+|--------|-------|
+| Purpose | Defines task workflow, provider rules, status meanings, and task-document conventions. |
+| Read When | You need workflow rules, provider behavior, or task lifecycle guidance. |
+| Skip When | You only need the current active items. |
+| Canonical | Yes |
+| Next Docs | [Kanban Board](kanban_board.md), [Tools Config](../tools_config.md), [Testing Strategy](../reference/guides/testing-strategy.md) |
+| Primary Sources | docs/tools_config.md, docs/tasks/kanban_board.md, docs/reference/guides/testing-strategy.md |
 
 ---
 
@@ -365,6 +387,3 @@ Every file mode document includes metadata headers:
 **Last Updated**: {{DATE}}
 
 ---
-
-**Template Version:** 1.0.0
-**Template Last Updated:** 2025-11-15

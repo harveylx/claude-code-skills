@@ -63,7 +63,7 @@
 | Tip | When |
 |-----|------|
 | Feature-specific agents, not generic "QA"/"backend engineer" | Agent design |
-| Agent Teams with tmux + git worktrees | Parallel development |
+| Subagents or separate sessions with git worktrees | Parallel development without experimental team runtime |
 | `/loop` for recurring monitoring (up to 3 days) | Poll deployments, babysit PRs, check builds |
 | Use `isolation: "worktree"` for parallel agents | Avoid git conflicts |
 | **Ctrl+B** sends long Bash commands to background | Agent checks result via BashOutput when ready. Frees main context |

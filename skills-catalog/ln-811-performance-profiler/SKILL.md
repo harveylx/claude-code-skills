@@ -246,7 +246,7 @@ Standardized format — feeds into `.hex-skills/optimization/{slug}/context.md` 
 
 ```yaml
 performance_map:
-  test_command: "uv run pytest tests/e2e/test_example.py -s"
+  test_command: "uv run pytest tests/automated/e2e/test_example.py -s"
   baseline:
     wall_time_ms: 7280
     cpu_time_ms: 850

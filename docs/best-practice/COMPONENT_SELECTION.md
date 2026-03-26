@@ -90,7 +90,7 @@ Agent remembers across sessions in project scope. Use for:
 
 | Level | Claude Code primitive | Example |
 |-------|----------------------|---------|
-| L0 Meta-orchestrator | Command + Agent Teams (TeamCreate) | Pipeline coordinator running multiple stories |
+| L0 Meta-orchestrator | Command + sequential `Skill()` stages | Pipeline coordinator driving a story through multiple stages |
 | L1 Orchestrator | Command (coordinates agents) | Story executor, quality gate |
 | L2 Coordinator | Agent (isolated context) | Quality coordinator, test planner |
 | L3 Worker | Skill (inline) or Agent (heavy) | Task executor, code quality checker |

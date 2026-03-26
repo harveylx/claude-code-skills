@@ -1,128 +1,107 @@
 # Documentation Standards
 
-**Requirements for Claude Code Project Documentation**
+**Requirements for project documentation generated and audited by this repository**
 
-<!-- SCOPE: Documentation requirements for target project docs created by skills. -->
-
----
-
-## Categories
-
-| Category | Priority levels | Validator |
-|----------|----------------|-----------|
-| **Core Documentation** | Critical + Important | Structure audit |
-| **Claude Code Integration** | Critical + Important | Structure audit |
-| **AI-Friendly Writing** | Important | Content audit |
-| **Markdown Best Practices** | Important | markdownlint |
-| **Code Examples Quality** | Critical + Important | Manual + CI |
-| **DIATAXIS Framework** | Desired | Manual |
-| **Project Files** | Critical + Important | Manual |
-| **Quality Checks** | Important | markdownlint, Vale |
-| **Front Matter (SSG)** | Desired | Conditional |
-| **Visual Documentation** | Desired | Manual |
-| **Conventional Commits** | Desired | commitlint |
-| **Security & Compliance** | Critical + Important | Manual |
-| **Performance** | Important | Manual |
-| **AI-First Documentation** | Critical + Important | Content audit |
-
----
+<!-- SCOPE: Documentation requirements for target project docs created by skills. Defines root entrypoint model, header contract, doc kinds, and verification priorities. -->
 
 ## Critical Requirements
 
-| Requirement | Rationale |
-|------------|-----------|
-| CLAUDE.md ≤ 200 lines per file | Claude Code context optimization |
-| All code examples runnable | Prevent documentation drift |
-| LICENSE file exists | Legal compliance |
-| Never commit secrets | Security breach prevention |
-| Stack Adaptation | Documents match project stack (.NET -> C# links, not Python) |
-| NO_CODE in docs | No code blocks; tables/ASCII/links instead (AI fetches code dynamically) |
+| Requirement | Why It Exists |
+|-------------|---------------|
+| `AGENTS.md` is the canonical machine-facing entrypoint | Keeps the always-loaded map small and stable |
+| `CLAUDE.md` stays a thin compatibility shim | Avoids duplicated persistent context |
+| Every generated doc has the standard header contract | Enables routing and deterministic audits |
+| Every generated doc has `Quick Navigation`, `Agent Entry`, and `Maintenance` | Enables section-first reads |
+| No raw placeholders outside allowlisted setup docs | Generated docs must be publishable immediately |
+| Stack references use official sources | Reduces drift and hallucinated guidance |
 
----
+## Standard Header Contract
 
-## Important Requirements
+Every generated markdown doc must contain:
 
-**Claude Code Integration:**
-- @-sourcing support in CLAUDE.md (DRY pattern)
-- Use `.claude/rules/` for organizing large instruction sets
+- `SCOPE`
+- `DOC_KIND`
+- `DOC_ROLE`
+- `READ_WHEN`
+- `SKIP_WHEN`
+- `PRIMARY_SOURCES`
 
-**AI-Friendly Writing:**
-- Use second person ("you" vs "users")
-- Active voice instead of passive
-- Short sentences (max 25 words)
-- Prohibited phrases: "please note", "simply", "just", "easily"
+These markers belong near the top of the file in HTML comments.
 
-**Markdown Best Practices:**
-- Header depth <= h3 (rarely h4)
-- Descriptive links (not "click here")
-- Callouts/Admonitions for important info
-- Files end with single blank line (POSIX)
+## Standard Top Sections
 
-**Project Files:**
-- CONTRIBUTING.md (contribution process)
-- SECURITY.md (vulnerability reporting)
-- .gitignore for docs (exclude generated files)
+Every generated markdown doc must expose the same top scan shape:
 
-**Quality Checks:**
-- markdownlint-cli2 (.markdownlint.jsonc)
-- Vale.sh (.vale.ini for editorial checks)
-- Link checking (dead link detection)
+- `Quick Navigation`
+- `Agent Entry`
+- body sections by purpose
+- `Maintenance`
 
-**Security & Compliance:**
-- GitHub Secrets for CI/CD
-- .env.example instead of .env
-- Vulnerability reporting process (SECURITY.md)
+`Agent Entry` should state:
+- purpose
+- when to read
+- when to skip
+- whether the doc is canonical
+- what to read next
+- what the primary truth sources are
 
-**AI-First Documentation:**
+## Root Entrypoint Model
 
-| Requirement | Rationale | Source |
-|-------------|-----------|--------|
-| **Format Priority** | Tables/ASCII > Lists > Text; optimized for LLM parsing | Redocly |
-| **Self-contained pages** | Each page standalone; LLM reads without nav context | kapa.ai |
-| **Consistent terminology** | One concept = one term; no synonyms | kapa.ai |
-| **Semantic chunking** | 500-800 chars for tech docs; semantic boundaries | Pinecone |
-| **llms.txt file** | Index file for AI agents (Markdown format) | llmstxt.org |
+| File | Role |
+|------|------|
+| `AGENTS.md` | Canonical vendor-neutral root map |
+| `CLAUDE.md` | Anthropic-compatible thin wrapper |
+| `docs/README.md` | Canonical documentation hub |
 
----
+Root docs should be map-first:
+- small enough to stay cheap in context
+- explicit about routing
+- light on deep domain detail
 
-## Desired Requirements
+## Document Kinds
 
-- DIATAXIS framework (Tutorial/How-to/Reference/Explanation sections)
-- Mermaid diagrams, workflow diagrams, sequence diagrams
-- Conventional Commits format, auto-generate CHANGELOG
-- Realistic variable names (not foo/bar), show expected output
-- CODE_OF_CONDUCT.md, README badges
-- Front Matter for SSG (Hugo/Docusaurus)
-- Title case for h1 / Sentence case for h2+
+| DOC_KIND | Use For |
+|----------|---------|
+| `index` | navigation and routing |
+| `reference` | precise lookup |
+| `how-to` | executable procedure |
+| `explanation` | rationale and mental model |
+| `record` | decision history |
 
----
+Do not mix these purposes casually inside one file.
 
-## Standards Compliance
+## Writing Rules
 
-| Standard | Reference |
-|----------|-----------|
-| **ISO/IEC/IEEE 29148:2018** | Requirements Engineering |
-| **ISO/IEC/IEEE 42010:2022** | Architecture Description |
-| **DIATAXIS Framework** | diataxis.fr |
-| **RFC 2119, WCAG 2.1 AA** | Requirement keywords, Accessibility |
-| **Conventional Commits** | conventionalcommits.org |
-| **Semantic Versioning** | semver.org |
-| **llms.txt Standard** | llmstxt.org |
+| Rule | Guidance |
+|------|----------|
+| Map-first | Put routing and read/skip hints before depth |
+| Section-first | Make top sections enough for the first decision |
+| Single source of truth | One canonical doc per topic |
+| Token efficiency | Prefer tables, short bullets, and direct links |
+| AI-friendly prose | Short sentences, active voice, consistent terminology |
 
----
+## Verification Priorities
 
-## Verification Checklist
+- header contract complete
+- top sections present
+- internal links resolve
+- maintenance markers present
+- no leaked template metadata
+- no forbidden placeholders outside allowlisted setup docs
+- stack-appropriate official links
 
-- [ ] CLAUDE.md <= 200 lines, concise and focused
-- [ ] All code examples runnable, no placeholders
-- [ ] LICENSE file exists
-- [ ] No secrets committed (API keys in .env only)
-- [ ] Header depth <= h3, files end with blank line
-- [ ] Active voice, second person, short sentences
-- [ ] SCOPE tag in docs, cross-references accurate
-- [ ] Stack Adaptation: all links/refs match project stack
-- [ ] Format Priority: Tables > Lists > Text
-- [ ] Self-contained pages: each doc standalone
+## Maintenance
+
+**Update Triggers:**
+- when shared docs-quality contract changes
+- when root entrypoint model changes
+- when doc kinds or roles change
+- when read protocol changes
+
+**Verification:**
+- [ ] Matches the shared docs-quality contract
+- [ ] Root entrypoint model is accurate
+- [ ] Verification priorities are still actionable
 
 **Version:** 3.0.0
 **Last Updated:** 2026-03-15

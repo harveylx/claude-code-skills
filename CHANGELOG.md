@@ -2,6 +2,13 @@
 
 <!-- SCOPE: User-facing changes only. Max 5 bullets per entry. Focus: new capabilities, workflow changes, breaking changes. -->
 
+## 2026-03-26
+- **Documentation pipeline compression** — SKILL.md files across ln-1XX series and shared templates heavily compressed (~1400 lines removed)
+- **Docs quality CLI** — new `shared/scripts/docs-quality/` with rules engine and contract for documentation validation
+- **Shared references extracted** — skill_contract, docs_quality_contract, markdown_read_protocol, procedural_extraction_rules as standalone references
+- **AGENT_DELEGATION_PLATFORM_GUIDE** — replaces AGENT_TEAMS_PLATFORM_GUIDE with updated delegation model
+- **AGENTS.md template** — new agents_md_template for ln-111-root-docs-creator
+
 ## 2026-03-25
 - **ln-010 npx cache probe** — hex package version detection via npx cache scan instead of `npm outdated -g`; setup_hooks called unconditionally in Phase 3c verification
 - **ln-014 auto-fix** — Phase 5b auto-fixes missing Compact Instructions and MCP Tool Preferences sections in instruction files

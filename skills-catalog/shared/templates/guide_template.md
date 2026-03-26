@@ -14,6 +14,28 @@
 
      WRONG (too much code):
      | useQuery({ queryKey: [...], queryFn: () => fetch(...) }) | fetch() in useEffect | ... | -->
+<!-- DOC_KIND: reference -->
+<!-- DOC_ROLE: canonical -->
+<!-- READ_WHEN: Read when you need reusable project patterns, dos and don'ts, or project-specific guidance around one topic. -->
+<!-- SKIP_WHEN: Skip when you only need a historical decision or generic vendor API reference. -->
+<!-- PRIMARY_SOURCES: docs/project/architecture.md, docs/reference/adrs/, src/ -->
+
+## Quick Navigation
+
+- [Reference Hub](../README.md)
+- [Architecture](../../project/architecture.md)
+- [ADRs](../adrs/)
+
+## Agent Entry
+
+| Signal | Value |
+|--------|-------|
+| Purpose | Captures reusable project-specific patterns around one focused topic. |
+| Read When | You need conventions, dos and don'ts, or project-specific implementation guidance. |
+| Skip When | You only need a one-off decision record or external package API reference. |
+| Canonical | Yes |
+| Next Docs | [Architecture](../../project/architecture.md), [ADRs](../adrs/), [Reference Hub](../README.md) |
+| Primary Sources | `docs/project/architecture.md`, `docs/reference/adrs/`, `src/` |
 
 ## Principle
 
@@ -46,10 +68,16 @@
 **ADRs:** {{RELATED_ADRS}}
 **Guides:** {{RELATED_GUIDES}}
 
----
+## Maintenance
+
 **Last Updated:** {{DATE}}
 
----
+**Update Triggers:**
+- Pattern guidance changes
+- Related ADRs change
+- Source locations move materially
 
-**Guide Template Version:** 5.0.0 (Added NO_CODE_EXAMPLES rule with correct/wrong examples)
-**Template Last Updated:** 2025-01-09
+**Verification:**
+- [ ] Do/Don't/When rows still match current project practice
+- [ ] Related links resolve
+- [ ] Guidance still references current architecture

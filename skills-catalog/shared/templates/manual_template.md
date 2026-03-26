@@ -11,6 +11,28 @@
      CORRECT: "See [Official docs: CreateClient()](https://docs.example.com/CreateClient)"
      CORRECT: "See [src/Services/RateLimiter.cs:42](src/Services/RateLimiter.cs#L42)"
      WRONG: Full code block with usage example -->
+<!-- DOC_KIND: reference -->
+<!-- DOC_ROLE: canonical -->
+<!-- READ_WHEN: Read when you need package-specific API facts, methods, or version notes used by the project. -->
+<!-- SKIP_WHEN: Skip when you only need project patterns or architectural decisions. -->
+<!-- PRIMARY_SOURCES: docs/reference/README.md, official docs, package manifests, src/ -->
+
+## Quick Navigation
+
+- [Reference Hub](../README.md)
+- [Architecture](../../project/architecture.md)
+- [Tech Stack](../../project/tech_stack.md)
+
+## Agent Entry
+
+| Signal | Value |
+|--------|-------|
+| Purpose | Summarizes the external package API surface actually relevant to the project. |
+| Read When | You need package methods, parameters, return types, or version-specific notes. |
+| Skip When | You only need project-specific patterns or architectural rationale. |
+| Canonical | Yes |
+| Next Docs | [Tech Stack](../../project/tech_stack.md), [Architecture](../../project/architecture.md), [Reference Hub](../README.md) |
+| Primary Sources | `docs/reference/README.md`, official docs, package manifests, `src/` |
 
 ## Package Information
 
@@ -112,4 +134,16 @@
 * **Related Guides:** {{RELATED_GUIDES}}
 * **Related ADRs:** {{RELATED_ADRS}}
 
+## Maintenance
+
 **Last Updated:** {{DATE}}
+
+**Update Triggers:**
+- Package version changes
+- Relevant methods or configuration usage change
+- Official documentation changes materially
+
+**Verification:**
+- [ ] Version matches the project dependency
+- [ ] Method signatures still match current package usage
+- [ ] Official documentation links resolve

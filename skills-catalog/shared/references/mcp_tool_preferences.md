@@ -31,7 +31,8 @@ MCP server at `mcp/hex-line-mcp/`. 11 tools with FNV-1a hash verification:
 ## When to Use
 
 - **USE for CODE files** (.ts, .js, .py, .go, .rs, .java, etc.)
-- **DO NOT use for:** small JSON configs, YAML, markdown
+- **USE for markdown structure discovery:** prefer `outline` first for larger `.md` files, then targeted reads by section
+- **DO NOT use for:** tiny JSON/YAML files where a full read is cheaper than hash/anchor setup
 - **Workflow:** outline → read (specific ranges) → edit by anchor → verify. Text rename → bulk_replace
 
 ## Setup

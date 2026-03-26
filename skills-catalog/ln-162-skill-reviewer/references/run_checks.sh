@@ -14,8 +14,9 @@
 
 set -uo pipefail
 
-# Resolve skills repo root dynamically (works regardless of CWD depth)
-SKILLS_ROOT=$(cd "$(dirname "$0")/../../.." && pwd)/skills
+# Resolve repo roots dynamically (works regardless of CWD depth)
+REPO_ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+SKILLS_ROOT="$REPO_ROOT/skills-catalog"
 SCOPE="$@"
 FAILS=0
 
@@ -212,6 +213,31 @@ echo ""
 echo "=== CHECK 18: Type line presence (D7) ==="
 for f in $SCOPE; do
   grep -q '\*\*Type:\*\*' "$f" || fail "no **Type:** line: $f"
+done
+echo "DONE"
+echo ""
+
+# CHECK 19: Worker independence (D8)
+echo "=== CHECK 19: Worker independence (D8) ==="
+for f in $SCOPE; do
+  grep '\*\*Type:\*\*' "$f" | grep -qi 'worker' || continue
+  if grep -q '^\*\*Coordinator:\*\*' "$f"; then fail "worker declares Coordinator: $f"; fi
+  if grep -q '^\*\*Parent:\*\*' "$f"; then fail "worker declares Parent: $f"; fi
+  if grep -nE 'Invoked by ln-[0-9]+|called by ln-[0-9]+' "$f" >/dev/null; then fail "worker declares caller coupling: $f"; fi
+done
+echo "DONE"
+echo ""
+
+# CHECK 20: Docs-model alignment for extraction skills (D4)
+echo "=== CHECK 20: Docs-model alignment for extraction skills (D4) ==="
+for f in $SCOPE; do
+  case "$f" in
+    *ln-160-*|*ln-161-*)
+      grep -q 'markdown_read_protocol' "$f" || fail "docs extraction skill missing markdown_read_protocol: $f"
+      grep -q 'docs_quality_contract' "$f" || fail "docs extraction skill missing docs_quality_contract: $f"
+      grep -q 'procedural_extraction_rules' "$f" || fail "docs extraction skill missing procedural_extraction_rules: $f"
+      ;;
+  esac
 done
 echo "DONE"
 echo ""

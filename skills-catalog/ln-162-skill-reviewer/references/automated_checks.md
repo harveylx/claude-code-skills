@@ -1,6 +1,7 @@
 # Automated Verification Checks (SKILL Mode)
 
 <!-- DO NOT add here: Workflow phases -> ln-162-skill-reviewer SKILL.md -->
+<!-- Contract source: shared/references/skill_contract.md -->
 
 Run ALL checks below for every SKILL.md in scope. Every FAIL is a confirmed violation -- no judgment needed, no skipping.
 
@@ -167,3 +168,26 @@ done
 ```
 
 Every SKILL.md must have a `**Type:**` line (e.g., `**Type:** L1 Top Orchestrator`). Without it, Check 9 (Meta-Analysis) and Check 17 (Worker Invocation) silently skip the skill.
+
+## Check 19: Worker independence (D8)
+```bash
+for f in {scoped SKILL.md files}; do
+  grep '\*\*Type:\*\*' "$f" | grep -qi 'worker' || continue
+  grep -q '^\*\*Coordinator:\*\*' "$f" && echo "FAIL: worker declares Coordinator: $f"
+  grep -q '^\*\*Parent:\*\*' "$f" && echo "FAIL: worker declares Parent: $f"
+  grep -nE 'Invoked by ln-[0-9]+|called by ln-[0-9]+' "$f" && echo "FAIL: worker declares caller coupling: $f"
+done
+```
+
+## Check 20: Docs-model alignment for extraction skills (D4)
+```bash
+for f in {scoped SKILL.md files}; do
+  case "$f" in
+    *ln-160-*|*ln-161-*)
+      grep -q 'markdown_read_protocol' "$f" || echo "FAIL: docs extraction skill missing markdown_read_protocol: $f"
+      grep -q 'docs_quality_contract' "$f" || echo "FAIL: docs extraction skill missing docs_quality_contract: $f"
+      grep -q 'procedural_extraction_rules' "$f" || echo "FAIL: docs extraction skill missing procedural_extraction_rules: $f"
+      ;;
+  esac
+done
+```

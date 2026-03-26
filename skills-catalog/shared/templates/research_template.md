@@ -7,6 +7,28 @@
      Types: Technical, Market, Competitor, Requirements, Feasibility, Other
      Status: In Progress, Completed, Superseded -->
 <!-- DO NOT add here: Decisions -> ADR, Patterns -> Guide, API reference -> Manual -->
+<!-- DOC_KIND: reference -->
+<!-- DOC_ROLE: canonical -->
+<!-- READ_WHEN: Read when you need the investigation record for one focused question. -->
+<!-- SKIP_WHEN: Skip when the question has already been converted into a final ADR, guide, or manual. -->
+<!-- PRIMARY_SOURCES: docs/reference/README.md, cited sources, project artifacts -->
+
+## Quick Navigation
+
+- [Reference Hub](../README.md)
+- [Research Directory](./)
+- [Architecture](../../project/architecture.md)
+
+## Agent Entry
+
+| Signal | Value |
+|--------|-------|
+| Purpose | Captures evidence, findings, and next actions for one investigation question. |
+| Read When | You need the research trail or source-backed findings for one topic. |
+| Skip When | The knowledge has already been promoted into an ADR, guide, or manual. |
+| Canonical | Yes |
+| Next Docs | [Reference Hub](../README.md), [Architecture](../../project/architecture.md) |
+| Primary Sources | `docs/reference/README.md`, cited sources, project artifacts |
 
 ---
 
@@ -78,10 +100,16 @@
 
 {{SOURCES}}
 
----
+## Maintenance
+
 **Last Updated:** {{DATE}}
 
----
+**Update Triggers:**
+- Research status changes
+- Findings are superseded by newer evidence
+- Follow-up actions or linked docs change
 
-**Research Template Version:** 1.0.0
-**Template Last Updated:** 2025-01-20
+**Verification:**
+- [ ] Sources still resolve
+- [ ] Findings still match cited evidence
+- [ ] Next steps reflect current project state

@@ -111,7 +111,7 @@ Quality gates run before completion."
 2. **Sentence Length:** Max 20-25 words per sentence
 3. **Paragraph Length:** 3-5 sentences, one idea per paragraph
 
-**Full documentation:** See [docs/SKILL_ARCHITECTURE_GUIDE.md](../docs/SKILL_ARCHITECTURE_GUIDE.md#appendix-a-concise-terms-dictionary)
+**Full documentation:** See [SKILL_ARCHITECTURE_GUIDE.md](../../docs/architecture/SKILL_ARCHITECTURE_GUIDE.md)
 
 ---
 
