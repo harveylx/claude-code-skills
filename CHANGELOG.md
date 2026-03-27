@@ -2,6 +2,9 @@
 
 <!-- SCOPE: User-facing changes only. Max 5 bullets per entry. Focus: new capabilities, workflow changes, breaking changes. -->
 
+## 2026-03-27
+- **Marketplace install docs** — updated README, plugin docs, and GitHub Pages site to use the current Claude Code marketplace flow (`/plugin marketplace add` + `/plugin install plugin@marketplace`) instead of deprecated `/plugin add`
+
 ## 2026-03-26
 - **State platform runtime** — shared coordinator runtime now enforces manifest, state, checkpoints, history, active-pointer, and status schemas across stateful skill families
 - **Planning and environment migration** — ln-010, ln-220, and ln-300 now run on identifier-scoped runtimes with pause/resume, replay, and standalone worker summaries

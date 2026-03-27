@@ -5,11 +5,11 @@
 ## Install
 
 ```bash
-# This plugin only
-/plugin add levnikolaevich/claude-code-skills --plugin agile-workflow
+# Add the marketplace once
+/plugin marketplace add levnikolaevich/claude-code-skills
 
-# Full suite
-/plugin add levnikolaevich/claude-code-skills
+# Install this plugin
+/plugin install agile-workflow@levnikolaevich-skills-marketplace
 ```
 
 ## What it does

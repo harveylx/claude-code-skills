@@ -231,9 +231,11 @@
       <h1>Setup Environment</h1>
       <p class="subtitle">One-command setup for multi-agent workflows</p>
       <p class="section-desc" style="text-align: center; max-width: 640px; margin: 0 auto 32px;">Install CLI agents, configure MCP servers, sync settings across agents, and audit instruction files. The coordinator is runtime-backed, resumable, and writes durable environment state only after verification passes.</p>
-      <div class="install-block" onclick="navigator.clipboard.writeText('/plugin add levnikolaevich/claude-code-skills --plugin setup-environment'); this.querySelector('.copy').textContent='Copied!'">
+      <div class="install-block" onclick="navigator.clipboard.writeText('/plugin marketplace add levnikolaevich/claude-code-skills\n/plugin install setup-environment@levnikolaevich-skills-marketplace'); this.querySelector('.copy').textContent='Copied!'">
         <span class="prompt">$</span>
-        <span class="cmd">/plugin add levnikolaevich/claude-code-skills --plugin setup-environment</span>
+        <span class="cmd">/plugin marketplace add levnikolaevich/claude-code-skills</span><br>
+        <span class="prompt">$</span>
+        <span class="cmd">/plugin install setup-environment@levnikolaevich-skills-marketplace</span>
         <span class="copy">Copy</span>
       </div>
     </div>

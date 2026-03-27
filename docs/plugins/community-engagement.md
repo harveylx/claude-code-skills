@@ -5,11 +5,11 @@
 ## Install
 
 ```bash
-# This plugin only
-/plugin add levnikolaevich/claude-code-skills --plugin community-engagement
+# Add the marketplace once
+/plugin marketplace add levnikolaevich/claude-code-skills
 
-# Full suite
-/plugin add levnikolaevich/claude-code-skills
+# Install this plugin
+/plugin install community-engagement@levnikolaevich-skills-marketplace
 ```
 
 ## What it does

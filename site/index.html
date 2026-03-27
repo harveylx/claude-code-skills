@@ -273,12 +273,12 @@
     <div class="container">
       <h1>Production-ready plugins<br>for <span>Claude Code</span></h1>
       <p class="subtitle">
-        Automate your full delivery workflow &mdash; from project bootstrap to code audit
-        to production quality gates. No API keys required.
+        Add the marketplace once, then install the plugins you need &mdash; from project
+        bootstrap to code audit to production quality gates. No API keys required.
       </p>
-      <div class="install-block" onclick="navigator.clipboard.writeText('/plugin add levnikolaevich/claude-code-skills'); this.querySelector('.copy').textContent='Copied!'">
+      <div class="install-block" onclick="navigator.clipboard.writeText('/plugin marketplace add levnikolaevich/claude-code-skills'); this.querySelector('.copy').textContent='Copied!'">
         <span class="prompt">$</span>
-        <span class="cmd">/plugin add levnikolaevich/claude-code-skills</span>
+        <span class="cmd">/plugin marketplace add levnikolaevich/claude-code-skills</span>
         <span class="copy">Copy</span>
       </div>
       <div class="cta-row">
@@ -338,14 +338,14 @@
   <section id="plugins">
     <div class="container">
       <h2>Choose your plugin</h2>
-      <p class="section-desc">Install the full suite or pick only the plugins you need. Each works independently.</p>
+      <p class="section-desc">Add the marketplace once, then install only the plugins you need. Each works independently.</p>
       <div class="plugins-grid">
 
         <div class="plugin-card">
           <div class="icon">&#9881;</div>
           <h3>Agile Workflow</h3>
           <p>End-to-end delivery pipeline: scope decomposition, Story/Task management, multi-model code review, quality gates, and autonomous pipeline orchestration.</p>
-          <code>/plugin add levnikolaevich/claude-code-skills --plugin agile-workflow</code>
+          <code>/plugin install agile-workflow@levnikolaevich-skills-marketplace</code>
           <a href="plugins/agile-workflow.html" class="plugin-link">View skills &rarr;</a>
         </div>
 
@@ -353,7 +353,7 @@
           <div class="icon">&#128269;</div>
           <h3>Codebase Audit Suite</h3>
           <p>Parallel auditors for security, code quality, architecture patterns, test suites, and persistence performance. Run on any existing codebase.</p>
-          <code>/plugin add levnikolaevich/claude-code-skills --plugin codebase-audit-suite</code>
+          <code>/plugin install codebase-audit-suite@levnikolaevich-skills-marketplace</code>
           <a href="plugins/codebase-audit-suite.html" class="plugin-link">View skills &rarr;</a>
         </div>
 
@@ -361,7 +361,7 @@
           <div class="icon">&#128196;</div>
           <h3>Documentation Pipeline</h3>
           <p>Auto-detect project type (backend, frontend, devops) and generate complete documentation suite: architecture, API spec, runbook, and more.</p>
-          <code>/plugin add levnikolaevich/claude-code-skills --plugin documentation-pipeline</code>
+          <code>/plugin install documentation-pipeline@levnikolaevich-skills-marketplace</code>
           <a href="plugins/documentation-pipeline.html" class="plugin-link">View skills &rarr;</a>
         </div>
 
@@ -369,7 +369,7 @@
           <div class="icon">&#128640;</div>
           <h3>Project Bootstrap</h3>
           <p>CREATE new or TRANSFORM existing projects to production-ready Clean Architecture with Docker, CI/CD, linters, and security scanning.</p>
-          <code>/plugin add levnikolaevich/claude-code-skills --plugin project-bootstrap</code>
+          <code>/plugin install project-bootstrap@levnikolaevich-skills-marketplace</code>
           <a href="plugins/project-bootstrap.html" class="plugin-link">View skills &rarr;</a>
         </div>
 
@@ -377,7 +377,7 @@
           <div class="icon">&#9889;</div>
           <h3>Optimization Suite</h3>
           <p>Multi-cycle performance profiling, dependency upgrades (npm, NuGet, pip), code modernization, and bundle size optimization.</p>
-          <code>/plugin add levnikolaevich/claude-code-skills --plugin optimization-suite</code>
+          <code>/plugin install optimization-suite@levnikolaevich-skills-marketplace</code>
           <a href="plugins/optimization-suite.html" class="plugin-link">View skills &rarr;</a>
         </div>
 
@@ -385,7 +385,7 @@
           <div class="icon">&#127760;</div>
           <h3>Community Engagement</h3>
           <p>Automated GitHub community management: triage issues and PRs, compose announcements, launch RFC debates, respond to discussions.</p>
-          <code>/plugin add levnikolaevich/claude-code-skills --plugin community-engagement</code>
+          <code>/plugin install community-engagement@levnikolaevich-skills-marketplace</code>
           <a href="plugins/community-engagement.html" class="plugin-link">View skills &rarr;</a>
         </div>
 
@@ -393,7 +393,7 @@
           <div class="icon">&#128736;</div>
           <h3>Setup Environment</h3>
           <p>Install CLI agents, configure MCP servers, sync settings across agents, and audit instruction files. One-command multi-agent setup.</p>
-          <code>/plugin add levnikolaevich/claude-code-skills --plugin setup-environment</code>
+          <code>/plugin install setup-environment@levnikolaevich-skills-marketplace</code>
           <a href="plugins/setup-environment.html" class="plugin-link">View skills &rarr;</a>
         </div>
 
@@ -450,10 +450,18 @@
   <section id="quickstart">
     <div class="container">
       <h2>Quick start</h2>
-      <p class="section-desc">Install and run. No configuration required.</p>
+      <p class="section-desc">Add the marketplace, install what you need, then run. No configuration required.</p>
       <div class="code-block">
+        <span class="comment"># Add the marketplace once</span><br>
+        <span class="cmd">/plugin marketplace add levnikolaevich/claude-code-skills</span><br><br>
         <span class="comment"># Install full suite</span><br>
-        <span class="cmd">/plugin add levnikolaevich/claude-code-skills</span><br><br>
+        <span class="cmd">/plugin install agile-workflow@levnikolaevich-skills-marketplace</span><br>
+        <span class="cmd">/plugin install documentation-pipeline@levnikolaevich-skills-marketplace</span><br>
+        <span class="cmd">/plugin install codebase-audit-suite@levnikolaevich-skills-marketplace</span><br>
+        <span class="cmd">/plugin install project-bootstrap@levnikolaevich-skills-marketplace</span><br>
+        <span class="cmd">/plugin install optimization-suite@levnikolaevich-skills-marketplace</span><br>
+        <span class="cmd">/plugin install community-engagement@levnikolaevich-skills-marketplace</span><br>
+        <span class="cmd">/plugin install setup-environment@levnikolaevich-skills-marketplace</span><br><br>
         <span class="comment"># Standalone &mdash; works immediately</span><br>
         <span class="cmd">ln-620-codebase-auditor</span>&nbsp;&nbsp;&nbsp;<span class="comment"># Audit your code</span><br>
         <span class="cmd">ln-700-project-bootstrap</span>&nbsp;&nbsp;<span class="comment"># Bootstrap a project</span><br>

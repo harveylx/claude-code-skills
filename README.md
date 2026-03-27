@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![GitHub stars](https://img.shields.io/github/stars/levnikolaevich/claude-code-skills?style=social)](https://github.com/levnikolaevich/claude-code-skills)
 
-> **7 plugins. One install command.** Automate your full delivery workflow —
+> **7 plugins. One marketplace.** Install only what you need and automate your full delivery workflow —
 > from project bootstrap to code audit to production quality gates.
 > Works standalone or as a complete Agile pipeline.
 
@@ -18,20 +18,20 @@
 
 ## Plugins
 
-Install the full suite or pick only the plugins you need. Each works independently.
+Add the marketplace once, then install only the plugins you need. Each works independently.
 
 ```bash
-# All 7 plugins
-/plugin add levnikolaevich/claude-code-skills
+# Add the marketplace once
+/plugin marketplace add levnikolaevich/claude-code-skills
 
-# Or individually:
-/plugin add levnikolaevich/claude-code-skills --plugin agile-workflow
-/plugin add levnikolaevich/claude-code-skills --plugin documentation-pipeline
-/plugin add levnikolaevich/claude-code-skills --plugin codebase-audit-suite
-/plugin add levnikolaevich/claude-code-skills --plugin project-bootstrap
-/plugin add levnikolaevich/claude-code-skills --plugin optimization-suite
-/plugin add levnikolaevich/claude-code-skills --plugin community-engagement
-/plugin add levnikolaevich/claude-code-skills --plugin setup-environment
+# Install any plugin you need
+/plugin install agile-workflow@levnikolaevich-skills-marketplace
+/plugin install documentation-pipeline@levnikolaevich-skills-marketplace
+/plugin install codebase-audit-suite@levnikolaevich-skills-marketplace
+/plugin install project-bootstrap@levnikolaevich-skills-marketplace
+/plugin install optimization-suite@levnikolaevich-skills-marketplace
+/plugin install community-engagement@levnikolaevich-skills-marketplace
+/plugin install setup-environment@levnikolaevich-skills-marketplace
 ```
 
 | Plugin | Description |
@@ -47,7 +47,7 @@ Install the full suite or pick only the plugins you need. Each works independent
 Browse and discover individual skills at [skills.sh](https://skills.sh/LevNikolaevich/claude-code-skills).
 
 > [!NOTE]
-> **skills.sh is a showcase only.** Skills depend on shared resources (`shared/` directory) that are not copied by `npx skills add`. Use `/plugin add` for a working installation.
+> **skills.sh is a showcase only.** Skills depend on shared resources (`shared/` directory) that are not copied by `npx skills add`. Use `/plugin marketplace add` and `/plugin install` for a working installation.
 
 ---
 
@@ -56,7 +56,8 @@ Browse and discover individual skills at [skills.sh](https://skills.sh/LevNikola
 **Prerequisites:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 
 ```bash
-/plugin add levnikolaevich/claude-code-skills
+/plugin marketplace add levnikolaevich/claude-code-skills
+/plugin install setup-environment@levnikolaevich-skills-marketplace
 ```
 
 Verify: run `ln-010-dev-environment-setup`
@@ -279,20 +280,20 @@ Claude Opus is the primary model. For code and story reviews, skills delegate to
 <summary><b>How do I install it?</b></summary>
 
 ```bash
-# Full suite
-/plugin add levnikolaevich/claude-code-skills
+# Add the marketplace once
+/plugin marketplace add levnikolaevich/claude-code-skills
 
-# Or individually:
-/plugin add levnikolaevich/claude-code-skills --plugin agile-workflow
-/plugin add levnikolaevich/claude-code-skills --plugin documentation-pipeline
-/plugin add levnikolaevich/claude-code-skills --plugin codebase-audit-suite
-/plugin add levnikolaevich/claude-code-skills --plugin project-bootstrap
-/plugin add levnikolaevich/claude-code-skills --plugin optimization-suite
-/plugin add levnikolaevich/claude-code-skills --plugin community-engagement
-/plugin add levnikolaevich/claude-code-skills --plugin setup-environment
+# Install one plugin
+/plugin install agile-workflow@levnikolaevich-skills-marketplace
 
-# Git Clone (alternative)
-git clone https://github.com/levnikolaevich/claude-code-skills.git ~/.claude/skills
+# Or install the full suite
+/plugin install agile-workflow@levnikolaevich-skills-marketplace
+/plugin install documentation-pipeline@levnikolaevich-skills-marketplace
+/plugin install codebase-audit-suite@levnikolaevich-skills-marketplace
+/plugin install project-bootstrap@levnikolaevich-skills-marketplace
+/plugin install optimization-suite@levnikolaevich-skills-marketplace
+/plugin install community-engagement@levnikolaevich-skills-marketplace
+/plugin install setup-environment@levnikolaevich-skills-marketplace
 ```
 
 </details>
@@ -309,9 +310,9 @@ git clone https://github.com/levnikolaevich/claude-code-skills.git ~/.claude/ski
 | Optimize performance, dependencies, bundle size | `optimization-suite` |
 | Manage GitHub community (triage, announcements, RFCs) | `community-engagement` |
 | Set up multi-agent dev environment | `setup-environment` |
-| Everything | `/plugin add levnikolaevich/claude-code-skills` (all 7) |
+| Everything | `/plugin marketplace add levnikolaevich/claude-code-skills` + all 7 `/plugin install ...@levnikolaevich-skills-marketplace` commands |
 
-Each plugin works independently — install only what you need.
+Add the marketplace once, then install only what you need.
 
 </details>
 
