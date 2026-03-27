@@ -66,10 +66,17 @@ private/
 
 # Claude Code Specific
 .claude/settings.local.json
+.claude/worktrees/
 tmpclaude-*
 
-# Agent Review Artifacts
+# Skill-generated working artifacts (machine-specific)
+.hex-skills/
+.codegraph/
 .agent-review/
+.optimization/
+.pipeline/
+.worktrees/
+docs/environment_state.json
 
 # Git-related
 *.orig
@@ -97,3 +104,10 @@ wheels/
 *.swn
 .*.sw*
 NUL
+/docs/research
+
+# npm pack artifacts
+*.tgz
+
+# Benchmark results (machine-specific)
+**/benchmark/results/

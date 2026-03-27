@@ -1,97 +1,79 @@
 # CLAUDE.md
 
-<!-- SCOPE: Repository rules and AI agent instructions ONLY. ~140 lines index. Detailed guides in docs/. -->
-<!-- DO NOT add here: public documentation -> README.md, architecture patterns -> docs/SKILL_ARCHITECTURE_GUIDE.md, skill workflows -> individual SKILL.md files -->
+> **SCOPE:** Entry point with rules and navigation ONLY. Guides in `docs/`. Workflows in `SKILL.md`. Public docs in `README.md`.
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Skills collection for Claude Code with config-driven Agile task management (Linear or File Mode).
 
-## Repository
+## Critical Rules
 
-This is a collection of skills for Claude Code with config-driven Agile task management (Linear or File Mode per `docs/tools_config.md`).
+| Rule | Details |
+|------|---------|
+| **Architecture Guide** | Read `docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` before any skill work |
+| **MANDATORY READ** | Use `**MANDATORY READ:** Load {file}`. Passive refs are NOT followed |
+| **Path Resolution** | Relative to skills repo root, NOT target project |
+| **Sequential Numbering** | 1, 2, 3 (NOT 1.5). Sub-steps: Na/Nb (3a, 4a) |
+| **Docs in English** | Stories/Tasks can be EN/RU |
+| **No version auto-updates** | Update ONLY when user explicitly requests |
+| **YAML quoting** | Wrap `description:` in quotes if it contains `:` |
+| **Research-to-Action Gate** | No defect = informational, not actionable |
+| **No hardcoded counts** | Counts ONLY in README.md badge |
+| **No Changes sections** | `**Version:** X.Y.Z` + `**Last Updated:**` at end |
+| **DoD with checkboxes** | `## Definition of Done` with `- [ ]` items |
+| **Worker independence** | No parent/peer refs in L3 Workers |
 
-> [!WARNING]
+## MCP Tool Preferences
 
-> Before starting any work with skills in this repository, **ALWAYS read** [docs/SKILL_ARCHITECTURE_GUIDE.md](docs/SKILL_ARCHITECTURE_GUIDE.md) for industry best practices (2024-2026): Orchestrator-Worker Pattern, Single Responsibility Principle, Token Efficiency, Subagents vs Agent Teams, Task Decomposition guidelines, and Red Flags to avoid. For Agent Teams runtime patterns (hooks, heartbeat, crash recovery, Windows): [docs/AGENT_TEAMS_PLATFORM_GUIDE.md](docs/AGENT_TEAMS_PLATFORM_GUIDE.md).
+**PREFER** hex-line MCP for code files — hash-annotated reads enable safe edits:
 
-## Documentation Levels
+| Instead of | Use | When |
+|-----------|-----|------|
+| Built-in Read | `hex-line read_file` | Code files (hash-annotated, edit-ready) |
+| Built-in Edit | `hex-line edit_file` | Always (hash-verified anchors) |
+| Built-in Write | `hex-line write_file` | Always (consistent workflow) |
+| Built-in Grep | `hex-line grep_search` | Before editing found code (grep→edit pipeline) |
+| Large code file | `hex-line outline` then `read_file` with range | Unfamiliar files >100 lines |
 
-| Level | Files | Audience |
-|-------|-------|----------|
-| **1. Project** | CLAUDE.md + docs/ | AI agent developing/maintaining skills |
-| **2. Public** | README.md | GitHub visitors (developers, users) |
-| **3. Templates** | {skill}/references/*_template.md | Target projects created by skills |
+**Built-in OK for:** images, PDFs, notebooks, Glob (always), `.claude/settings.json` and `.claude/settings.local.json`.
 
-**No duplication** across levels. Same concepts in different files serve different contexts.
+## Quick Understanding
 
-## Writing Guidelines
+| What | How |
+|------|-----|
+| Project overview + tree | `cat README.md` |
+| Architecture (L0-L3) | `cat docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` |
+| Key workflow | `ln-700 → ln-100 → ln-200 → ln-1000` |
+| Tool config (Linear/File) | `cat skills-catalog/shared/references/tools_config_guide.md` |
+| Skill metadata | `head -20 {ln-NNN}/SKILL.md` |
 
-See [Writing Guidelines](docs/SKILL_ARCHITECTURE_GUIDE.md#writing-guidelines-progressive-disclosure-pattern) in SKILL_ARCHITECTURE_GUIDE.md.
+## Navigation
 
-## Available Skills
+**DAG:** CLAUDE.md → `docs/README.md` → topic docs. Read SCOPE tag first.
 
-Skills organized by categories (0XX-10XX). See [README.md](README.md#-features) for complete list.
+| Topic | File |
+|-------|------|
+| Writing Guidelines | `docs/architecture/SKILL_ARCHITECTURE_GUIDE.md` §Writing Guidelines |
+| Tool Configuration | `skills-catalog/shared/references/tools_config_guide.md` |
+| Risk-Based Testing | `skills-catalog/shared/references/risk_based_testing_guide.md` |
+| Frontmatter fields | `skills-catalog/shared/references/frontmatter_reference.md` |
+| Hooks reference | `skills-catalog/shared/references/hooks_reference.md` |
+| Questions format | `skills-catalog/shared/references/questions_format.md` |
+| Hook Design | `docs/best-practice/HOOK_DESIGN_GUIDE.md` |
+| MCP Tool Design | `docs/best-practice/MCP_TOOL_DESIGN_GUIDE.md` |
+| Token Efficiency | `docs/standards/TOKEN_EFFICIENCY_PATTERNS.md` |
+| Prompt Caching | `docs/best-practice/PROMPT_CACHING_GUIDE.md` |
+| npm Packages | `docs/standards/NPM_PACKAGE_BEST_PRACTICES.md` |
 
-**Key workflow:** ln-700-project-bootstrap -> ln-100-documents-pipeline -> ln-201-opportunity-discoverer (optional) -> ln-200-scope-decomposer -> **ln-1000-pipeline-orchestrator** (or manually: ln-400-story-executor -> ln-500-story-quality-gate)
+## Maintenance
 
-## Key Concepts
+Version update (ONLY on explicit request): update `**Version:**` in SKILL.md, version in README.md tables, CHANGELOG.md paragraph.
 
-### Tool Configuration (Phase 0)
-All skills read `docs/tools_config.md` at startup (auto-bootstrapped if missing). This config determines: task provider (Linear/File Mode), research chain, git strategy. See `shared/references/tools_config_guide.md`. Task numbering and Team ID come from `docs/tasks/kanban_board.md`. Both created by ln-130/ln-111 or auto-bootstrapped by any skill.
+## Compact Instructions
 
-### Task Hierarchy, Kanban Board, Development Principles, Task Templates, DAG Support
-See [README.md](README.md#-key-concepts) for detailed structure, principles, and template references.
+Preserve in priority order during /compact:
+- Architecture decisions and rationale (NEVER summarize)
+- Modified files and their key changes
+- Current verification status (pass/fail)
+- Open TODOs and rollback notes
+- Tool outputs (can delete, keep summary only)
 
-## Decomposition Workflow
-
-Four levels: Scope -> Epics (ln-210) -> Stories (ln-220) -> RICE Prioritization (ln-230) -> Tasks (ln-300). See [README.md](README.md#-key-concepts) for complete flow.
-
-## Skill Workflows
-
-All skills documented in [README.md](README.md#-features) with workflows in each SKILL.md. Follow Orchestrator-Worker Pattern per [SKILL_ARCHITECTURE_GUIDE.md](docs/SKILL_ARCHITECTURE_GUIDE.md).
-
-## Important Details
-
-**Structural Validation:** ln-310-multi-agent-validator auto-fixes Stories/Tasks against template compliance.
-
-**Testing:** Risk-Based Testing (Priority ≥15, Usefulness Criteria). See [risk_based_testing_guide.md](shared/references/risk_based_testing_guide.md).
-
-**Code Comments:** 15-20% ratio. Explain WHY, not WHAT. NO historical notes, NO code examples. Task/ADR IDs allowed as spec references, forbidden as development history.
-
-**Documentation Language:** All docs in English except Stories/Tasks (can be English/Russian regardless of provider).
-
-**Sequential Numbering:** Phases/Sections/Steps: 1, 2, 3, 4 (NOT 1, 1.5, 2). Exceptions: Phase 4a (CREATE), 4b (REPLAN).
-
-**File References in Skills:** MUST use `**MANDATORY READ:** Load {file}` pattern. Passive references (`See`, `Per`, `Follows`) are NOT followed by agents. Group multiple references into ONE `**MANDATORY READ:**` at section start.
-
-**Path Resolution:** File paths in SKILL.md (`shared/`, `references/`, `../ln-*`) are relative to skills repo root, NOT target project. Every SKILL.md with file references includes a `> **Paths:**` note after frontmatter.
-
-**Research-to-Action Gate:** Before turning external research into skill changes, answer: "What specific defect in current skill output does this fix?" If no concrete defect — the research is informational, not actionable. Existing skills already working correctly is not a problem to solve.
-
-## Working with Skill Files
-
-**SKILL.md Metadata:** YAML frontmatter with `name` and `description`. If `description` contains colons (`:`), wrap in double quotes.
-
-**Reference Files:** Stored in `{skill}/references/` — templates, integration guides, checklists, structure templates.
-
-**Questions Files:** Format for validation questions in skills. See [docs/QUESTIONS_FORMAT.md](docs/QUESTIONS_FORMAT.md).
-
-## Versioning
-
-All skills have versions at end of file: `**Version:** X.Y.Z` + `**Last Updated:** YYYY-MM-DD`. Do NOT add **Changes:** sections — git history tracks changes.
-
-## Maintenance After Changes
-
-> [!WARNING]
-
-> Version updates are performed ONLY when explicitly requested by the user, NOT automatically.
-
-**Default:** Make changes to skill files. Do NOT update versions in SKILL.md, CLAUDE.md, README.md, or CHANGELOG.md.
-
-**When user explicitly requests version update:**
-1. Update skill version in `{skill}/SKILL.md`
-2. Update version in CLAUDE.md "Available Skills" section
-3. Update version in README.md feature tables
-4. Update CHANGELOG.md — one summary paragraph per date (`## YYYY-MM-DD`), no duplicate dates
-5. Update Last Updated date below
-
-**Last Updated:** 2026-02-15
+**Last Updated:** 2026-03-20
